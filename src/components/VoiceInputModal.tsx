@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle, Loader2 } from 'lucide-react';
 import { Category } from '../types';
 import { speechService } from '../utils/speechService';
-import { parseVoiceInput, ParsedVoiceResult } from '../utils/voiceParser';
+import { parseVoiceInput, parseVoiceWithGemini, ParsedVoiceResult } from '../utils/voiceParser';
 import { formatCurrency } from '../utils/formatters';
 
 interface VoiceInputModalProps {
@@ -19,6 +19,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   onParsedResult,
 }) => {
   const [isListening, setIsListening] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewResult, setPreviewResult] = useState<ParsedVoiceResult | null>(null);
@@ -28,6 +29,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     if (!isOpen) {
       speechService.stopListening();
       setIsListening(false);
+      setIsAnalyzing(false);
       setTranscript('');
       setErrorMsg(null);
       setPreviewResult(null);
@@ -46,6 +48,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     setErrorMsg(null);
     setTranscript('');
     setPreviewResult(null);
+    setIsAnalyzing(false);
     hasFinishedRef.current = false;
 
     const success = await speechService.startListening({
@@ -57,21 +60,32 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           setPreviewResult(parsed);
         }
       },
-      onFinalResult: (text) => {
+      onFinalResult: async (text) => {
         setTranscript(text);
         if (!hasFinishedRef.current && text.trim().length > 1) {
           hasFinishedRef.current = true;
-          const parsed = parseVoiceInput(text, categories);
-          setPreviewResult(parsed);
-          // Cho người dùng xem kết quả 400ms rồi tự động chuyển tiếp
-          setTimeout(() => {
-            handleConfirm(parsed);
-          }, 500);
+          setIsAnalyzing(true);
+          try {
+            const parsed = await parseVoiceWithGemini(text, categories);
+            setPreviewResult(parsed);
+            setTimeout(() => {
+              handleConfirm(parsed);
+            }, 600);
+          } catch {
+            const fallback = parseVoiceInput(text, categories);
+            setPreviewResult(fallback);
+            setTimeout(() => {
+              handleConfirm(fallback);
+            }, 600);
+          } finally {
+            setIsAnalyzing(false);
+          }
         }
       },
       onError: (err) => {
         setErrorMsg(err);
         setIsListening(false);
+        setIsAnalyzing(false);
       },
       onListeningStateChange: (listening) => {
         setIsListening(listening);
@@ -88,9 +102,18 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     setIsListening(false);
     const textToParse = transcript || finalTxt;
     if (textToParse.trim()) {
-      const parsed = parseVoiceInput(textToParse, categories);
-      setPreviewResult(parsed);
-      handleConfirm(parsed);
+      setIsAnalyzing(true);
+      try {
+        const parsed = await parseVoiceWithGemini(textToParse, categories);
+        setPreviewResult(parsed);
+        handleConfirm(parsed);
+      } catch {
+        const fallback = parseVoiceInput(textToParse, categories);
+        setPreviewResult(fallback);
+        handleConfirm(fallback);
+      } finally {
+        setIsAnalyzing(false);
+      }
     } else {
       setErrorMsg('Chưa nghe rõ nội dung. Vui lòng thử nói lại!');
     }
@@ -102,11 +125,20 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     onClose();
   };
 
-  const handleSelectExample = (exampleText: string) => {
+  const handleSelectExample = async (exampleText: string) => {
     setTranscript(exampleText);
-    const parsed = parseVoiceInput(exampleText, categories);
-    setPreviewResult(parsed);
-    handleConfirm(parsed);
+    setIsAnalyzing(true);
+    try {
+      const parsed = await parseVoiceWithGemini(exampleText, categories);
+      setPreviewResult(parsed);
+      handleConfirm(parsed);
+    } catch {
+      const fallback = parseVoiceInput(exampleText, categories);
+      setPreviewResult(fallback);
+      handleConfirm(fallback);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -136,12 +168,16 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
         </div>
 
         <h3 className="text-lg font-bold text-[#3e332a] mb-6">
-          {isListening ? 'Đang lắng nghe bạn nói...' : 'Đã dừng ghi âm'}
+          {isAnalyzing
+            ? 'Google Gemini AI đang bóc tách...'
+            : isListening
+            ? 'Đang lắng nghe bạn nói...'
+            : 'Đã dừng ghi âm'}
         </h3>
 
         {/* Visualizer / Animated Microphone */}
         <div className="relative flex items-center justify-center mb-6">
-          {isListening && (
+          {(isListening || isAnalyzing) && (
             <>
               <div className="absolute w-28 h-28 rounded-full bg-[#ea580c]/15 animate-ping" />
               <div className="absolute w-24 h-24 rounded-full bg-[#ea580c]/25 animate-pulse" />
@@ -150,20 +186,26 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
           <button
             onClick={() => {
+              if (isAnalyzing) return;
               if (isListening) {
                 handleStopAndParse();
               } else {
                 startRecording();
               }
             }}
+            disabled={isAnalyzing}
             className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center text-white shadow-xl transition-transform active:scale-95 ${
-              isListening
+              isAnalyzing
+                ? 'bg-[#ea580c] ring-4 ring-[#ea580c]/30 cursor-wait'
+                : isListening
                 ? 'bg-gradient-to-tr from-[#ea580c] to-[#f97316] ring-4 ring-[#ea580c]/30'
                 : 'bg-[#7a6a58] hover:bg-[#5c4f42]'
             }`}
-            title={isListening ? 'Bấm để hoàn tất' : 'Bấm để nói lại'}
+            title={isAnalyzing ? 'Đang phân tích...' : isListening ? 'Bấm để hoàn tất' : 'Bấm để nói lại'}
           >
-            {isListening ? (
+            {isAnalyzing ? (
+              <Loader2 className="w-9 h-9 animate-spin" />
+            ) : isListening ? (
               <Mic className="w-9 h-9 animate-bounce" />
             ) : (
               <MicOff className="w-9 h-9" />
@@ -173,7 +215,19 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
         {/* Hộp hiển thị văn bản nhận diện được */}
         <div className="w-full min-h-[72px] p-3.5 rounded-2xl bg-[#fbf5eb] border border-[#ebdcc9] flex flex-col justify-center items-center mb-4 transition">
-          {transcript ? (
+          {isAnalyzing ? (
+            <div className="flex flex-col items-center gap-1.5 py-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#ea580c] animate-pulse">
+                <Sparkles className="w-4 h-4 animate-spin text-[#ea580c]" />
+                <span>Google Gemini AI đang phân tích câu nói...</span>
+              </div>
+              {transcript && (
+                <p className="text-xs text-[#7a6a58] italic break-words line-clamp-1">
+                  "{transcript}"
+                </p>
+              )}
+            </div>
+          ) : transcript ? (
             <p className="text-sm font-semibold text-[#3e332a] italic break-words">
               "{transcript}"
             </p>

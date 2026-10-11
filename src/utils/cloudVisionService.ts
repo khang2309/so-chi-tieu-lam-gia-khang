@@ -97,24 +97,17 @@ Quy tắc:
  */
 export const VISION_INVOICE_PROMPT_MERGE = `Phân tích hóa đơn này và trả về 1 giao dịch duy nhất. Khóa totalAmount là tổng tiền hóa đơn. Khóa note (Ghi chú) bắt buộc phải bắt đầu bằng [Tên Cửa Hàng], sau đó liệt kê chi tiết từng món hàng và giá tiền tương ứng bên dưới theo định dạng: [Tên Cửa Hàng]\\n- Món A: giá\\n- Món B: giá.
 
-Trả về định dạng JSON thuần túy (JSON object hoặc mảng JSON 1 phần tử) với cấu trúc:
-{
-  "totalAmount": 150000,
-  "note": "[Tên Cửa Hàng]\\n- Món A: giá\\n- Món B: giá",
-  "date": "2026-03-25",
-  "categorySuggestion": "Ăn uống"
-}
+BẮT BUỘC: Trả về DUY NHẤT một chuỗi JSON hợp lệ. Ví dụ:
+{"totalAmount": 100000, "note": "Tên Cửa Hàng\\n- Món 1: 50.000\\n- Món 2: 50.000", "categorySuggestion": "Ăn uống", "date": "YYYY-MM-DD"}
+
+ĐẶC BIỆT LƯU Ý: Phải dùng ký tự escape \\n để xuống dòng bên trong giá trị string của note, tuyệt đối không dùng dấu xuống dòng thực tế (literal unescaped newline) gây lỗi JSON.
 
 Quy tắc bắt buộc:
 1. "totalAmount": Số nguyên tổng tiền cả hóa đơn (Total / Tổng thanh toán). Không lấy tiền thối hay giảm giá.
-2. "note": BẮT BUỘC phải bắt đầu bằng [Tên Cửa Hàng], sau đó xuống dòng liệt kê chi tiết từng món hàng và giá tiền tương ứng bên dưới:
-[Tên Cửa Hàng]
-- Món A: giá
-- Món B: giá
-Nếu không rõ tên cửa hàng trên hóa đơn, hãy dùng [Hóa đơn mua sắm] hoặc [Biên lai dịch vụ].
+2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và giá (VD: "[Tên Cửa Hàng]\\n- Món A: 50.000\\n- Món B: 50.000").
 3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe (Yamaha Janus)", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
 4. "date": YYYY-MM-DD từ hóa đơn (mặc định 2026 nếu thiếu).
-5. Chỉ trả về chuỗi JSON thuần túy, không có markdown (\`\`\`json) hoặc văn bản giải thích bên ngoài.`;
+5. Chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không bọc markdown (\`\`\`json) hay văn bản giải thích nào khác.`;
 
 export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
@@ -225,6 +218,111 @@ async function callGeminiVision(
 }
 
 /**
+ * Gọi Google Gemini API với nội dung văn bản thuần túy (dùng cho Voice NLP, Text Extraction)
+ */
+export async function callGeminiText(
+  promptText: string,
+  apiKeyOverride?: string,
+  abortSignal?: AbortSignal
+): Promise<string> {
+  const savedCfg = getSavedVisionConfig();
+  const keyToUse =
+    apiKeyOverride && apiKeyOverride.trim().length > 0
+      ? apiKeyOverride.trim()
+      : savedCfg.apiKey && savedCfg.apiKey.trim().length > 0
+      ? savedCfg.apiKey.trim()
+      : DEFAULT_GEMINI_API_KEY;
+
+  const payload = {
+    contents: [
+      {
+        parts: [{ text: promptText }],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  let lastError = '';
+
+  for (const model of GEMINI_FALLBACK_MODELS) {
+    if (abortSignal?.aborted) {
+      throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
+    }
+
+    const apiVersions = ['v1beta', 'v1'];
+    for (const apiVer of apiVersions) {
+      if (abortSignal?.aborted) {
+        throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
+      }
+
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${keyToUse}`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: abortSignal,
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawContent) {
+            return rawContent;
+          }
+        } else {
+          const errText = await res.text();
+          lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || abortSignal?.aborted) {
+          throw err;
+        }
+        lastError = err?.message || String(err);
+      }
+    }
+  }
+
+  throw new Error(`Không thể kết nối Gemini API: ${lastError}`);
+}
+
+/**
+ * Tự động chuyển đổi các ký tự xuống dòng thực tế (literal unescaped newlines)
+ * nằm bên trong chuỗi nháy kép JSON thành ký tự escape \n
+ * Tránh lỗi SyntaxError: Bad control character / Unexpected token khi parse JSON
+ */
+export function escapeNewlinesInJsonStrings(jsonStr: string): string {
+  let inString = false;
+  let isEscaped = false;
+  let result = '';
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const char = jsonStr[i];
+
+    if (char === '"' && !isEscaped) {
+      inString = !inString;
+      result += char;
+    } else if (char === '\\' && inString) {
+      isEscaped = !isEscaped;
+      result += char;
+    } else if ((char === '\n' || char === '\r') && inString) {
+      if (char === '\r' && jsonStr[i + 1] === '\n') {
+        i++; // Bỏ qua ký tự \n liền kề sau \r
+      }
+      result += '\\n';
+    } else {
+      isEscaped = false;
+      result += char;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Tách các top-level JSON objects {} từ chuỗi (hỗ trợ nested brackets)
  */
 function extractTopLevelObjects(str: string): string[] {
@@ -268,15 +366,17 @@ function extractTopLevelObjects(str: string): string[] {
 
 /**
  * Hàm dọn dẹp chuỗi trước khi Parse JSON (JSON Extraction & Fallback Parser):
- * 1. Xóa bỏ các thẻ Markdown: text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
- * 2. Cứu vãn dữ liệu (Fallback Parser): Nếu chuỗi trả về là các object rời rạc (ví dụ: {...} {...} hoặc {...}, {...}),
- *    dùng Regex tự động bọc chuỗi đó vào dấu [] và thêm dấu phẩy giữa các object trước khi gọi JSON.parse().
- * 3. Đảm bảo an toàn không bị lỗi "Unexpected non-whitespace character after JSON".
+ * 1. Xóa bỏ các thẻ Markdown: let cleanText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+ * 2. Escape các ký tự newline unescaped trong chuỗi string literal.
+ * 3. Trích xuất block JSON cốt lõi và cứu vãn cú pháp nếu có lỗi format.
  */
 export function extractCleanJsonString(rawText: string): string {
   if (!rawText) return '';
   // Bước 1: Xóa bỏ các thẻ Markdown
   let text = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  // Bước 2: Sửa các ký tự xuống dòng chưa được escape trong JSON string
+  text = escapeNewlinesInJsonStrings(text);
 
   // Bước 2: Dùng vị trí/Regex để trích xuất phần JSON cốt lõi (tìm từ dấu { hoặc [ đầu tiên đến dấu } hoặc ] cuối cùng)
   const firstBrace = text.indexOf('{');
@@ -355,18 +455,23 @@ export function extractCleanJsonString(rawText: string): string {
 /**
  * Bóc tách JSON string trả về từ LLM Vision thành BatchParsedResult
  */
-export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
-  // Dọn dẹp chuỗi JSON trước khi Parse
-  const cleanJson = extractCleanJsonString(jsonString);
+export function parseVisionJsonResponse(responseText: string): BatchParsedResult {
+  // Bọc hàm xử lý an toàn: Trước khi JSON.parse(responseText), bắt buộc phải có bước dọn dẹp
+  let cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const cleanJson = extractCleanJsonString(cleanText);
 
   let parsed: any;
   try {
     parsed = JSON.parse(cleanJson);
   } catch (err: any) {
-    console.error('Không thể parse JSON từ Cloud AI sau khi dọn dẹp:', cleanJson, err);
-    throw new Error(
-      `Phản hồi từ Cloud AI không phải JSON hợp lệ (${err?.message || err}). Dữ liệu nhận được: ${cleanJson.slice(0, 120)}...`
-    );
+    try {
+      parsed = JSON.parse(escapeNewlinesInJsonStrings(cleanJson));
+    } catch {
+      console.error('Không thể parse JSON từ Cloud AI sau khi dọn dẹp:', cleanJson, err);
+      throw new Error(
+        `Phản hồi từ Cloud AI không phải JSON hợp lệ (${err?.message || err}). Dữ liệu nhận được: ${cleanJson.slice(0, 120)}...`
+      );
+    }
   }
 
   const invoiceType: InvoiceType =

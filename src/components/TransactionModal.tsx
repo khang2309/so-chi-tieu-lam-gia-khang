@@ -41,22 +41,33 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [note, setNote] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
 
-  // Lấy các ghi chú từ lịch sử giao dịch (loại trừ đã xóa mềm) sắp xếp theo tần suất
+  // Lấy các gợi ý từ lịch sử giao dịch (loại trừ đã xóa mềm) kèm giao dịch gốc tương ứng
   const noteSuggestions = useMemo(() => {
     if (!existingTransactions || existingTransactions.length === 0) return [];
 
-    const frequencyMap = new Map<string, number>();
+    const map = new Map<string, { note: string; sourceTransaction: Transaction; count: number }>();
     for (const tx of existingTransactions) {
       if (tx.isDeleted) continue;
       const trimmed = tx.note?.trim();
       if (trimmed) {
-        frequencyMap.set(trimmed, (frequencyMap.get(trimmed) || 0) + 1);
+        const existing = map.get(trimmed);
+        if (!existing) {
+          map.set(trimmed, {
+            note: trimmed,
+            sourceTransaction: tx,
+            count: 1,
+          });
+        } else {
+          existing.count += 1;
+          // Ưu tiên giao dịch có ngày mới hơn
+          if (new Date(tx.date).getTime() > new Date(existing.sourceTransaction.date).getTime()) {
+            existing.sourceTransaction = tx;
+          }
+        }
       }
     }
 
-    return Array.from(frequencyMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([noteText]) => noteText);
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [existingTransactions]);
 
   // Lọc gợi ý theo từ khóa đang gõ trong ô Ghi chú
@@ -67,9 +78,27 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return noteSuggestions.slice(0, 8);
     }
     return noteSuggestions
-      .filter((s) => s.toLowerCase().includes(query) && s.toLowerCase() !== query)
+      .filter((s) => s.note.toLowerCase().includes(query) && s.note.toLowerCase() !== query)
       .slice(0, 8);
   }, [noteSuggestions, note]);
+
+  // Khi chọn gợi ý: Tự động điền Note, Số tiền (amount) và Danh mục (category) từ giao dịch gốc
+  const handleSelectSuggestion = (item: { note: string; sourceTransaction: Transaction }) => {
+    setNote(item.note);
+    const orig = item.sourceTransaction;
+    if (orig) {
+      if (orig.amount && orig.amount > 0) {
+        setAmount(orig.amount.toString());
+      }
+      if (orig.categoryId) {
+        setCategoryId(orig.categoryId);
+      }
+      if (orig.type) {
+        setType(orig.type);
+      }
+    }
+    setShowSuggestions(false);
+  };
 
   useEffect(() => {
     if (editingTransaction) {
@@ -304,27 +333,40 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
             {/* Dropdown Gợi ý thông minh */}
             {showSuggestions && filteredSuggestions.length > 0 && (
-              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-[#fffdfa] border border-[#d8c8b4] rounded-xl shadow-lg max-h-48 overflow-y-auto p-1.5 divide-y divide-[#f5ebe0]">
-                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#a25832]">
-                  Gợi ý từ lịch sử ({filteredSuggestions.length})
+              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-[#fffdfa] border border-[#d8c8b4] rounded-xl shadow-lg max-h-52 overflow-y-auto p-1.5 divide-y divide-[#f5ebe0]">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#a25832] flex items-center justify-between">
+                  <span>Gợi ý từ lịch sử ({filteredSuggestions.length})</span>
+                  <span className="text-[9px] text-[#7a6a58] lowercase font-normal italic">tự điền tiền & danh mục</span>
                 </div>
-                {filteredSuggestions.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setNote(suggestion);
-                      setShowSuggestions(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 text-xs text-[#3e332a] hover:bg-[#f5ebe0] rounded-lg transition flex items-center justify-between group"
-                  >
-                    <span className="truncate">{suggestion}</span>
-                    <span className="text-[10px] text-[#7a6a58] opacity-0 group-hover:opacity-100 transition">
-                      chọn
-                    </span>
-                  </button>
-                ))}
+                {filteredSuggestions.map((item, idx) => {
+                  const cat = categories.find((c) => c.id === item.sourceTransaction.categoryId);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectSuggestion(item);
+                      }}
+                      className="w-full text-left px-2.5 py-2 text-xs text-[#3e332a] hover:bg-[#f5ebe0] rounded-lg transition flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col truncate pr-2">
+                        <span className="font-semibold truncate">{item.note}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#7a6a58]">
+                          {cat && (
+                            <span className="inline-flex items-center gap-1 text-[#a25832]">
+                              • {cat.name}
+                            </span>
+                          )}
+                          <span>• {item.sourceTransaction.amount.toLocaleString('vi-VN')} đ</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#a25832] font-semibold opacity-0 group-hover:opacity-100 transition shrink-0 bg-[#a25832]/10 px-1.5 py-0.5 rounded">
+                        Áp dụng
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

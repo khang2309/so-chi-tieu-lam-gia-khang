@@ -1,4 +1,5 @@
 import { Category, TransactionType } from '../types';
+import { callGeminiText } from './cloudVisionService';
 
 export interface ParsedVoiceResult {
   amount: number;
@@ -454,7 +455,7 @@ export function cleanNote(rawText: string, matchedAmountStr: string): string {
 }
 
 /**
- * Hàm phân tích toàn diện câu nói bằng giọng nói (Smart Voice Parser)
+ * Hàm phân tích toàn diện câu nói bằng giọng nói (Smart Voice Parser - Regex Cục Bộ)
  */
 export function parseVoiceInput(text: string, categories: Category[]): ParsedVoiceResult {
   const trimmed = text.trim();
@@ -474,3 +475,84 @@ export function parseVoiceInput(text: string, categories: Category[]): ParsedVoi
     rawText: trimmed,
   };
 }
+
+/**
+ * Nâng cấp bóc tách Giọng nói (Voice) bằng Google Gemini API:
+ * Gửi câu nói lên Gemini để bóc tách: amount, note, category
+ * Tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số nguyên, loại bỏ số tiền khỏi note
+ */
+export async function parseVoiceWithGemini(
+  text: string,
+  categories: Category[],
+  apiKeyOverride?: string,
+  abortSignal?: AbortSignal
+): Promise<ParsedVoiceResult> {
+  const cleanInput = text.trim();
+  if (!cleanInput) {
+    return {
+      amount: 0,
+      note: '',
+      type: 'expense',
+      categoryId: categories[0]?.id || '',
+      rawText: text,
+    };
+  }
+
+  // Danh sách danh mục để AI gợi ý chuẩn xác nhất
+  const categoryNames = categories.map((c) => c.name).join(', ');
+
+  const prompt = `Trích xuất thông tin giao dịch từ câu nói này: '${cleanInput}'. Trả về duy nhất định dạng JSON: { "amount": <số tiền nguyên dương, tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số>, "note": "<nội dung giao dịch, loại bỏ số tiền>", "category": "<danh mục phù hợp nhất trong danh sách: ${categoryNames}>" }`;
+
+  try {
+    const rawResponse = await callGeminiText(prompt, apiKeyOverride, abortSignal);
+    let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+
+    const parsed = JSON.parse(cleanText);
+
+    const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
+    const rawNote = String(parsed.note || '').trim();
+    const note = rawNote || cleanInput;
+    const categoryName = String(parsed.category || '').trim().toLowerCase();
+
+    // Tìm danh mục khớp nhất
+    let matchedCat = categories.find(
+      (c) => c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase())
+    );
+
+    if (!matchedCat && categoryName) {
+      matchedCat = categories.find((c) =>
+        c.name.toLowerCase().split(/\s+/).some((w) => w.length > 1 && categoryName.includes(w))
+      );
+    }
+
+    if (!matchedCat) {
+      const localResult = parseVoiceInput(cleanInput, categories);
+      matchedCat = categories.find((c) => c.id === localResult.categoryId);
+    }
+
+    const defaultExpenseCat = categories.find((c) => c.type === 'expense') || categories[0];
+    const finalCat = matchedCat || defaultExpenseCat;
+
+    const isIncome =
+      finalCat?.type === 'income' ||
+      /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ)\b/i.test(cleanInput);
+
+    return {
+      amount,
+      note,
+      type: isIncome ? 'income' : 'expense',
+      categoryId: finalCat?.id || '',
+      rawText: text,
+    };
+  } catch (err) {
+    console.warn('Lỗi gọi Gemini NLP cho Voice, tự động fallback sang Regex parser cục bộ:', err);
+    return parseVoiceInput(text, categories);
+  }
+}
+
