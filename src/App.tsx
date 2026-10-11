@@ -137,23 +137,7 @@ export function App() {
 
         {activeTab === 'dashboard' ? (
           <>
-            {/* Dashboard Statistics (Chỉ hiển thị Tổng Thu Nhập, Tổng Chi Tiêu, Chênh Lệch và Phân bổ) */}
-            <Dashboard
-              stats={manager.stats}
-              timeFilter={manager.timeFilter}
-              onChangeTimeFilter={manager.setTimeFilter}
-              wallets={manager.wallets}
-              walletBalances={manager.walletBalances}
-              activeWalletId={manager.activeWalletId}
-              onSelectWallet={manager.setActiveWalletId}
-              includeAllWallets={manager.includeAllWallets}
-              onToggleIncludeAllWallets={manager.setIncludeAllWallets}
-              categoryBreakdown={manager.categoryBreakdown}
-              onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
-              onOpenWalletManager={() => setIsWalletManagerModalOpen(true)}
-            />
-
-            {/* Transaction History Journal with Smart Date Filter */}
+            {/* 1. ĐẨY NHẬT KÝ GIAO DỊCH LÊN ĐẦU: Đập vào mắt người dùng ngay lập tức */}
             <TransactionList
               transactions={manager.transactions.filter((tx) =>
                 manager.activeLedgerId === 'all' || tx.ledgerId === manager.activeLedgerId
@@ -176,6 +160,22 @@ export function App() {
               onDeleteTransaction={manager.deleteTransaction}
               onOpenNewTransaction={handleOpenNewTransaction}
               onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
+            />
+
+            {/* 2. Phân bổ chi tiêu theo danh mục (đặt phía dưới nhật ký) */}
+            <Dashboard
+              stats={manager.stats}
+              timeFilter={manager.timeFilter}
+              onChangeTimeFilter={manager.setTimeFilter}
+              wallets={manager.wallets}
+              walletBalances={manager.walletBalances}
+              activeWalletId={manager.activeWalletId}
+              onSelectWallet={manager.setActiveWalletId}
+              includeAllWallets={manager.includeAllWallets}
+              onToggleIncludeAllWallets={manager.setIncludeAllWallets}
+              categoryBreakdown={manager.categoryBreakdown}
+              onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
+              onOpenWalletManager={() => setIsWalletManagerModalOpen(true)}
             />
           </>
         ) : (

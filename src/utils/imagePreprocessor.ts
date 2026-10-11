@@ -6,25 +6,27 @@
  */
 
 export interface PreprocessOptions {
-  contrast?: number; // Độ tăng tương phản (-255 đến 255), khuyên dùng 60 - 80 cho hóa đơn
+  contrast?: number; // Độ tăng tương phản (-255 đến 255), khuyên dùng 50 - 70 cho hóa đơn
   sharpen?: boolean; // Bật/tắt bộ lọc làm nét
-  maxDimension?: number; // Giới hạn kích thước tối đa để tối ưu hiệu năng bộ nhớ
+  maxDimension?: number; // Giới hạn kích thước tối đa (chuẩn 1024px để tối ưu tốc độ upload và AI xử lý)
+  quality?: number; // Chất lượng nén ảnh JPEG (chuẩn 0.7 để giữ vài trăm KB)
 }
 
 /**
- * Hàm tiền xử lý ảnh trước khi gửi vào bộ máy OCR
+ * Hàm tiền xử lý & nén ảnh trước khi gửi vào bộ máy OCR
  * @param imageSource Dữ liệu ảnh dạng data:image/... base64 hoặc URL
  * @param options Cấu hình tùy chọn
- * @returns Promise<string> Ảnh đã qua xử lý ở dạng base64 JPEG
+ * @returns Promise<string> Ảnh đã qua xử lý & nén ở dạng base64 JPEG
  */
 export async function preprocessImage(
   imageSource: string,
   options: PreprocessOptions = {}
 ): Promise<string> {
   const {
-    contrast = 70,
+    contrast = 60,
     sharpen = true,
-    maxDimension = 1800,
+    maxDimension = 1024,
+    quality = 0.7,
   } = options;
 
   return new Promise((resolve) => {
@@ -154,8 +156,8 @@ export async function preprocessImage(
           ctx.putImageData(outputData, 0, 0);
         }
 
-        // Bước 4: Xuất ảnh đã xử lý dưới định dạng JPEG chất lượng cao
-        const resultDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        // Bước 4: Xuất ảnh đã xử lý dưới định dạng JPEG nén tối ưu (chất lượng 0.7, ≤ 1024px)
+        const resultDataUrl = canvas.toDataURL('image/jpeg', quality);
         resolve(resultDataUrl);
       } catch (err) {
         console.warn('Lỗi trong quá trình tiền xử lý ảnh:', err);
@@ -171,3 +173,23 @@ export async function preprocessImage(
     img.src = imageSource;
   });
 }
+
+/**
+ * Hàm nén ảnh cục bộ siêu tốc trước khi gửi lên Gemini API:
+ * - Đưa kích thước ảnh về tối đa 1024px (giữ nguyên tỷ lệ khung hình)
+ * - Giảm chất lượng (quality) JPEG xuống 0.7
+ * - Giúp dung lượng ảnh chỉ còn 100KB - 300KB, upload chớp nhoáng và AI xử lý cực nhanh
+ */
+export async function compressImageForOcr(
+  imageSource: string,
+  maxDimension = 1024,
+  quality = 0.7
+): Promise<string> {
+  return preprocessImage(imageSource, {
+    maxDimension,
+    quality,
+    contrast: 50,
+    sharpen: true,
+  });
+}
+

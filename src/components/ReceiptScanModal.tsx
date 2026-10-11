@@ -26,7 +26,7 @@ import {
   saveVisionConfig,
   VisionConfig,
 } from '../utils/cloudVisionService';
-import { preprocessImage } from '../utils/imagePreprocessor';
+import { compressImageForOcr } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
@@ -127,14 +127,11 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     abortControllerRef.current = controller;
 
     setIsProcessing(true);
-    setStatusMessage('Đang tiền xử lý ảnh (Làm nét & Tăng tương phản)...');
+    setStatusMessage('Đang nén ảnh (≤ 1024px) & làm nét chữ...');
 
     try {
-      // 1. Tiền xử lý ảnh qua Canvas API để chữ rõ nhất
-      const enhancedDataUrl = await preprocessImage(dataUrl, {
-        contrast: 60,
-        sharpen: true,
-      });
+      // 1. Nén ảnh cục bộ bằng Canvas API: tối đa 1024px, JPEG quality 0.7
+      const enhancedDataUrl = await compressImageForOcr(dataUrl, 1024, 0.7);
 
       if (controller.signal.aborted) return;
       setProcessedImageUrl(enhancedDataUrl);

@@ -75,29 +75,21 @@ function mapCategoryNameToId(name: string): string {
 }
 
 /**
- * Prompt chuẩn mực tối ưu cho LLM Vision nhận diện hóa đơn tiếng Việt
+ * Prompt rút gọn tối ưu tốc độ cho LLM Vision: tập trung trích xuất mảng JSON siêu nhanh
  */
-const VISION_INVOICE_PROMPT = `Bạn là trợ lý AI chuyên trích xuất dữ liệu hóa đơn và chi tiêu tại Việt Nam.
-Nhiệm vụ: Hãy phân tích kỹ hình ảnh này (hóa đơn in nhiệt siêu thị/cửa hàng, biên lai chuyển khoản ngân hàng, hoặc giấy ghi chép chi tiêu tự do).
+const VISION_INVOICE_PROMPT = `Đọc hóa đơn/biên lai và trích xuất các khoản chi tiêu.
 Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ định dạng bắt buộc: [ { "name": "Món 1", "amount": 100 }, { "name": "Món 2", "amount": 200 } ]. Không trả về các object rời rạc.
 
-Cấu trúc đối tượng mục chi tiêu mẫu:
-{
-  "name": "Tên món hoặc khoản chi rõ ràng",
-  "amount": 50000,
-  "date": "YYYY-MM-DD",
-  "categorySuggestion": "Ăn" | "Uống" | "Xăng xe (Yamaha Janus)" | "Hóa đơn" | "Mua sắm" | "Cắt tóc" | "Đồ điện tử" | "Đồ gia dụng" | "Tiền lương" | "Chi tiêu khác"
-}
+Mỗi phần tử gồm:
+- "name": tên món hoặc người nhận chuyển khoản
+- "amount": số tiền nguyên dương (VD: 50k -> 50000, 1.2tr -> 1200000)
+- "date": YYYY-MM-DD (mặc định 2026 nếu thiếu năm)
+- "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe (Yamaha Janus)", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác"
 
-Quy tắc bắt buộc:
-1. Số tiền: Bỏ chữ VNĐ, đ, nghìn, k, chuyển đổi thành số nguyên dương (VD: 50k -> 50000, 1.2tr -> 1200000, 45.000 -> 45000).
-2. Không đưa các dòng phụ như "Tổng cộng", "VAT", "Tiền mặt", "Khách đưa", "Tiền thừa" vào danh sách mặt hàng items.
-3. Ngày tháng: Chuẩn YYYY-MM-DD. Nếu hóa đơn chỉ ghi ngày/tháng (ví dụ 12/10), mặc định lấy năm 2026.
-4. Đối với Biên lai chuyển khoản ngân hàng (Type B): Chỉ xuất đúng 1 item có amount là số tiền chuyển, name là nội dung chuyển khoản / người nhận.
-5. Đối với Hóa đơn in nhiệt có bảng (Type A): Tách từng món trong danh sách hàng hóa và gán cùng ngày hóa đơn.
-6. Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ định dạng bắt buộc: [ { "name": "Món 1", "amount": 100 }, { "name": "Món 2", "amount": 200 } ]. Không trả về các object rời rạc.
-
-Chỉ trả về duy nhất một chuỗi JSON hợp lệ. KHÔNG dùng định dạng markdown, KHÔNG dùng block code \`\`\`json, KHÔNG có bất kỳ đoạn text hoặc ký tự * nào bên ngoài cấu trúc JSON.`;
+Quy tắc:
+1. Không lấy dòng VAT, Tổng cộng, Tiền thối.
+2. Biên lai ngân hàng: xuất 1 phần tử gồm nội dung/người nhận và số tiền.
+3. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc ký tự khác bên ngoài.`;
 
 export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
