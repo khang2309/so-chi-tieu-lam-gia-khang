@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Sổ Chi Tiêu</string>
     <string name="title_activity_main">Sổ Chi Tiêu</string>
-    <string name="package_name">com.lamgiakhang.sochitieu</string>
-    <string name="custom_url_scheme">com.lamgiakhang.sochitieu</string>
+    <string name="package_name">com.khanglam.sochitieu</string>
+    <string name="custom_url_scheme">com.khanglam.sochitieu</string>
     <string name="server_client_id">1049457866930-8p1gu1bmhm5f8q6fs4k14s1meb2h5l6f.apps.googleusercontent.com</string>
 </resources>
