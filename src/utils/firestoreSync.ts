@@ -89,32 +89,58 @@ export async function removeLedgerFromFirestore(uid: string, id: string): Promis
 }
 
 /**
- * Lắng nghe thay đổi dữ liệu thời gian thực từ Firestore với hỗ trợ offline
+ * Lưu hoặc cập nhật danh mục lên Firestore (users/{uid}/categories/{id})
+ */
+export async function syncCategoryToFirestore(uid: string, cat: Category): Promise<void> {
+  if (!db || !uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'categories', cat.id);
+    await setDoc(docRef, cat, { merge: true });
+  } catch (err) {
+    console.warn('Lỗi ghi danh mục lên Firestore:', err);
+  }
+}
+
+/**
+ * Xóa một danh mục trên Firestore
+ */
+export async function removeCategoryFromFirestore(uid: string, id: string): Promise<void> {
+  if (!db || !uid) return;
+  try {
+    const docRef = doc(db, 'users', uid, 'categories', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Lỗi xóa danh mục trên Firestore:', err);
+  }
+}
+
+/**
+ * Lắng nghe thay đổi dữ liệu thời gian thực từ Firestore với hỗ trợ offline (onSnapshot)
+ * Firestore tự động đọc từ cache nội bộ (persistentLocalCache) khi offline và đồng bộ lên server khi online.
  */
 export function subscribeToUserFirestoreData(
   uid: string,
   callbacks: {
-    onTransactions?: (items: Transaction[]) => void;
-    onWallets?: (items: Wallet[]) => void;
-    onLedgers?: (items: Ledger[]) => void;
-    onCategories?: (items: Category[]) => void;
+    onTransactions?: (items: Transaction[], isEmpty: boolean) => void;
+    onWallets?: (items: Wallet[], isEmpty: boolean) => void;
+    onLedgers?: (items: Ledger[], isEmpty: boolean) => void;
+    onCategories?: (items: Category[], isEmpty: boolean) => void;
   }
 ): () => void {
   if (!db || !uid) return () => {};
 
   const unsubs: Array<() => void> = [];
 
-  // Lắng nghe transactions
+  // 1. Lắng nghe transactions
   if (callbacks.onTransactions) {
     const txCol = collection(db, 'users', uid, 'transactions');
     const unsub = onSnapshot(
       txCol,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const list: Transaction[] = [];
-          snapshot.forEach((d) => list.push(d.data() as Transaction));
-          callbacks.onTransactions?.(list);
-        }
+        const list: Transaction[] = [];
+        snapshot.forEach((d) => list.push(d.data() as Transaction));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        callbacks.onTransactions?.(list, snapshot.empty);
       },
       (error) => {
         console.warn('Lỗi lắng nghe transactions Firestore:', error);
@@ -123,17 +149,15 @@ export function subscribeToUserFirestoreData(
     unsubs.push(unsub);
   }
 
-  // Lắng nghe wallets
+  // 2. Lắng nghe wallets
   if (callbacks.onWallets) {
     const walletCol = collection(db, 'users', uid, 'wallets');
     const unsub = onSnapshot(
       walletCol,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const list: Wallet[] = [];
-          snapshot.forEach((d) => list.push(d.data() as Wallet));
-          callbacks.onWallets?.(list);
-        }
+        const list: Wallet[] = [];
+        snapshot.forEach((d) => list.push(d.data() as Wallet));
+        callbacks.onWallets?.(list, snapshot.empty);
       },
       (error) => {
         console.warn('Lỗi lắng nghe wallets Firestore:', error);
@@ -142,20 +166,35 @@ export function subscribeToUserFirestoreData(
     unsubs.push(unsub);
   }
 
-  // Lắng nghe ledgers
+  // 3. Lắng nghe ledgers
   if (callbacks.onLedgers) {
     const ledgerCol = collection(db, 'users', uid, 'ledgers');
     const unsub = onSnapshot(
       ledgerCol,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const list: Ledger[] = [];
-          snapshot.forEach((d) => list.push(d.data() as Ledger));
-          callbacks.onLedgers?.(list);
-        }
+        const list: Ledger[] = [];
+        snapshot.forEach((d) => list.push(d.data() as Ledger));
+        callbacks.onLedgers?.(list, snapshot.empty);
       },
       (error) => {
         console.warn('Lỗi lắng nghe ledgers Firestore:', error);
+      }
+    );
+    unsubs.push(unsub);
+  }
+
+  // 4. Lắng nghe categories
+  if (callbacks.onCategories) {
+    const catCol = collection(db, 'users', uid, 'categories');
+    const unsub = onSnapshot(
+      catCol,
+      (snapshot) => {
+        const list: Category[] = [];
+        snapshot.forEach((d) => list.push(d.data() as Category));
+        callbacks.onCategories?.(list, snapshot.empty);
+      },
+      (error) => {
+        console.warn('Lỗi lắng nghe categories Firestore:', error);
       }
     );
     unsubs.push(unsub);

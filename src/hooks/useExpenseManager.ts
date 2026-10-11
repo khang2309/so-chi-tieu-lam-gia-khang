@@ -10,6 +10,8 @@ import {
   removeWalletFromFirestore,
   syncLedgerToFirestore,
   removeLedgerFromFirestore,
+  syncCategoryToFirestore,
+  removeCategoryFromFirestore,
   subscribeToUserFirestoreData,
   uploadAllLocalDataToFirestore,
 } from '../utils/firestoreSync';
@@ -118,7 +120,7 @@ export function useExpenseManager() {
     localStorage.setItem(STORAGE_KEYS.TIME_FILTER, timeFilter);
   }, [timeFilter]);
 
-  // Đồng bộ thời gian thực từ Firestore khi người dùng đăng nhập
+  // Đồng bộ thời gian thực từ Firestore qua onSnapshot (Offline-First)
   useEffect(() => {
     if (!auth) return;
     let unsubData: (() => void) | null = null;
@@ -130,20 +132,54 @@ export function useExpenseManager() {
       }
 
       if (currentUser?.uid) {
-        unsubData = subscribeToUserFirestoreData(currentUser.uid, {
-          onTransactions: (fireTxs) => {
-            if (fireTxs && fireTxs.length > 0) {
+        const uid = currentUser.uid;
+        unsubData = subscribeToUserFirestoreData(uid, {
+          onTransactions: (fireTxs, isEmpty) => {
+            if (isEmpty) {
+              setTransactions((prev) => {
+                if (prev.length > 0) {
+                  prev.forEach((tx) => syncTransactionToFirestore(uid, tx));
+                }
+                return prev;
+              });
+            } else {
               setTransactions(fireTxs);
             }
           },
-          onWallets: (fireWallets) => {
-            if (fireWallets && fireWallets.length > 0) {
+          onWallets: (fireWallets, isEmpty) => {
+            if (isEmpty) {
+              setWallets((prev) => {
+                if (prev.length > 0) {
+                  prev.forEach((w) => syncWalletToFirestore(uid, w));
+                }
+                return prev;
+              });
+            } else {
               setWallets(fireWallets);
             }
           },
-          onLedgers: (fireLedgers) => {
-            if (fireLedgers && fireLedgers.length > 0) {
+          onLedgers: (fireLedgers, isEmpty) => {
+            if (isEmpty) {
+              setLedgers((prev) => {
+                if (prev.length > 0) {
+                  prev.forEach((l) => syncLedgerToFirestore(uid, l));
+                }
+                return prev;
+              });
+            } else {
               setLedgers(fireLedgers);
+            }
+          },
+          onCategories: (fireCategories, isEmpty) => {
+            if (isEmpty) {
+              setCategories((prev) => {
+                if (prev.length > 0) {
+                  prev.forEach((c) => syncCategoryToFirestore(uid, c));
+                }
+                return prev;
+              });
+            } else {
+              setCategories(fireCategories);
             }
           },
         });
@@ -430,6 +466,9 @@ export function useExpenseManager() {
     };
 
     setTransactions((prev) => [newTx, ...prev]);
+    if (auth?.currentUser?.uid) {
+      syncTransactionToFirestore(auth.currentUser.uid, newTx);
+    }
   };
 
   const addCategory = (data: Omit<Category, 'id'>) => {
@@ -438,17 +477,28 @@ export function useExpenseManager() {
       id: 'cat-' + Date.now(),
     };
     setCategories((prev) => [...prev, newCat]);
+    if (auth?.currentUser?.uid) {
+      syncCategoryToFirestore(auth.currentUser.uid, newCat);
+    }
     return newCat;
   };
 
   const updateCategory = (id: string, data: Partial<Category>) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...data } : c))
-    );
+    setCategories((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, ...data } : c));
+      const target = updated.find((c) => c.id === id);
+      if (target && auth?.currentUser?.uid) {
+        syncCategoryToFirestore(auth.currentUser.uid, target);
+      }
+      return updated;
+    });
   };
 
   const deleteCategory = (id: string) => {
     setCategories((prev) => prev.filter((c) => c.id !== id));
+    if (auth?.currentUser?.uid) {
+      removeCategoryFromFirestore(auth.currentUser.uid, id);
+    }
   };
 
   const resetToDefaults = () => {

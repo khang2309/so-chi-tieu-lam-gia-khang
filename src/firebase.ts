@@ -37,19 +37,24 @@ if (isFirebaseConfigured) {
     app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
 
-    // BẮT BUỘC: Kích hoạt bộ nhớ đệm cục bộ (Offline-First persistence)
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
+    // BẬT OFFLINE PERSISTENCE CHO FIRESTORE
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+    } catch {
+      try {
+        db = initializeFirestore(app, {
+          localCache: persistentLocalCache(),
+        });
+      } catch {
+        db = getFirestore(app);
+      }
+    }
   } catch (err) {
     console.warn('Cảnh báo khởi tạo Firebase:', err);
-    try {
-      if (app) db = getFirestore(app);
-    } catch {
-      // Fallback
-    }
   }
 }
 
