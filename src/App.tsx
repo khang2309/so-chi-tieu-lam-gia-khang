@@ -57,25 +57,6 @@ export function App() {
     }
   };
 
-  const handleApplyReceiptToTransaction = (receiptData: {
-    amount: number;
-    categoryId: string;
-    note: string;
-    date: string;
-  }) => {
-    setEditingTransaction({
-      id: '',
-      amount: receiptData.amount,
-      type: 'expense',
-      date: receiptData.date,
-      categoryId: receiptData.categoryId,
-      note: receiptData.note,
-      ledgerId: manager.activeLedgerId === 'all' ? (manager.ledgers[0]?.id || 'ledger-personal') : manager.activeLedgerId,
-      walletId: manager.activeWalletId === 'all' ? (manager.wallets[0]?.id || 'wallet-cash') : manager.activeWalletId,
-      createdAt: new Date().toISOString(),
-    });
-    setIsTransactionModalOpen(true);
-  };
 
   return (
     <div className="min-h-screen bg-paper text-ink font-sans flex flex-col selection:bg-[#ecd9c2]">
@@ -225,7 +206,11 @@ export function App() {
       <ReceiptScanModal
         isOpen={isReceiptScanModalOpen}
         onClose={() => setIsReceiptScanModalOpen(false)}
-        onApplyReceipt={handleApplyReceiptToTransaction}
+        ledgers={manager.ledgers}
+        wallets={manager.wallets}
+        categories={manager.categories}
+        activeLedgerId={manager.activeLedgerId}
+        onSaveTransaction={(tx) => manager.addTransaction(tx)}
       />
 
       <RoommateSplitModal
