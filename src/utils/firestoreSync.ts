@@ -10,6 +10,54 @@ import { db } from '../firebase';
 import { Transaction, Wallet, Ledger, Category } from '../types';
 
 /**
+ * Hàm làm sạch dữ liệu (Sanitize Data) đệ quy trước khi gửi lên Firestore:
+ * - Quét qua toàn bộ Object/Array.
+ * - Loại bỏ hoặc chuyển đổi bất kỳ key nào có giá trị là `undefined` (xóa khỏi object hoặc chuyển thành null).
+ * - Đảm bảo trường `toWalletId` nếu không phải là transfer thì luôn là null (hoặc chuỗi rỗng), tuyệt đối không để undefined.
+ * - Bắt buộc bọc payload bằng hàm này trước khi gọi setDoc, addDoc, updateDoc trên toàn bộ dự án.
+ */
+export function sanitizeFirestoreData<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as unknown as T;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeFirestoreData(item)) as unknown as T;
+  }
+
+  if (typeof data === 'object') {
+    // Nếu là Date instance
+    if (data instanceof Date) {
+      return data.toISOString() as unknown as T;
+    }
+
+    const cleanObj: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined) {
+        if (key === 'toWalletId') {
+          cleanObj[key] = null;
+        }
+        // Các trường khác có value undefined: xóa khỏi object để Firestore không quăng lỗi
+        continue;
+      } else if (value !== null && typeof value === 'object') {
+        cleanObj[key] = sanitizeFirestoreData(value);
+      } else {
+        cleanObj[key] = value;
+      }
+    }
+
+    // Đặc biệt kiểm tra đối với giao dịch: nếu không phải transfer, đảm bảo toWalletId là null
+    if ('type' in cleanObj && cleanObj.type !== 'transfer') {
+      cleanObj.toWalletId = null;
+    }
+
+    return cleanObj as T;
+  }
+
+  return data;
+}
+
+/**
  * Lấy mốc thời gian timestamp từ entity
  */
 function getEntityTimestamp(item: { updatedAt?: string; createdAt?: string; date?: string }): number {
@@ -123,18 +171,22 @@ export async function performTwoWaySync(
       categories: mergedCategories,
     };
 
-    // Bước 4: Đẩy (Upload) mảng đã gộp hoàn chỉnh ngược lên lại Firestore Cloud
+    // Bước 4: Đẩy (Upload) mảng đã gộp hoàn chỉnh ngược lên lại Firestore Cloud (bọc sanitize)
     for (const tx of mergedTransactions) {
-      await setDoc(doc(db, 'users', uid, 'transactions', tx.id), tx, { merge: true });
+      const cleanTx = sanitizeFirestoreData(tx);
+      await setDoc(doc(db, 'users', uid, 'transactions', tx.id), cleanTx, { merge: true });
     }
     for (const w of mergedWallets) {
-      await setDoc(doc(db, 'users', uid, 'wallets', w.id), w, { merge: true });
+      const cleanW = sanitizeFirestoreData(w);
+      await setDoc(doc(db, 'users', uid, 'wallets', w.id), cleanW, { merge: true });
     }
     for (const l of mergedLedgers) {
-      await setDoc(doc(db, 'users', uid, 'ledgers', l.id), l, { merge: true });
+      const cleanL = sanitizeFirestoreData(l);
+      await setDoc(doc(db, 'users', uid, 'ledgers', l.id), cleanL, { merge: true });
     }
     for (const c of mergedCategories) {
-      await setDoc(doc(db, 'users', uid, 'categories', c.id), c, { merge: true });
+      const cleanC = sanitizeFirestoreData(c);
+      await setDoc(doc(db, 'users', uid, 'categories', c.id), cleanC, { merge: true });
     }
 
     return {
@@ -159,8 +211,9 @@ export async function performTwoWaySync(
 export async function syncTransactionToFirestore(uid: string, tx: Transaction): Promise<void> {
   if (!db || !uid) return;
   try {
+    const cleanTx = sanitizeFirestoreData(tx);
     const docRef = doc(db, 'users', uid, 'transactions', tx.id);
-    await setDoc(docRef, tx, { merge: true });
+    await setDoc(docRef, cleanTx, { merge: true });
   } catch (err: any) {
     console.warn('Lỗi ghi giao dịch lên Firestore:', err);
     alert('Lỗi Firebase: ' + (err?.message || String(err)));
@@ -187,8 +240,9 @@ export async function removeTransactionFromFirestore(uid: string, id: string): P
 export async function syncWalletToFirestore(uid: string, wallet: Wallet): Promise<void> {
   if (!db || !uid) return;
   try {
+    const cleanWallet = sanitizeFirestoreData(wallet);
     const docRef = doc(db, 'users', uid, 'wallets', wallet.id);
-    await setDoc(docRef, wallet, { merge: true });
+    await setDoc(docRef, cleanWallet, { merge: true });
   } catch (err: any) {
     console.warn('Lỗi ghi ví lên Firestore:', err);
     alert('Lỗi Firebase: ' + (err?.message || String(err)));
@@ -215,8 +269,9 @@ export async function removeWalletFromFirestore(uid: string, id: string): Promis
 export async function syncLedgerToFirestore(uid: string, ledger: Ledger): Promise<void> {
   if (!db || !uid) return;
   try {
+    const cleanLedger = sanitizeFirestoreData(ledger);
     const docRef = doc(db, 'users', uid, 'ledgers', ledger.id);
-    await setDoc(docRef, ledger, { merge: true });
+    await setDoc(docRef, cleanLedger, { merge: true });
   } catch (err: any) {
     console.warn('Lỗi ghi sổ lên Firestore:', err);
     alert('Lỗi Firebase: ' + (err?.message || String(err)));
@@ -243,8 +298,9 @@ export async function removeLedgerFromFirestore(uid: string, id: string): Promis
 export async function syncCategoryToFirestore(uid: string, cat: Category): Promise<void> {
   if (!db || !uid) return;
   try {
+    const cleanCat = sanitizeFirestoreData(cat);
     const docRef = doc(db, 'users', uid, 'categories', cat.id);
-    await setDoc(docRef, cat, { merge: true });
+    await setDoc(docRef, cleanCat, { merge: true });
   } catch (err: any) {
     console.warn('Lỗi ghi danh mục lên Firestore:', err);
     alert('Lỗi Firebase: ' + (err?.message || String(err)));
@@ -412,22 +468,26 @@ export async function uploadAllLocalDataToFirestore(
   try {
     let count = 0;
     for (const tx of data.transactions) {
+      const cleanTx = sanitizeFirestoreData(tx);
       const docRef = doc(db, 'users', uid, 'transactions', tx.id);
-      await setDoc(docRef, tx, { merge: true });
+      await setDoc(docRef, cleanTx, { merge: true });
       count++;
     }
     for (const w of data.wallets) {
+      const cleanW = sanitizeFirestoreData(w);
       const docRef = doc(db, 'users', uid, 'wallets', w.id);
-      await setDoc(docRef, w, { merge: true });
+      await setDoc(docRef, cleanW, { merge: true });
     }
     for (const l of data.ledgers) {
+      const cleanL = sanitizeFirestoreData(l);
       const docRef = doc(db, 'users', uid, 'ledgers', l.id);
-      await setDoc(docRef, l, { merge: true });
+      await setDoc(docRef, cleanL, { merge: true });
     }
     if (data.categories) {
       for (const c of data.categories) {
+        const cleanC = sanitizeFirestoreData(c);
         const docRef = doc(db, 'users', uid, 'categories', c.id);
-        await setDoc(docRef, c, { merge: true });
+        await setDoc(docRef, cleanC, { merge: true });
       }
     }
     return { success: true, count, message: `Đã lưu ${count} giao dịch lên Cloud` };

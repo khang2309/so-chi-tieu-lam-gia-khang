@@ -74,7 +74,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
       categoryId: type === 'transfer' ? '' : categoryId,
       ledgerId,
       walletId,
-      toWalletId: type === 'transfer' ? toWalletId : undefined,
+      toWalletId: type === 'transfer' ? (toWalletId || null) : null,
       note: note.trim(),
     });
 

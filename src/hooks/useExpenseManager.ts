@@ -329,6 +329,7 @@ export function useExpenseManager() {
     const now = new Date().toISOString();
     const newTx: Transaction = {
       ...data,
+      toWalletId: data.type === 'transfer' ? (data.toWalletId || null) : null,
       id: 'tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       createdAt: now,
       updatedAt: now,
@@ -344,6 +345,7 @@ export function useExpenseManager() {
     const now = new Date().toISOString();
     const newTxs: Transaction[] = items.map((data, idx) => ({
       ...data,
+      toWalletId: data.type === 'transfer' ? (data.toWalletId || null) : null,
       id: 'tx-' + (Date.now() + idx) + '-' + Math.random().toString(36).substr(2, 4),
       createdAt: now,
       updatedAt: now,
@@ -358,7 +360,16 @@ export function useExpenseManager() {
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
     const now = new Date().toISOString();
     setTransactions((prev) => {
-      const updated = prev.map((tx) => (tx.id === id ? { ...tx, ...data, updatedAt: now } : tx));
+      const updated = prev.map((tx) => {
+        if (tx.id === id) {
+          const merged = { ...tx, ...data, updatedAt: now };
+          if (merged.type !== 'transfer') {
+            merged.toWalletId = null;
+          }
+          return merged;
+        }
+        return tx;
+      });
       const target = updated.find((tx) => tx.id === id);
       if (target && auth?.currentUser?.uid) {
         syncTransactionToFirestore(auth.currentUser.uid, target);

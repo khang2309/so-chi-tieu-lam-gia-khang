@@ -101,6 +101,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         categoryId,
         ledgerId,
         walletId,
+        toWalletId: null,
         note: note.trim(),
       },
       editingTransaction?.id

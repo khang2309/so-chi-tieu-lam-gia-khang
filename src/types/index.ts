@@ -44,14 +44,14 @@ export interface Transaction {
   note: string;
   ledgerId: string;
   walletId: string;
-  toWalletId?: string; // for transfer type
-  receiptImage?: string;
+  toWalletId?: string | null; // for transfer type
+  receiptImage?: string | null;
   splitInfo?: {
     totalRoomExpense: number;
     roommateCount: number;
     perPersonAmount: number;
     details: string;
-  };
+  } | null;
   createdAt: string;
   updatedAt?: string;
 }
