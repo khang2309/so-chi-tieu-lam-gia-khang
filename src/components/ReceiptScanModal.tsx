@@ -12,6 +12,7 @@ import {
   Calendar,
   Layers,
   Sparkles,
+  Wand2,
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { createWorker } from 'tesseract.js';
@@ -20,6 +21,7 @@ import {
   ExtractedBatchItem,
   InvoiceType,
 } from '../utils/ocrParser';
+import { preprocessImage } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
@@ -107,6 +109,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [batchItems, setBatchItems] = useState<ExtractedBatchItem[]>([]);
   const [invoiceType, setInvoiceType] = useState<InvoiceType>('TYPE_C_FREE_TEXT');
   const [invoiceTypeName, setInvoiceTypeName] = useState<string>('');
+  const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -133,18 +136,27 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setStep('verify');
   };
 
-  // Quét OCR thực tế bằng Tesseract.js
+  // Quét OCR thực tế bằng Tesseract.js có TIỀN XỬ LÝ ẢNH (Image Pre-processing)
   const runOcrOnImage = async (dataUrl: string) => {
     setIsProcessing(true);
-    setStatusMessage('Đang khởi động bộ máy OCR đọc chữ tiếng Việt...');
+    setStatusMessage('Đang tiền xử lý ảnh (Grayscale, Tăng tương phản, Làm nét)...');
 
     try {
-      setStatusMessage('Đang nhận diện toàn bộ các dòng chữ trên giấy...');
+      // BƯỚC TIỀN XỬ LÝ: Chuyển thang độ xám, tăng tương phản 70%, áp dụng kernel làm nét 3x3
+      const enhancedDataUrl = await preprocessImage(dataUrl, {
+        contrast: 70,
+        sharpen: true,
+      });
+      setProcessedImageUrl(enhancedDataUrl);
+
+      setStatusMessage('Đang khởi động bộ máy OCR đọc chữ tiếng Việt...');
       const worker = await createWorker('vie');
-      const ret = await worker.recognize(dataUrl);
+
+      setStatusMessage('Đang nhận diện toàn bộ các dòng chữ trên ảnh đã làm nét...');
+      const ret = await worker.recognize(enhancedDataUrl);
       await worker.terminate();
 
-      setStatusMessage('Đang phân tích cú pháp từng dòng & tự động phân loại...');
+      setStatusMessage('Đang phân tích cú pháp & tự động phân loại chi tiêu...');
       setIsProcessing(false);
       handleProcessBatchResult(ret.data.text);
     } catch (err) {
@@ -390,20 +402,29 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                 </div>
               </div>
 
-              {/* Kiểu hóa đơn tự động nhận diện */}
-              <div className="flex items-center gap-2 pt-1 border-t border-[#2e7d32]/15 text-xs">
-                <span className="text-[#7a6a58] font-medium text-[11px]">Kiểu nhận diện:</span>
-                <span
-                  className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                    invoiceType === 'TYPE_A_TABLE'
-                      ? 'bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd]'
-                      : invoiceType === 'TYPE_B_TRANSFER'
-                      ? 'bg-[#dcfce7] text-[#15803d] border border-[#bbf7d0]'
-                      : 'bg-[#fef3c7] text-[#b45309] border border-[#fde68a]'
-                  }`}
-                >
-                  {invoiceTypeName || 'Hóa đơn tự do'}
-                </span>
+              {/* Kiểu hóa đơn & Tiền xử lý ảnh */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#2e7d32]/15 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[#7a6a58] font-medium text-[11px]">Kiểu nhận diện:</span>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                      invoiceType === 'TYPE_A_TABLE'
+                        ? 'bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd]'
+                        : invoiceType === 'TYPE_B_TRANSFER'
+                        ? 'bg-[#dcfce7] text-[#15803d] border border-[#bbf7d0]'
+                        : 'bg-[#fef3c7] text-[#b45309] border border-[#fde68a]'
+                    }`}
+                  >
+                    {invoiceTypeName || 'Hóa đơn tự do'}
+                  </span>
+                </div>
+
+                {processedImageUrl && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#e0f2fe] text-[#0369a1] text-[10px] font-semibold border border-[#bae6fd]">
+                    <Wand2 className="w-3 h-3 text-[#0284c7]" />
+                    <span>Đã tiền xử lý: Grayscale + Tương phản 70% + Làm nét</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -564,16 +585,37 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               </div>
             </div>
 
-            {/* Xem trước văn bản OCR gốc */}
-            {rawOcrText && (
+            {/* Xem trước văn bản OCR gốc & Ảnh đã tiền xử lý */}
+            {(rawOcrText || processedImageUrl) && (
               <details className="text-xs text-[#7a6a58] border border-[#ebdcc9] rounded-xl p-2.5 bg-[#fbf5eb]/60">
                 <summary className="cursor-pointer font-medium flex items-center gap-1.5 text-[#3e332a]">
                   <FileText className="w-3.5 h-3.5" />
-                  Xem văn bản OCR gốc đã đọc
+                  Xem chi tiết văn bản đọc được & ảnh đã tiền xử lý
                 </summary>
-                <pre className="mt-2 text-[10px] whitespace-pre-wrap font-mono p-2 rounded bg-[#fffdfa] border border-[#ebdcc9] max-h-24 overflow-y-auto">
-                  {rawOcrText}
-                </pre>
+                <div className="mt-2 space-y-2">
+                  {processedImageUrl && (
+                    <div>
+                      <span className="text-[11px] font-semibold text-[#7a6a58]">
+                        Ảnh sau khi tiền xử lý (Grayscale + Tương phản + Làm nét):
+                      </span>
+                      <img
+                        src={processedImageUrl}
+                        alt="Hóa đơn sau tiền xử lý"
+                        className="mt-1 max-h-48 rounded-lg border border-[#ebdcc9] object-contain bg-white"
+                      />
+                    </div>
+                  )}
+                  {rawOcrText && (
+                    <div>
+                      <span className="text-[11px] font-semibold text-[#7a6a58]">
+                        Văn bản thô OCR:
+                      </span>
+                      <pre className="mt-1 text-[10px] whitespace-pre-wrap font-mono p-2 rounded bg-[#fffdfa] border border-[#ebdcc9] max-h-24 overflow-y-auto">
+                        {rawOcrText}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               </details>
             )}
 

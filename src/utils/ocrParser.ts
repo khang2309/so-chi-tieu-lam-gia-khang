@@ -196,6 +196,33 @@ function parseMoneyNumber(rawStr: string): number | null {
 }
 
 // =========================================================================
+// HELPER: LỌC RÁC VÀ LÀM SẠCH KÝ TỰ NHIỄU OCR
+// =========================================================================
+function cleanNoteText(str: string): string {
+  if (!str) return '';
+  // Loại bỏ các ký tự rác OCR phổ biến như |, ;, ", ?, ~, `, <, >, {, }
+  let cleaned = str.replace(/[|;~"`\<\>\\{}]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Loại bỏ chuỗi ký tự rời rạc vô nghĩa do nhiễu hạt scan như "HE Hi B li In li HH II II I"
+  cleaned = cleaned.replace(/\b([IHli1]\s+){2,}[IHli1]?\b/gi, '').trim();
+  return cleaned;
+}
+
+function isGarbageOcrText(str: string): boolean {
+  if (!str) return true;
+  const trimmed = str.trim();
+  if (trimmed.length < 2) return true;
+
+  // Đếm số lượng chữ cái tiếng Việt và số
+  const lettersAndDigits = trimmed.replace(/[^a-zA-Z0-9\u00C0-\u1EF9]/g, '');
+  if (lettersAndDigits.length < 2) return true;
+
+  // Chuỗi chỉ gồm các vạch kẻ và chữ cái nhiễu lặp lại (I, H, l, |, ;, :)
+  if (/^([IHl\|ji\s;:,\.\?!"])+$/i.test(trimmed)) return true;
+
+  return false;
+}
+
+// =========================================================================
 // 2. CHIẾN LƯỢC TRÍCH XUẤT CHO TỪNG LOẠI (EXTRACTION STRATEGIES)
 // =========================================================================
 
@@ -264,10 +291,11 @@ export function extractThermalReceipt(rawText: string): ExtractedBatchItem[] {
 
         // Xóa số thứ tự ở đầu dòng nếu có (ví dụ: '1.', '2/', '1 ')
         itemName = itemName.replace(/^\d+[\.\/\-)\s]+/, '').trim();
-        // Xóa dấu thừa
+        // Xóa dấu thừa và làm sạch ký tự rác OCR
+        itemName = cleanNoteText(itemName);
         itemName = itemName.replace(/^[\s:\-–—+=,.]+/, '').replace(/[\s:\-–—+=,.]+$/, '').trim();
 
-        if (!itemName || itemName.length < 2) {
+        if (isGarbageOcrText(itemName)) {
           itemName = `Món ăn / Hàng hóa ${parsedAmt.toLocaleString('vi-VN')} đ`;
         } else {
           itemName = itemName.charAt(0).toUpperCase() + itemName.slice(1);
@@ -411,7 +439,12 @@ export function extractFreeTextReceipt(rawText: string): ExtractedBatchItem[] {
         if (!note) {
           note = `Khoản chi ${amt.toLocaleString('vi-VN')} đ`;
         } else {
-          note = note.charAt(0).toUpperCase() + note.slice(1);
+          note = cleanNoteText(note);
+          if (isGarbageOcrText(note)) {
+            note = `Khoản chi ${amt.toLocaleString('vi-VN')} đ`;
+          } else {
+            note = note.charAt(0).toUpperCase() + note.slice(1);
+          }
         }
 
         items.push({
