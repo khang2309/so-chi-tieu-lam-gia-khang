@@ -78,7 +78,7 @@ function mapCategoryNameToId(name: string): string {
  */
 const VISION_INVOICE_PROMPT = `Bạn là trợ lý AI chuyên trích xuất dữ liệu hóa đơn và chi tiêu tại Việt Nam.
 Nhiệm vụ: Hãy phân tích kỹ hình ảnh này (hóa đơn in nhiệt siêu thị/cửa hàng, biên lai chuyển khoản ngân hàng, hoặc giấy ghi chép chi tiêu tự do).
-Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ theo cấu trúc sau (KHÔNG kèm chữ giải thích, KHÔNG bọc markdown \`\`\`json):
+Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ theo cấu trúc sau:
 {
   "invoiceType": "TYPE_A_TABLE" | "TYPE_B_TRANSFER" | "TYPE_C_FREE_TEXT",
   "invoiceTypeName": "Hóa đơn in / Bảng (Siêu thị)" hoặc "Biên lai Chuyển khoản" hoặc "Giấy ghi chép tự do",
@@ -99,7 +99,9 @@ Quy tắc bắt buộc:
 2. Không đưa các dòng phụ như "Tổng cộng", "VAT", "Tiền mặt", "Khách đưa", "Tiền thừa" vào danh sách mặt hàng items.
 3. Ngày tháng: Chuẩn YYYY-MM-DD. Nếu hóa đơn chỉ ghi ngày/tháng (ví dụ 12/10), mặc định lấy năm 2026.
 4. Đối với Biên lai chuyển khoản ngân hàng (Type B): Chỉ xuất đúng 1 item có amount là số tiền chuyển, name là nội dung chuyển khoản / người nhận.
-5. Đối với Hóa đơn in nhiệt có bảng (Type A): Tách từng món trong danh sách hàng hóa và gán cùng ngày hóa đơn.`;
+5. Đối với Hóa đơn in nhiệt có bảng (Type A): Tách từng món trong danh sách hàng hóa và gán cùng ngày hóa đơn.
+
+Chỉ trả về duy nhất một chuỗi JSON hợp lệ. KHÔNG dùng định dạng markdown, KHÔNG dùng block code \`\`\`json, KHÔNG có bất kỳ đoạn text hoặc ký tự * nào bên ngoài cấu trúc JSON.`;
 
 export const DEFAULT_GEMINI_API_KEY = "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ";
 
@@ -226,18 +228,53 @@ async function callOpenAIVision(base64Image: string, apiKey: string): Promise<st
 }
 
 /**
+ * Hàm dọn dẹp chuỗi trước khi Parse JSON (JSON Extraction):
+ * 1. Xóa bỏ các thẻ Markdown: text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+ * 2. Dùng Regex để trích xuất phần JSON cốt lõi (tìm từ dấu { hoặc [ đầu tiên đến dấu } hoặc ] cuối cùng).
+ * 3. Chỉ khi nào trích xuất được chuỗi sạch mới parse, bọc trong try...catch an toàn.
+ */
+export function extractCleanJsonString(rawText: string): string {
+  if (!rawText) return '';
+  // Bước 1: Xóa bỏ các thẻ Markdown
+  let text = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  // Bước 2: Dùng vị trí/Regex để trích xuất phần JSON cốt lõi (tìm từ dấu { hoặc [ đầu tiên đến dấu } hoặc ] cuối cùng)
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+  let startIdx = -1;
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    startIdx = Math.min(firstBrace, firstBracket);
+  } else {
+    startIdx = firstBrace !== -1 ? firstBrace : firstBracket;
+  }
+
+  const lastBrace = text.lastIndexOf('}');
+  const lastBracket = text.lastIndexOf(']');
+  const endIdx = Math.max(lastBrace, lastBracket);
+
+  if (startIdx !== -1 && endIdx > startIdx) {
+    text = text.substring(startIdx, endIdx + 1);
+  }
+
+  return text.trim();
+}
+
+/**
  * Bóc tách JSON string trả về từ LLM Vision thành BatchParsedResult
  */
 export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
-  let cleaned = jsonString.trim();
-  // Loại bỏ markdown code block nếu có
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
-  }
+  // Dọn dẹp chuỗi JSON trước khi Parse
+  const cleanJson = extractCleanJsonString(jsonString);
 
-  const parsed = JSON.parse(cleaned);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch (err: any) {
+    console.error('Không thể parse JSON từ Cloud AI sau khi dọn dẹp:', cleanJson, err);
+    throw new Error(
+      `Phản hồi từ Cloud AI không phải JSON hợp lệ (${err?.message || err}). Dữ liệu nhận được: ${cleanJson.slice(0, 120)}...`
+    );
+  }
 
   const invoiceType: InvoiceType = parsed.invoiceType || 'TYPE_A_TABLE';
   const invoiceTypeName =
@@ -248,9 +285,16 @@ export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
       ? 'Biên lai Chuyển khoản'
       : 'Giấy ghi chép tự do');
 
-  const defaultDate = parsed.date || new Date().toISOString().slice(0, 10);
+  const defaultDate =
+    (typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.date : null) ||
+    new Date().toISOString().slice(0, 10);
 
-  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const rawItems = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed.items)
+    ? parsed.items
+    : [];
+
   const items: ExtractedBatchItem[] = rawItems
     .filter((item: any) => item && (Number(item.amount) > 0 || Number(item.price) > 0))
     .map((item: any, idx: number) => {
@@ -270,7 +314,7 @@ export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
     });
 
   const totalAmount =
-    Number(parsed.totalAmount) ||
+    (typeof parsed === 'object' && !Array.isArray(parsed) && Number(parsed.totalAmount)) ||
     items.reduce((acc, it) => acc + it.amount, 0);
 
   return {

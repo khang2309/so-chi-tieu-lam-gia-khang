@@ -465,20 +465,50 @@ export function extractFreeTextReceipt(rawText: string): ExtractedBatchItem[] {
 // =========================================================================
 // 3. HÀM CHÍNH ĐIỀU PHỐI (EXTRACT INVOICE DATA)
 // Hỗ trợ cả chuỗi JSON từ Cloud/LLM Vision và văn bản phân tích dòng
+/**
+ * Hàm dọn dẹp chuỗi trước khi Parse JSON (JSON Extraction):
+ * 1. Xóa bỏ các thẻ Markdown: text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+ * 2. Dùng Regex / Vị trí để trích xuất phần JSON cốt lõi (tìm từ dấu { hoặc [ đầu tiên đến dấu } hoặc ] cuối cùng).
+ * 3. Chỉ khi nào trích xuất được chuỗi sạch mới parse, bọc trong try...catch an toàn.
+ */
+export function extractCleanJsonString(rawText: string): string {
+  if (!rawText) return '';
+  // Bước 1: Xóa bỏ các thẻ Markdown
+  let text = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  // Bước 2: Dùng vị trí/Regex để trích xuất phần JSON cốt lõi (từ dấu { hoặc [ đầu tiên đến dấu } hoặc ] cuối cùng)
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+  let startIdx = -1;
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    startIdx = Math.min(firstBrace, firstBracket);
+  } else {
+    startIdx = firstBrace !== -1 ? firstBrace : firstBracket;
+  }
+
+  const lastBrace = text.lastIndexOf('}');
+  const lastBracket = text.lastIndexOf(']');
+  const endIdx = Math.max(lastBrace, lastBracket);
+
+  if (startIdx !== -1 && endIdx > startIdx) {
+    text = text.substring(startIdx, endIdx + 1);
+  }
+
+  return text.trim();
+}
+
+// =========================================================================
+// 5. HÀM CHÍNH BÓC TÁCH DỮ LIỆU TỔNG QUÁT (EXTRACT INVOICE DATA)
 // =========================================================================
 export function extractInvoiceData(rawText: string): BatchParsedResult {
-  const trimmed = (rawText || '').trim();
+  const cleanJson = extractCleanJsonString(rawText);
 
   // Kiểm tra nếu đầu vào là kết quả JSON trả về từ Cloud LLM Vision
-  if ((trimmed.startsWith('{') || trimmed.startsWith('```json')) && (trimmed.includes('"items"') || trimmed.includes('"totalAmount"'))) {
+  if (
+    (cleanJson.startsWith('{') || cleanJson.startsWith('[')) &&
+    (cleanJson.includes('"items"') || cleanJson.includes('"totalAmount"') || cleanJson.includes('"amount"'))
+  ) {
     try {
-      let cleanJson = trimmed;
-      if (cleanJson.startsWith('```json')) {
-        cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (cleanJson.startsWith('```')) {
-        cleanJson = cleanJson.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
-
       const parsed = JSON.parse(cleanJson);
       const invoiceType: InvoiceType = parsed.invoiceType || 'TYPE_A_TABLE';
       const invoiceTypeName =
