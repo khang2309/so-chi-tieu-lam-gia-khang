@@ -92,10 +92,11 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
       await loginWithGoogleNative();
     } catch (err: any) {
       console.warn('Lỗi đăng nhập Google Native:', err);
-      const msg = err?.message || '';
-      if (!msg.toLowerCase().includes('cancel')) {
-        setAuthError(msg || 'Đăng nhập bằng Google không thành công.');
-      }
+      const detail =
+        typeof err === 'object'
+          ? (err.message ? `${err.message} (${JSON.stringify(err)})` : JSON.stringify(err))
+          : String(err);
+      setAuthError(detail);
     } finally {
       setIsGoogleSubmitting(false);
     }

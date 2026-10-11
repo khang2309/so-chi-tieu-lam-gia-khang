@@ -95,30 +95,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithGoogleNative = async () => {
     if (!auth) {
-      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
+      const msg = 'Firebase chưa được cấu hình khóa API trong file .env';
+      alert(msg);
+      throw new Error(msg);
     }
     try {
-      await GoogleAuth.initialize();
+      await GoogleAuth.initialize({
+        clientId: '1049457866930-8p1gu1bmhm5f8q6fs4k14s1meb2h5l6f.apps.googleusercontent.com',
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: true,
+      });
       const googleUser = await GoogleAuth.signIn();
       const idToken = googleUser.authentication?.idToken || (googleUser as any).idToken;
       if (!idToken) {
-        throw new Error('Không nhận được mã xác thực idToken từ Google.');
+        const tokenErr = 'Không nhận được mã xác thực idToken từ Google: ' + JSON.stringify(googleUser);
+        alert(tokenErr);
+        throw new Error(tokenErr);
       }
       const credential = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, credential);
       setIsAuthModalOpen(false);
     } catch (err: any) {
-      const msg = err?.message?.toLowerCase() || '';
-      // Nếu người dùng đóng hộp thoại chọn tài khoản Google (cancel) thì không coi là lỗi nghiêm trọng
-      if (
-        msg.includes('cancel') ||
-        msg.includes('canceled') ||
-        msg.includes('cancelled') ||
-        msg.includes('12501')
-      ) {
-        return;
-      }
       console.warn('Lỗi xác thực Google Native:', err);
+      // Hiển thị trực tiếp toàn bộ mã lỗi chi tiết (alert JSON hoặc message) theo yêu cầu
+      const errorStr =
+        typeof err === 'object'
+          ? (err.message ? `${err.message}\nChi tiết: ${JSON.stringify(err)}` : JSON.stringify(err))
+          : String(err);
+      alert(errorStr);
       throw err;
     }
   };

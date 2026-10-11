@@ -38,10 +38,11 @@ export const AuthModal: React.FC = () => {
       await loginWithGoogleNative();
     } catch (err: any) {
       console.warn('Lỗi đăng nhập Google Native:', err);
-      const msg = err?.message || '';
-      if (!msg.toLowerCase().includes('cancel')) {
-        setError(msg || 'Đăng nhập bằng Google không thành công.');
-      }
+      const detail =
+        typeof err === 'object'
+          ? (err.message ? `${err.message} (${JSON.stringify(err)})` : JSON.stringify(err))
+          : String(err);
+      setError(detail);
     } finally {
       setIsGoogleSubmitting(false);
     }
