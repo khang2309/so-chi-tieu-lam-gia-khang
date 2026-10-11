@@ -86,7 +86,7 @@ Mỗi phần tử gồm:
 - "name": tên món hoặc người nhận chuyển khoản
 - "amount": số tiền nguyên dương (VD: 50k -> 50000, 1.2tr -> 1200000)
 - "date": YYYY-MM-DD (mặc định 2026 nếu thiếu năm)
-- "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe (Yamaha Janus)", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác"
+- "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác"
 
 Quy tắc:
 1. Không lấy dòng VAT, Tổng cộng, Tiền thối.
@@ -106,7 +106,7 @@ BẮT BUỘC: Trả về DUY NHẤT một chuỗi JSON hợp lệ. Ví dụ:
 Quy tắc bắt buộc:
 1. "totalAmount": Số nguyên tổng tiền cả hóa đơn (Total / Tổng thanh toán). Không lấy tiền thối hay giảm giá.
 2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và giá (VD: "[Tên Cửa Hàng]\\n- Món A: 50.000\\n- Món B: 50.000").
-3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe (Yamaha Janus)", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
+3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
 4. "date": YYYY-MM-DD từ hóa đơn (mặc định 2026 nếu thiếu).
 5. Chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không bọc markdown (\`\`\`json) hay văn bản giải thích nào khác.`;
 
@@ -227,11 +227,11 @@ export const GEMINI_VOICE_SCHEMA = {
   properties: {
     amount: {
       type: 'INTEGER',
-      description: 'Số tiền nguyên dương đã tự động quy đổi từ các từ ngữ tiếng Việt',
+      description: 'Số tiền nguyên dương đã tự động quy đổi từ các từ ngữ tiếng Việt (k/ca/ka/nghìn/ngàn = x1.000, củ/triệu/tr = x1.000.000, lít/lốp = x100.000)',
     },
     note: {
       type: 'STRING',
-      description: 'Nội dung chi tiêu hoặc thu nhập, đã loại bỏ phần số tiền',
+      description: 'Nội dung chi tiêu hoặc thu nhập, tuyệt đối loại bỏ phần số tiền và từ lóng chỉ tiền (ví dụ: ăn cơm tấm 25ca -> note chỉ là "ăn cơm tấm")',
     },
     category: {
       type: 'STRING',
@@ -377,7 +377,8 @@ export async function callGeminiText(
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
   responseSchema?: any,
-  onModelSwitch?: (modelName: string, reason: string) => void
+  onModelSwitch?: (modelName: string, reason: string) => void,
+  systemInstruction?: string
 ): Promise<string> {
   const savedCfg = getSavedVisionConfig();
   const keyToUse =
@@ -400,6 +401,7 @@ export async function callGeminiText(
       // Trong khối try, khởi tạo genAI.getGenerativeModel({ model: currentModel }) và thực hiện generateContent
       const model = genAI.getGenerativeModel({
         model: currentModel,
+        ...(systemInstruction ? { systemInstruction } : {}),
         generationConfig: {
           temperature: 0.1,
           responseMimeType: 'application/json',
@@ -488,7 +490,8 @@ export async function callGeminiAudio(
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
   responseSchema?: any,
-  onModelSwitch?: (modelName: string, reason: string) => void
+  onModelSwitch?: (modelName: string, reason: string) => void,
+  systemInstruction?: string
 ): Promise<string> {
   const savedCfg = getSavedVisionConfig();
   const keyToUse =
@@ -533,6 +536,7 @@ export async function callGeminiAudio(
       // Trong khối try, khởi tạo genAI.getGenerativeModel({ model: currentModel }) và thực hiện generateContent
       const model = genAI.getGenerativeModel({
         model: currentModel,
+        ...(systemInstruction ? { systemInstruction } : {}),
         generationConfig: {
           temperature: 0.1,
           responseMimeType: 'application/json',

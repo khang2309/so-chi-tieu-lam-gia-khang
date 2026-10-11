@@ -508,7 +508,11 @@ export async function parseVoiceWithGemini(
   // Danh sách danh mục để AI gợi ý chuẩn xác nhất
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `Trích xuất thông tin giao dịch từ câu nói này: '${cleanInput}'. Trả về duy nhất định dạng JSON: { "amount": <số tiền nguyên dương, tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số>, "note": "<nội dung giao dịch, loại bỏ số tiền>", "category": "<danh mục phù hợp nhất trong danh sách: ${categoryNames}>" }`;
+  const prompt = `${VOICE_FEW_SHOT_SYSTEM_PROMPT}
+
+Danh sách các danh mục có sẵn: ${categoryNames}.
+
+Input: '${cleanInput}' -> Output:`;
 
   try {
     const rawResponse = await callGeminiText(
@@ -516,7 +520,8 @@ export async function parseVoiceWithGemini(
       apiKeyOverride,
       abortSignal,
       GEMINI_VOICE_SCHEMA,
-      onModelSwitch
+      onModelSwitch,
+      VOICE_FEW_SHOT_SYSTEM_PROMPT
     );
     let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
     const cleanJson = extractCleanJsonString(cleanText);
@@ -530,7 +535,13 @@ export async function parseVoiceWithGemini(
 
     const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
     const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
-    const note = rawNote || cleanInput;
+    // Dọn dẹp an toàn: nếu model vẫn vô tình để lại số tiền hoặc từ lóng trong note
+    let note = rawNote
+      .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
+      .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
+      .trim();
+    if (!note) note = rawNote || cleanInput;
+
     const categoryName = String(parsed.category || '').trim().toLowerCase();
 
     // Tìm danh mục khớp nhất
@@ -570,6 +581,23 @@ export async function parseVoiceWithGemini(
 }
 
 /**
+ * System Prompt chuẩn Few-Shot Learning theo đúng chỉ định để trị dứt điểm lỗi bóc tách từ lóng và số tiền trong ghi chú
+ */
+export const VOICE_FEW_SHOT_SYSTEM_PROMPT = `Bạn là trợ lý tài chính. Trích xuất thông tin giao dịch từ dữ liệu âm thanh/văn bản. Trả về định dạng JSON: {"amount": <số nguyên>, "note": "<chuỗi>", "category": "<chuỗi>"}. Tự động nhân các từ lóng: k, ca, ka, nghìn, ngàn = x1.000; củ, triệu, tr = x1.000.000; lít, lốp = x100.000.
+
+Dưới đây là các ví dụ BẮT BUỘC bạn phải học theo:
+
+Input: 'ăn cơm tấm 25ca' -> Output: {"amount": 25000, "note": "ăn cơm tấm", "category": "Ăn uống"}
+
+Input: 'ăn cơm tấm hết 25 nghìn' -> Output: {"amount": 25000, "note": "ăn cơm tấm", "category": "Ăn uống"}
+
+Input: 'đổ xăng 50k' -> Output: {"amount": 50000, "note": "đổ xăng", "category": "Xăng xe"}
+
+Input: 'tám trăm hai mươi lăm nghìn' -> Output: {"amount": 825000, "note": "Chưa rõ mục đích", "category": "Khác"}
+
+Input: 'mua cái áo 2 củ' -> Output: {"amount": 2000000, "note": "mua cái áo", "category": "Mua sắm"}`;
+
+/**
  * Phân tích trực tiếp từ dữ liệu âm thanh ghi âm (Audio Base64) bằng Google Gemini
  * Tự động chuyển đổi các model dự phòng khi hết Quota
  */
@@ -583,7 +611,10 @@ export async function parseVoiceAudioWithGemini(
 ): Promise<ParsedVoiceResult> {
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `Nghe đoạn âm thanh tiếng Việt này và trích xuất thông tin giao dịch. Trả về duy nhất định dạng JSON (không có markdown): { "amount": <số tiền nguyên dương>, "note": "<mô tả nội dung chi tiêu hoặc thu nhập>", "category": "<danh mục phù hợp nhất trong danh sách: ${categoryNames}>" }`;
+  const prompt = `${VOICE_FEW_SHOT_SYSTEM_PROMPT}
+
+Danh sách các danh mục có sẵn: ${categoryNames}.
+Nhiệm vụ: Hãy nghe đoạn âm thanh tiếng Việt đính kèm và trích xuất thông tin giao dịch theo đúng các ví dụ trên (tuyệt đối không để số tiền hay từ lóng như 25ca, 25k, 25 nghìn trong trường "note"). Trả về DUY NHẤT một chuỗi JSON hợp lệ.`;
 
   const rawResponse = await callGeminiAudio(
     audioBase64,
@@ -592,7 +623,8 @@ export async function parseVoiceAudioWithGemini(
     apiKeyOverride,
     abortSignal,
     GEMINI_VOICE_SCHEMA,
-    onModelSwitch
+    onModelSwitch,
+    VOICE_FEW_SHOT_SYSTEM_PROMPT
   );
 
   let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -612,7 +644,13 @@ export async function parseVoiceAudioWithGemini(
 
   const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
   const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
-  const note = rawNote || 'Giao dịch giọng nói';
+  // Dọn dẹp an toàn: nếu model vẫn vô tình để lại số tiền hoặc từ lóng trong note
+  let note = rawNote
+    .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
+    .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
+    .trim();
+  if (!note) note = rawNote || 'Giao dịch giọng nói';
+
   const categoryName = String(parsed.category || '').trim().toLowerCase();
 
   // Tìm danh mục khớp nhất

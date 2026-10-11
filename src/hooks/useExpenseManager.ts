@@ -52,7 +52,15 @@ export function useExpenseManager() {
   const [categories, setCategories] = useState<Category[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-      return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_CATEGORIES;
+      if (saved) {
+        const parsed = sanitizeData(JSON.parse(saved));
+        return parsed.map((cat: Category) =>
+          cat.id === 'cat-gas' && (cat.name.includes('Yamaha Janus') || cat.name === 'Xăng xe (Yamaha Janus)')
+            ? { ...cat, name: 'Xăng xe' }
+            : cat
+        );
+      }
+      return DEFAULT_CATEGORIES;
     } catch {
       return DEFAULT_CATEGORIES;
     }

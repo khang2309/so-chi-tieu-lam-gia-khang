@@ -138,7 +138,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
   },
   {
     id: 'cat-gas',
-    name: 'Xăng xe (Yamaha Janus)',
+    name: 'Xăng xe',
     type: 'expense',
     icon: 'Fuel',
     color: '#ea580c',
