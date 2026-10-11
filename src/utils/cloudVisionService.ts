@@ -1,9 +1,9 @@
 import { BatchParsedResult, ExtractedBatchItem, InvoiceType, predictCategory } from './ocrParser';
 
-export type VisionProvider = 'gemini' | 'openai' | 'google_vision';
+export type VisionProvider = 'gemini';
 
 export interface VisionConfig {
-  provider: VisionProvider;
+  provider: 'gemini';
   apiKey: string;
   customEndpoint?: string;
 }
@@ -11,13 +11,14 @@ export interface VisionConfig {
 const STORAGE_KEY_CONFIG = 'lamgiakhang_vision_config';
 
 /**
- * Lấy cấu hình Vision API từ LocalStorage
+ * Lấy cấu hình Vision API từ LocalStorage (Luôn sử dụng Google Gemini)
  */
 export function getSavedVisionConfig(): VisionConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
     if (raw) {
       const parsed = JSON.parse(raw);
+      parsed.provider = 'gemini';
       if (!parsed.apiKey || parsed.apiKey.trim().length === 0 || parsed.apiKey === "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ") {
         parsed.apiKey = DEFAULT_GEMINI_API_KEY;
         saveVisionConfig(parsed);
@@ -75,9 +76,9 @@ function mapCategoryNameToId(name: string): string {
 }
 
 /**
- * Prompt rút gọn tối ưu tốc độ cho LLM Vision: tập trung trích xuất mảng JSON siêu nhanh
+ * Prompt 1: Tách từng món (Mặc định)
  */
-const VISION_INVOICE_PROMPT = `Đọc hóa đơn/biên lai và trích xuất các khoản chi tiêu.
+export const VISION_INVOICE_PROMPT_SPLIT = `Đọc hóa đơn/biên lai và trích xuất các khoản chi tiêu từng món.
 Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ định dạng bắt buộc: [ { "name": "Món 1", "amount": 100 }, { "name": "Món 2", "amount": 200 } ]. Không trả về các object rời rạc.
 
 Mỗi phần tử gồm:
@@ -90,6 +91,27 @@ Quy tắc:
 1. Không lấy dòng VAT, Tổng cộng, Tiền thối.
 2. Biên lai ngân hàng: xuất 1 phần tử gồm nội dung/người nhận và số tiền.
 3. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc ký tự khác bên ngoài.`;
+
+/**
+ * Prompt 2: Gộp thành 1 giao dịch duy nhất
+ */
+export const VISION_INVOICE_PROMPT_MERGE = `Đọc hóa đơn/biên lai và gộp toàn bộ thành DUY NHẤT 1 giao dịch tổng thể.
+Bạn phải trả về một MẢNG JSON gồm ĐÚNG 1 phần tử (JSON Array chứa 1 Object duy nhất). Ví dụ:
+[
+  {
+    "name": "Tên cửa hàng hoặc Tổng hợp chi tiêu hóa đơn (VD: Siêu thị WinMart, Highlands Coffee, Đổ xăng Petrolimex, Quán Cơm Niêu)",
+    "amount": 150000,
+    "date": "2026-03-25",
+    "categorySuggestion": "Mua sắm"
+  }
+]
+
+Quy tắc:
+1. "amount": Bắt buộc là "Tổng cộng" (Total / Tổng thanh toán) của cả hóa đơn. Không lấy tiền thối hay giảm giá.
+2. "name": Bắt buộc là tên cửa hàng, người bán, hoặc tóm tắt tổng thể chi tiêu của cả hóa đơn.
+3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe (Yamaha Janus)", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
+4. "date": YYYY-MM-DD từ hóa đơn (mặc định 2026 nếu thiếu).
+5. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc văn bản giải thích bên ngoài.`;
 
 export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
@@ -111,10 +133,15 @@ export const GEMINI_FALLBACK_MODELS = [
 ];
 
 /**
- * 1. Gọi Google Gemini Vision API với cơ chế tự động Fallback qua danh sách models
+ * Gọi Google Gemini Vision API với cơ chế tự động Fallback qua danh sách models
  * Hỗ trợ tự động thử cả v1beta và v1 endpoints nếu gặp lỗi 404, tích hợp AbortSignal để hủy tức thì
  */
-async function callGeminiVision(base64Image: string, apiKey: string, abortSignal?: AbortSignal): Promise<string> {
+async function callGeminiVision(
+  base64Image: string,
+  apiKey: string,
+  abortSignal?: AbortSignal,
+  promptText: string = VISION_INVOICE_PROMPT_SPLIT
+): Promise<string> {
   const { base64Data, mimeType } = cleanBase64(base64Image);
   const keyToUse = apiKey && apiKey.trim().length > 0 ? apiKey.trim() : DEFAULT_GEMINI_API_KEY;
 
@@ -122,7 +149,7 @@ async function callGeminiVision(base64Image: string, apiKey: string, abortSignal
     contents: [
       {
         parts: [
-          { text: VISION_INVOICE_PROMPT },
+          { text: promptText },
           {
             inline_data: {
               mime_type: mimeType,
@@ -192,56 +219,6 @@ async function callGeminiVision(base64Image: string, apiKey: string, abortSignal
   }
 
   throw new Error(`Tất cả các model Gemini đều không phản hồi: ${lastError}`);
-}
-
-/**
- * 2. Gọi OpenAI GPT-4o-mini Vision API (Hỗ trợ AbortSignal)
- */
-async function callOpenAIVision(base64Image: string, apiKey: string, abortSignal?: AbortSignal): Promise<string> {
-  const { base64Data, mimeType } = cleanBase64(base64Image);
-  const endpoint = 'https://api.openai.com/v1/chat/completions';
-
-  const payload = {
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: VISION_INVOICE_PROMPT },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${base64Data}`,
-            },
-          },
-        ],
-      },
-    ],
-    temperature: 0.1,
-    response_format: { type: 'json_object' },
-  };
-
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(payload),
-    signal: abortSignal,
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`OpenAI Vision API lỗi (${res.status}): ${errorText}`);
-  }
-
-  const json = await res.json();
-  const rawContent = json?.choices?.[0]?.message?.content;
-  if (!rawContent) {
-    throw new Error('OpenAI API không trả về kết quả!');
-  }
-  return rawContent;
 }
 
 /**
@@ -405,11 +382,28 @@ export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
     (typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.date : null) ||
     new Date().toISOString().slice(0, 10);
 
-  const rawItems = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray(parsed.items)
-    ? parsed.items
-    : [];
+  let rawItems: any[] = [];
+  if (Array.isArray(parsed)) {
+    rawItems = parsed;
+  } else if (Array.isArray(parsed.items)) {
+    rawItems = parsed.items;
+  } else if (typeof parsed === 'object' && parsed !== null) {
+    // Nếu AI trả về 1 object đơn lẻ (nhất là trong chế độ gộp 1 giao dịch)
+    const singleAmt = Number(parsed.totalAmount || parsed.total || parsed.amount || parsed.price || 0);
+    const singleName = String(
+      parsed.storeName || parsed.merchant || parsed.name || parsed.title || parsed.note || 'Chi tiêu hóa đơn'
+    ).trim();
+    if (singleAmt > 0) {
+      rawItems = [
+        {
+          name: singleName,
+          amount: singleAmt,
+          date: parsed.date || defaultDate,
+          categorySuggestion: parsed.categorySuggestion || parsed.category || singleName,
+        },
+      ];
+    }
+  }
 
   const items: ExtractedBatchItem[] = rawItems
     .filter((item: any) => item && (Number(item.amount) > 0 || Number(item.price) > 0))
@@ -444,27 +438,24 @@ export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
 
 /**
  * HÀM CHÍNH: extractInvoiceDataWithCloudVision
- * Gửi ảnh Base64 lên Cloud Vision API (Gemini / OpenAI) và parse dữ liệu JSON
+ * Gửi ảnh Base64 lên Google Gemini Vision API và parse dữ liệu JSON
  * Hỗ trợ abortSignal để hủy bỏ ngay lập tức nếu người dùng bấm Hủy
+ * Hỗ trợ scanMode: 'split' (Tách từng món) hoặc 'merge' (Gộp thành 1 giao dịch)
  */
 export async function extractInvoiceDataWithCloudVision(
   imageSource: string,
   configOverride?: Partial<VisionConfig>,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  scanMode: 'split' | 'merge' = 'split'
 ): Promise<BatchParsedResult> {
   const currentConfig = { ...getSavedVisionConfig(), ...configOverride };
   const effectiveKey = currentConfig.apiKey?.trim() || DEFAULT_GEMINI_API_KEY;
 
-  let rawJsonText = '';
-  if (currentConfig.provider === 'openai') {
-    if (!effectiveKey) {
-      throw new Error('Chưa thiết lập OpenAI API Key!');
-    }
-    rawJsonText = await callOpenAIVision(imageSource, effectiveKey, abortSignal);
-  } else {
-    // Mặc định: Google Gemini Vision
-    rawJsonText = await callGeminiVision(imageSource, effectiveKey, abortSignal);
-  }
+  const promptText =
+    scanMode === 'merge' ? VISION_INVOICE_PROMPT_MERGE : VISION_INVOICE_PROMPT_SPLIT;
+
+  // Mặc định và duy nhất: Google Gemini Vision
+  const rawJsonText = await callGeminiVision(imageSource, effectiveKey, abortSignal, promptText);
 
   return parseVisionJsonResponse(rawJsonText);
 }

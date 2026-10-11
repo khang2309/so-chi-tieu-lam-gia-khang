@@ -59,11 +59,11 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [rawOcrText, setRawOcrText] = useState<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Cấu hình Cloud Vision API (Gemini / OpenAI)
+  // Cấu hình Cloud Vision API (Google Gemini)
   const [visionConfig, setVisionConfig] = useState<VisionConfig>(getSavedVisionConfig());
   const [showConfig, setShowConfig] = useState<boolean>(!getSavedVisionConfig().apiKey);
   const [apiKeyInput, setApiKeyInput] = useState<string>(getSavedVisionConfig().apiKey);
-  const [providerInput, setProviderInput] = useState<'gemini' | 'openai'>('gemini');
+  const [scanMode, setScanMode] = useState<'split' | 'merge'>('split');
 
   // Cấu hình chung cho toàn bộ đợt quét
   const [selectedLedgerId, setSelectedLedgerId] = useState<string>('');
@@ -79,7 +79,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     const cfg = getSavedVisionConfig();
     setVisionConfig(cfg);
     setApiKeyInput(cfg.apiKey);
-    setProviderInput(cfg.provider === 'openai' ? 'openai' : 'gemini');
     if (!cfg.apiKey) {
       setShowConfig(true);
     }
@@ -98,7 +97,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const handleSaveVisionConfig = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const newCfg: VisionConfig = {
-      provider: providerInput,
+      provider: 'gemini',
       apiKey: apiKeyInput.trim(),
     };
     saveVisionConfig(newCfg);
@@ -148,12 +147,15 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       }
 
       setStatusMessage(
-        `Đang gửi ảnh lên ${cfg.provider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 1.5 Flash'}...`
+        scanMode === 'merge'
+          ? 'Đang gửi ảnh lên Google Gemini Vision (Gộp thành 1 giao dịch)...'
+          : 'Đang gửi ảnh lên Google Gemini Vision (Tách từng món)...'
       );
       const parsedResult = await extractInvoiceDataWithCloudVision(
         enhancedDataUrl,
         cfg,
-        controller.signal
+        controller.signal,
+        scanMode
       );
 
       if (controller.signal.aborted) return;
@@ -189,6 +191,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   // Chụp ảnh bằng Capacitor Camera
   const handleTakePhoto = async () => {
+    if (isProcessing) return;
     try {
       const photo = await Camera.getPhoto({
         quality: 90,
@@ -208,6 +211,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   // Tải ảnh từ thư viện
   const handleUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isProcessing) return;
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -217,6 +221,8 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       };
       reader.readAsDataURL(file);
     }
+    // Reset file input để có thể chọn lại nếu muốn
+    e.target.value = '';
   };
 
 
@@ -329,7 +335,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   </div>
                   <div>
                     <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
-                      <span>Động cơ: Cloud AI Vision</span>
+                      <span>Động cơ: Google Gemini AI Vision</span>
                       {visionConfig.apiKey ? (
                         <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
                           Đã kích hoạt
@@ -341,7 +347,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                       )}
                     </div>
                     <div className="text-[11px] text-[#7a6a58]">
-                      {visionConfig.provider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 1.5 Flash (Khuyên dùng)'}
+                      Nhận diện hóa đơn thông minh (Gemini 1.5 Flash / 2.0 Flash)
                     </div>
                   </div>
                 </div>
@@ -358,44 +364,26 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
               {showConfig && (
                 <form onSubmit={handleSaveVisionConfig} className="pt-2 border-t border-[#f0e4d5] space-y-2.5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-semibold text-[#7a6a58]">
-                        Nhà cung cấp AI:
-                      </label>
-                      <select
-                        value={providerInput}
-                        onChange={(e) => setProviderInput(e.target.value as any)}
-                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
+                      <span>Google Gemini API Key:</span>
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-[#a25832] hover:underline flex items-center gap-0.5 font-medium"
                       >
-                        <option value="gemini">Google Gemini (Miễn phí 100%)</option>
-                        <option value="openai">OpenAI (GPT-4o-mini)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
-                        <span>API Key:</span>
-                        {providerInput === 'gemini' && (
-                          <a
-                            href="https://aistudio.google.com/app/apikey"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[10px] text-[#a25832] hover:underline flex items-center gap-0.5 font-medium"
-                          >
-                            <span>Lấy key miễn phí</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        )}
-                      </label>
-                      <input
-                        type="password"
-                        value={apiKeyInput}
-                        onChange={(e) => setApiKeyInput(e.target.value)}
-                        placeholder={providerInput === 'gemini' ? 'Dán Gemini API Key (AIzaSy...)' : 'Dán OpenAI Key (sk-...)'}
-                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-mono text-[#3e332a] focus:bg-white focus:outline-none"
-                      />
-                    </div>
+                        <span>Lấy key miễn phí (Google AI Studio)</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </label>
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="Dán Gemini API Key (AIzaSy...)"
+                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-mono text-[#3e332a] focus:bg-white focus:outline-none"
+                    />
                   </div>
 
                   <div className="flex items-center justify-between gap-2 pt-1">
@@ -411,6 +399,51 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   </div>
                 </form>
               )}
+            </div>
+
+            {/* Tùy chọn Tách/Gộp hóa đơn */}
+            <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-[#a25832]" />
+                  <span>Chế độ trích xuất hóa đơn:</span>
+                </div>
+                <p className="text-[11px] text-[#7a6a58] mt-0.5">
+                  {scanMode === 'split'
+                    ? 'Tách chi tiết từng dòng mặt hàng thành nhiều khoản chi riêng lẻ'
+                    : 'Gộp toàn bộ thành 1 khoản chi duy nhất với số tiền Tổng cộng'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1 p-1 bg-[#fbf5eb] border border-[#ebdcc9] rounded-xl self-start sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => setScanMode('split')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    scanMode === 'split'
+                      ? 'bg-[#a25832] text-white shadow-xs'
+                      : 'text-[#7a6a58] hover:text-[#3e332a]'
+                  } ${isProcessing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                >
+                  <span>Tách từng món</span>
+                  <span className={`text-[10px] px-1 py-0.2 rounded font-medium ${scanMode === 'split' ? 'bg-white/20 text-white' : 'bg-[#ebdcc9] text-[#7a6a58]'}`}>
+                    Mặc định
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => setScanMode('merge')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    scanMode === 'merge'
+                      ? 'bg-[#a25832] text-white shadow-xs'
+                      : 'text-[#7a6a58] hover:text-[#3e332a]'
+                  } ${isProcessing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                >
+                  <span>Gộp 1 giao dịch</span>
+                </button>
+              </div>
             </div>
 
             {/* Vùng chụp / upload */}
@@ -453,19 +486,30 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   type="button"
                   onClick={handleTakePhoto}
                   disabled={isProcessing}
-                  className="px-4 py-2 rounded-xl bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1.5 shadow-xs"
+                  className={`px-4 py-2 rounded-xl bg-[#a25832] text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs ${
+                    isProcessing
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                      : 'hover:bg-[#8c4623] cursor-pointer'
+                  }`}
                 >
                   <CameraIcon className="w-4 h-4" />
                   <span>Chụp máy ảnh</span>
                 </button>
 
-                <label className="cursor-pointer px-4 py-2 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] hover:bg-[#f5ebe0] transition shadow-xs flex items-center gap-1.5">
+                <label
+                  className={`px-4 py-2 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] transition shadow-xs flex items-center gap-1.5 ${
+                    isProcessing
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                      : 'hover:bg-[#f5ebe0] cursor-pointer'
+                  }`}
+                >
                   <Upload className="w-4 h-4 text-[#7a6a58]" />
                   <span>Chọn ảnh từ máy</span>
                   <input
                     id="batch-receipt-file-input"
                     type="file"
                     accept="image/*"
+                    disabled={isProcessing}
                     onChange={handleUploadFile}
                     className="hidden"
                   />
