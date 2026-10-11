@@ -137,7 +137,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setWalletId(defaultWallet);
 
       if (initialValues?.categoryId) {
-        setCategoryId(initialValues.categoryId);
+        const matched = categories.find((c) => c.id === initialValues.categoryId);
+        if (matched && (matched.type === defaultType || matched.type === 'both')) {
+          setCategoryId(initialValues.categoryId);
+        } else {
+          const firstCat = categories.find((c) =>
+            defaultType === 'expense'
+              ? c.type === 'expense' || c.type === 'both'
+              : c.type === 'income' || c.type === 'both'
+          ) || categories[0];
+          setCategoryId(firstCat?.id || initialValues.categoryId);
+        }
       } else {
         const firstCat = categories.find((c) =>
           defaultType === 'expense'

@@ -223,22 +223,28 @@ export const GEMINI_SPLIT_SCHEMA = {
  * Schema Gemini cho Voice-to-Text NLP (Single Voice Parsed Object)
  */
 export const GEMINI_VOICE_SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
   properties: {
     amount: {
-      type: 'INTEGER',
-      description: 'Số tiền nguyên dương đã tự động quy đổi từ các từ ngữ tiếng Việt (k/ca/ka/nghìn/ngàn = x1.000, củ/triệu/tr = x1.000.000, lít/lốp = x100.000)',
+      type: 'integer',
+      description:
+        "Số tiền giao dịch. Phải quy đổi các từ lóng: k, ca, ka, nghìn, ngàn = x 1.000 (VD: '25ca' = 25000, '50k' = 50000). củ, triệu = x 1.000.000. Tuyệt đối không sinh ra số ngẫu nhiên.",
     },
     note: {
-      type: 'STRING',
-      description: 'Nội dung chi tiêu hoặc thu nhập, tuyệt đối loại bỏ phần số tiền và từ lóng chỉ tiền (ví dụ: ăn cơm tấm 25ca -> note chỉ là "ăn cơm tấm")',
+      type: 'string',
+      description: "Mô tả nội dung giao dịch, loại bỏ phần số tiền. (VD: 'ăn cơm tấm'). Nếu không rõ, để là 'Chưa rõ'.",
     },
     category: {
-      type: 'STRING',
-      description: 'Tên danh mục phù hợp nhất từ danh sách danh mục',
+      type: 'string',
+      description: 'Phân loại danh mục phù hợp (VD: Ăn uống, Mua sắm, Đi lại, Tiền lương...).',
+    },
+    transactionType: {
+      type: 'string',
+      description:
+        "Nếu người dùng chi tiền (mua, ăn, trả, tiêu) -> 'expense'. Nếu người dùng nhận tiền (bán, được, lương, thu) -> 'income'.",
     },
   },
-  required: ['amount', 'note', 'category'],
+  required: ['amount', 'note', 'category', 'transactionType'],
 };
 
 /**

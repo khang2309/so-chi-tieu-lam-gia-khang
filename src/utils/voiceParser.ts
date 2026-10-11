@@ -483,8 +483,17 @@ export function parseVoiceInput(text: string, categories: Category[]): ParsedVoi
 }
 
 /**
+ * Prompt ngắn gọn, súc tích theo chỉ định để trị dứt điểm lỗi ảo giác (hallucination)
+ * Loại bỏ hoàn toàn ví dụ số tiền tĩnh gây suy đoán sai (như 25ca -> 825000)
+ */
+export const VOICE_CONCISE_PROMPT =
+  'Phân tích câu nói tiếng Việt và điền dữ liệu vào JSON Schema. Lưu ý xử lý đúng các đơn vị tiền lóng (25ca = 25000) và phân biệt đúng Thu nhập / Chi tiêu.';
+
+export const VOICE_FEW_SHOT_SYSTEM_PROMPT = VOICE_CONCISE_PROMPT;
+
+/**
  * Nâng cấp bóc tách Giọng nói (Voice) bằng Google Gemini API:
- * Gửi câu nói lên Gemini để bóc tách: amount, note, category
+ * Gửi câu nói lên Gemini để bóc tách: amount, note, category, transactionType
  * Tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số nguyên, loại bỏ số tiền khỏi note
  */
 export async function parseVoiceWithGemini(
@@ -508,11 +517,10 @@ export async function parseVoiceWithGemini(
   // Danh sách danh mục để AI gợi ý chuẩn xác nhất
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `${VOICE_FEW_SHOT_SYSTEM_PROMPT}
+  const prompt = `${VOICE_CONCISE_PROMPT}
 
 Danh sách các danh mục có sẵn: ${categoryNames}.
-
-Input: '${cleanInput}' -> Output:`;
+Câu nói: "${cleanInput}"`;
 
   try {
     const rawResponse = await callGeminiText(
@@ -521,7 +529,7 @@ Input: '${cleanInput}' -> Output:`;
       abortSignal,
       GEMINI_VOICE_SCHEMA,
       onModelSwitch,
-      VOICE_FEW_SHOT_SYSTEM_PROMPT
+      VOICE_CONCISE_PROMPT
     );
     let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
     const cleanJson = extractCleanJsonString(cleanText);
@@ -533,25 +541,58 @@ Input: '${cleanInput}' -> Output:`;
       parsed = JSON.parse(escapeNewlinesInJsonStrings(cleanJson));
     }
 
-    const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
+    let amount = Math.abs(Math.round(Number(parsed.amount) || 0));
+    // Fallback nếu LLM trả 0
+    if (amount === 0) {
+      const fallbackExt = extractAmount(cleanInput);
+      if (fallbackExt) {
+        amount = fallbackExt.amount;
+      }
+    }
+
     const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
     // Dọn dẹp an toàn: nếu model vẫn vô tình để lại số tiền hoặc từ lóng trong note
     let note = rawNote
       .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
       .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
       .trim();
-    if (!note) note = rawNote || cleanInput;
+    if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
+      note = rawNote || cleanInput;
+    }
+
+    const rawType = String(parsed.transactionType || '').trim().toLowerCase();
+    let type: TransactionType = 'expense';
+    if (rawType === 'income' || rawType.includes('income') || rawType.includes('thu')) {
+      type = 'income';
+    } else if (rawType === 'expense' || rawType.includes('expense') || rawType.includes('chi')) {
+      type = 'expense';
+    } else {
+      const isIncomeText = /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ|bán)\b/i.test(
+        cleanInput
+      );
+      type = isIncomeText ? 'income' : 'expense';
+    }
 
     const categoryName = String(parsed.category || '').trim().toLowerCase();
 
-    // Tìm danh mục khớp nhất
+    // Tìm danh mục khớp với loại giao dịch (income / expense)
     let matchedCat = categories.find(
-      (c) => c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase())
+      (c) =>
+        (c.type === type || c.type === 'both') &&
+        (c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase()))
     );
 
     if (!matchedCat && categoryName) {
-      matchedCat = categories.find((c) =>
-        c.name.toLowerCase().split(/\s+/).some((w) => w.length > 1 && categoryName.includes(w))
+      matchedCat = categories.find(
+        (c) =>
+          (c.type === type || c.type === 'both') &&
+          c.name.toLowerCase().split(/\s+/).some((w) => w.length > 1 && categoryName.includes(w))
+      );
+    }
+
+    if (!matchedCat && categoryName) {
+      matchedCat = categories.find(
+        (c) => c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase())
       );
     }
 
@@ -560,17 +601,14 @@ Input: '${cleanInput}' -> Output:`;
       matchedCat = categories.find((c) => c.id === localResult.categoryId);
     }
 
-    const defaultExpenseCat = categories.find((c) => c.type === 'expense') || categories[0];
-    const finalCat = matchedCat || defaultExpenseCat;
-
-    const isIncome =
-      finalCat?.type === 'income' ||
-      /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ)\b/i.test(cleanInput);
+    const defaultCatForType =
+      categories.find((c) => c.type === type || c.type === 'both') || categories[0];
+    const finalCat = matchedCat || defaultCatForType;
 
     return {
       amount,
       note,
-      type: isIncome ? 'income' : 'expense',
+      type,
       categoryId: finalCat?.id || '',
       rawText: text,
     };
@@ -579,23 +617,6 @@ Input: '${cleanInput}' -> Output:`;
     return parseVoiceInput(text, categories);
   }
 }
-
-/**
- * System Prompt chuẩn Few-Shot Learning theo đúng chỉ định để trị dứt điểm lỗi bóc tách từ lóng và số tiền trong ghi chú
- */
-export const VOICE_FEW_SHOT_SYSTEM_PROMPT = `Bạn là trợ lý tài chính. Trích xuất thông tin giao dịch từ dữ liệu âm thanh/văn bản. Trả về định dạng JSON: {"amount": <số nguyên>, "note": "<chuỗi>", "category": "<chuỗi>"}. Tự động nhân các từ lóng: k, ca, ka, nghìn, ngàn = x1.000; củ, triệu, tr = x1.000.000; lít, lốp = x100.000.
-
-Dưới đây là các ví dụ BẮT BUỘC bạn phải học theo:
-
-Input: 'ăn cơm tấm 25ca' -> Output: {"amount": 25000, "note": "ăn cơm tấm", "category": "Ăn uống"}
-
-Input: 'ăn cơm tấm hết 25 nghìn' -> Output: {"amount": 25000, "note": "ăn cơm tấm", "category": "Ăn uống"}
-
-Input: 'đổ xăng 50k' -> Output: {"amount": 50000, "note": "đổ xăng", "category": "Xăng xe"}
-
-Input: 'tám trăm hai mươi lăm nghìn' -> Output: {"amount": 825000, "note": "Chưa rõ mục đích", "category": "Khác"}
-
-Input: 'mua cái áo 2 củ' -> Output: {"amount": 2000000, "note": "mua cái áo", "category": "Mua sắm"}`;
 
 /**
  * Phân tích trực tiếp từ dữ liệu âm thanh ghi âm (Audio Base64) bằng Google Gemini
@@ -611,10 +632,9 @@ export async function parseVoiceAudioWithGemini(
 ): Promise<ParsedVoiceResult> {
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `${VOICE_FEW_SHOT_SYSTEM_PROMPT}
+  const prompt = `${VOICE_CONCISE_PROMPT}
 
-Danh sách các danh mục có sẵn: ${categoryNames}.
-Nhiệm vụ: Hãy nghe đoạn âm thanh tiếng Việt đính kèm và trích xuất thông tin giao dịch theo đúng các ví dụ trên (tuyệt đối không để số tiền hay từ lóng như 25ca, 25k, 25 nghìn trong trường "note"). Trả về DUY NHẤT một chuỗi JSON hợp lệ.`;
+Danh sách các danh mục có sẵn: ${categoryNames}.`;
 
   const rawResponse = await callGeminiAudio(
     audioBase64,
@@ -624,7 +644,7 @@ Nhiệm vụ: Hãy nghe đoạn âm thanh tiếng Việt đính kèm và trích 
     abortSignal,
     GEMINI_VOICE_SCHEMA,
     onModelSwitch,
-    VOICE_FEW_SHOT_SYSTEM_PROMPT
+    VOICE_CONCISE_PROMPT
   );
 
   let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -642,39 +662,70 @@ Nhiệm vụ: Hãy nghe đoạn âm thanh tiếng Việt đính kèm và trích 
     }
   }
 
-  const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
+  let amount = Math.abs(Math.round(Number(parsed.amount) || 0));
+
   const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
   // Dọn dẹp an toàn: nếu model vẫn vô tình để lại số tiền hoặc từ lóng trong note
   let note = rawNote
     .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
     .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
     .trim();
-  if (!note) note = rawNote || 'Giao dịch giọng nói';
+  if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
+    note = rawNote || 'Giao dịch giọng nói';
+  }
+
+  // Nếu amount = 0, thử bóc tách từ rawNote
+  if (amount === 0 && rawNote) {
+    const fallbackExt = extractAmount(rawNote);
+    if (fallbackExt) {
+      amount = fallbackExt.amount;
+    }
+  }
+
+  const rawType = String(parsed.transactionType || '').trim().toLowerCase();
+  let type: TransactionType = 'expense';
+  if (rawType === 'income' || rawType.includes('income') || rawType.includes('thu')) {
+    type = 'income';
+  } else if (rawType === 'expense' || rawType.includes('expense') || rawType.includes('chi')) {
+    type = 'expense';
+  } else {
+    const isIncomeText = /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ|bán)\b/i.test(
+      note
+    );
+    type = isIncomeText ? 'income' : 'expense';
+  }
 
   const categoryName = String(parsed.category || '').trim().toLowerCase();
 
-  // Tìm danh mục khớp nhất
+  // Tìm danh mục khớp với loại giao dịch (income / expense)
   let matchedCat = categories.find(
-    (c) => c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase())
+    (c) =>
+      (c.type === type || c.type === 'both') &&
+      (c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase()))
   );
 
   if (!matchedCat && categoryName) {
-    matchedCat = categories.find((c) =>
-      c.name.toLowerCase().split(/\s+/).some((w) => w.length > 1 && categoryName.includes(w))
+    matchedCat = categories.find(
+      (c) =>
+        (c.type === type || c.type === 'both') &&
+        c.name.toLowerCase().split(/\s+/).some((w) => w.length > 1 && categoryName.includes(w))
     );
   }
 
-  const defaultExpenseCat = categories.find((c) => c.type === 'expense') || categories[0];
-  const finalCat = matchedCat || defaultExpenseCat;
+  if (!matchedCat && categoryName) {
+    matchedCat = categories.find(
+      (c) => c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase())
+    );
+  }
 
-  const isIncome =
-    finalCat?.type === 'income' ||
-    /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ)\b/i.test(note);
+  const defaultCatForType =
+    categories.find((c) => c.type === type || c.type === 'both') || categories[0];
+  const finalCat = matchedCat || defaultCatForType;
 
   return {
     amount,
     note,
-    type: isIncome ? 'income' : 'expense',
+    type,
     categoryId: finalCat?.id || '',
     rawText: note,
   };
