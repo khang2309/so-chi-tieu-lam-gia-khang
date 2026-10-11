@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { sanitizeData } from '../utils/firestoreSync';
 
 interface DuplicateTransactionModalProps {
   isOpen: boolean;
@@ -67,16 +68,18 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
       return;
     }
 
-    onConfirm({
-      amount: finalAmount,
-      type,
-      date: new Date(`${date}T12:00:00`).toISOString(),
-      categoryId: type === 'transfer' ? '' : categoryId,
-      ledgerId,
-      walletId,
-      toWalletId: type === 'transfer' ? (toWalletId || null) : null,
-      note: note.trim(),
-    });
+    onConfirm(
+      sanitizeData({
+        amount: finalAmount,
+        type,
+        date: new Date(`${date}T12:00:00`).toISOString(),
+        categoryId: type === 'transfer' ? '' : categoryId,
+        ledgerId,
+        walletId,
+        toWalletId: type === 'transfer' ? (toWalletId || null) : null,
+        note: note.trim(),
+      })
+    );
 
     onClose();
   };

@@ -81,6 +81,7 @@ export function App() {
         onSelectLedger={manager.setActiveLedgerId}
         onOpenLedgerManager={() => setIsLedgerManagerModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        isAutoSyncing={manager.isAutoSyncing}
       />
 
       {/* Main Content Container */}

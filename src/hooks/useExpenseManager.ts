@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Ledger, Wallet, Category, Transaction, TimeFilter } from '../types';
 import { DEFAULT_LEDGERS, DEFAULT_WALLETS, DEFAULT_CATEGORIES, DEFAULT_TRANSACTIONS } from '../data/initialData';
 import { isWithinTimeFilter } from '../utils/formatters';
@@ -15,6 +15,7 @@ import {
   subscribeToUserFirestoreData,
   mergeEntitiesById,
   performTwoWaySync,
+  sanitizeData,
 } from '../utils/firestoreSync';
 import { saveAndShareFile, utf8ToBase64 } from '../utils/fileExporter';
 
@@ -30,11 +31,11 @@ const STORAGE_KEYS = {
 };
 
 export function useExpenseManager() {
-  // 1. Initial State from LocalStorage
+  // 1. Initial State from LocalStorage (được deep sanitize triệt để loại bỏ undefined)
   const [ledgers, setLedgers] = useState<Ledger[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.LEDGERS);
-      return saved ? JSON.parse(saved) : DEFAULT_LEDGERS;
+      return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_LEDGERS;
     } catch {
       return DEFAULT_LEDGERS;
     }
@@ -43,7 +44,7 @@ export function useExpenseManager() {
   const [wallets, setWallets] = useState<Wallet[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.WALLETS);
-      return saved ? JSON.parse(saved) : DEFAULT_WALLETS;
+      return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_WALLETS;
     } catch {
       return DEFAULT_WALLETS;
     }
@@ -52,7 +53,7 @@ export function useExpenseManager() {
   const [categories, setCategories] = useState<Category[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-      return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+      return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_CATEGORIES;
     } catch {
       return DEFAULT_CATEGORIES;
     }
@@ -61,7 +62,7 @@ export function useExpenseManager() {
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      return saved ? JSON.parse(saved) : DEFAULT_TRANSACTIONS;
+      return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_TRANSACTIONS;
     } catch {
       return DEFAULT_TRANSACTIONS;
     }
@@ -121,12 +122,70 @@ export function useExpenseManager() {
     localStorage.setItem(STORAGE_KEYS.TIME_FILTER, timeFilter);
   }, [timeFilter]);
 
-  // Đồng bộ thời gian thực từ Firestore qua onSnapshot (Offline-First)
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+  const autoSyncRunningRef = useRef(false);
+
+  // Hàm tự động đồng bộ 2 chiều (Auto-Sync) ngầm khi đăng nhập
+  const runAutoSync = async (uid: string) => {
+    if (autoSyncRunningRef.current) return;
+    autoSyncRunningRef.current = true;
+    setIsAutoSyncing(true);
+
+    try {
+      // Đọc dữ liệu local mới nhất từ LocalStorage để không bị stale closure
+      let localTxs: Transaction[] = transactions;
+      let localWallets: Wallet[] = wallets;
+      let localLedgers: Ledger[] = ledgers;
+      let localCategories: Category[] = categories;
+
+      try {
+        const rawTxs = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+        if (rawTxs) localTxs = JSON.parse(rawTxs);
+        const rawW = localStorage.getItem(STORAGE_KEYS.WALLETS);
+        if (rawW) localWallets = JSON.parse(rawW);
+        const rawL = localStorage.getItem(STORAGE_KEYS.LEDGERS);
+        if (rawL) localLedgers = JSON.parse(rawL);
+        const rawC = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+        if (rawC) localCategories = JSON.parse(rawC);
+      } catch (err) {
+        console.warn('Lỗi phân tích LocalStorage khi Auto-Sync:', err);
+      }
+
+      // Sạch hóa dữ liệu tuyệt đối trước khi đồng bộ (xóa sạch mọi undefined)
+      const cleanPayload = {
+        transactions: sanitizeData(localTxs || []),
+        wallets: sanitizeData(localWallets || []),
+        ledgers: sanitizeData(localLedgers || []),
+        categories: sanitizeData(localCategories || []),
+      };
+
+      const res = await performTwoWaySync(uid, cleanPayload);
+      if (res.success && res.mergedData) {
+        const cleanMerged = sanitizeData(res.mergedData);
+        setTransactions(cleanMerged.transactions);
+        setWallets(cleanMerged.wallets);
+        setLedgers(cleanMerged.ledgers);
+        setCategories(cleanMerged.categories);
+
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cleanMerged.transactions));
+        localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(cleanMerged.wallets));
+        localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(cleanMerged.ledgers));
+        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cleanMerged.categories));
+      }
+    } catch (err) {
+      console.warn('Lỗi Auto-Sync:', err);
+    } finally {
+      setIsAutoSyncing(false);
+      autoSyncRunningRef.current = false;
+    }
+  };
+
+  // Đồng bộ thời gian thực từ Firestore qua onSnapshot & Tự động đồng bộ khi Đăng nhập
   useEffect(() => {
     if (!auth) return;
     let unsubData: (() => void) | null = null;
 
-    const unsubAuth = auth.onAuthStateChanged((currentUser: any) => {
+    const unsubAuth = auth.onAuthStateChanged(async (currentUser: any) => {
       if (unsubData) {
         unsubData();
         unsubData = null;
@@ -134,57 +193,34 @@ export function useExpenseManager() {
 
       if (currentUser?.uid) {
         const uid = currentUser.uid;
+
+        // 1. Tự động kích hoạt đồng bộ 2 chiều ngầm khi phát hiện đăng nhập
+        await runAutoSync(uid);
+
+        // 2. Gắn bộ lắng nghe thay đổi thời gian thực
         unsubData = subscribeToUserFirestoreData(uid, {
           onTransactions: (fireTxs, isEmpty) => {
-            if (isEmpty) {
-              setTransactions((prev) => {
-                if (prev.length > 0) {
-                  prev.forEach((tx) => syncTransactionToFirestore(uid, tx));
-                }
-                return prev;
-              });
-            } else {
+            if (!isEmpty) {
               setTransactions((prev) => {
                 const merged = mergeEntitiesById(prev, fireTxs);
                 merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                return merged;
+                return sanitizeData(merged);
               });
             }
           },
           onWallets: (fireWallets, isEmpty) => {
-            if (isEmpty) {
-              setWallets((prev) => {
-                if (prev.length > 0) {
-                  prev.forEach((w) => syncWalletToFirestore(uid, w));
-                }
-                return prev;
-              });
-            } else {
-              setWallets((prev) => mergeEntitiesById(prev, fireWallets));
+            if (!isEmpty) {
+              setWallets((prev) => sanitizeData(mergeEntitiesById(prev, fireWallets)));
             }
           },
           onLedgers: (fireLedgers, isEmpty) => {
-            if (isEmpty) {
-              setLedgers((prev) => {
-                if (prev.length > 0) {
-                  prev.forEach((l) => syncLedgerToFirestore(uid, l));
-                }
-                return prev;
-              });
-            } else {
-              setLedgers((prev) => mergeEntitiesById(prev, fireLedgers));
+            if (!isEmpty) {
+              setLedgers((prev) => sanitizeData(mergeEntitiesById(prev, fireLedgers)));
             }
           },
           onCategories: (fireCategories, isEmpty) => {
-            if (isEmpty) {
-              setCategories((prev) => {
-                if (prev.length > 0) {
-                  prev.forEach((c) => syncCategoryToFirestore(uid, c));
-                }
-                return prev;
-              });
-            } else {
-              setCategories((prev) => mergeEntitiesById(prev, fireCategories));
+            if (!isEmpty) {
+              setCategories((prev) => sanitizeData(mergeEntitiesById(prev, fireCategories)));
             }
           },
         });
@@ -327,13 +363,13 @@ export function useExpenseManager() {
   // 6. Action Handlers
   const addTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
-    const newTx: Transaction = {
+    const newTx: Transaction = sanitizeData({
       ...data,
       toWalletId: data.type === 'transfer' ? (data.toWalletId || null) : null,
       id: 'tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       createdAt: now,
       updatedAt: now,
-    };
+    });
     setTransactions((prev) => [newTx, ...prev]);
     if (auth?.currentUser?.uid) {
       syncTransactionToFirestore(auth.currentUser.uid, newTx);
@@ -343,13 +379,15 @@ export function useExpenseManager() {
 
   const addBatchTransactions = (items: Array<Omit<Transaction, 'id' | 'createdAt'>>) => {
     const now = new Date().toISOString();
-    const newTxs: Transaction[] = items.map((data, idx) => ({
-      ...data,
-      toWalletId: data.type === 'transfer' ? (data.toWalletId || null) : null,
-      id: 'tx-' + (Date.now() + idx) + '-' + Math.random().toString(36).substr(2, 4),
-      createdAt: now,
-      updatedAt: now,
-    }));
+    const newTxs: Transaction[] = sanitizeData(
+      items.map((data, idx) => ({
+        ...data,
+        toWalletId: data.type === 'transfer' ? (data.toWalletId || null) : null,
+        id: 'tx-' + (Date.now() + idx) + '-' + Math.random().toString(36).substr(2, 4),
+        createdAt: now,
+        updatedAt: now,
+      }))
+    );
     setTransactions((prev) => [...newTxs, ...prev]);
     if (auth?.currentUser?.uid) {
       newTxs.forEach((tx) => syncTransactionToFirestore(auth.currentUser.uid, tx));
@@ -366,7 +404,7 @@ export function useExpenseManager() {
           if (merged.type !== 'transfer') {
             merged.toWalletId = null;
           }
-          return merged;
+          return sanitizeData(merged);
         }
         return tx;
       });
@@ -387,12 +425,12 @@ export function useExpenseManager() {
 
   const addLedger = (data: Omit<Ledger, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
-    const newLedger: Ledger = {
+    const newLedger: Ledger = sanitizeData({
       ...data,
       id: 'ledger-' + Date.now(),
       createdAt: now,
       updatedAt: now,
-    };
+    });
     setLedgers((prev) => [...prev, newLedger]);
     if (auth?.currentUser?.uid) {
       syncLedgerToFirestore(auth.currentUser.uid, newLedger);
@@ -403,7 +441,7 @@ export function useExpenseManager() {
   const updateLedger = (id: string, data: Partial<Ledger>) => {
     const now = new Date().toISOString();
     setLedgers((prev) => {
-      const updated = prev.map((l) => (l.id === id ? { ...l, ...data, updatedAt: now } : l));
+      const updated = prev.map((l) => (l.id === id ? sanitizeData({ ...l, ...data, updatedAt: now }) : l));
       const target = updated.find((l) => l.id === id);
       if (target && auth?.currentUser?.uid) {
         syncLedgerToFirestore(auth.currentUser.uid, target);
@@ -429,12 +467,12 @@ export function useExpenseManager() {
 
   const addWallet = (data: Omit<Wallet, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
-    const newWallet: Wallet = {
+    const newWallet: Wallet = sanitizeData({
       ...data,
       id: 'wallet-' + Date.now(),
       createdAt: now,
       updatedAt: now,
-    };
+    });
     setWallets((prev) => [...prev, newWallet]);
     if (auth?.currentUser?.uid) {
       syncWalletToFirestore(auth.currentUser.uid, newWallet);
@@ -445,7 +483,7 @@ export function useExpenseManager() {
   const updateWallet = (id: string, data: Partial<Wallet>) => {
     const now = new Date().toISOString();
     setWallets((prev) => {
-      const updated = prev.map((w) => (w.id === id ? { ...w, ...data, updatedAt: now } : w));
+      const updated = prev.map((w) => (w.id === id ? sanitizeData({ ...w, ...data, updatedAt: now }) : w));
       const target = updated.find((w) => w.id === id);
       if (target && auth?.currentUser?.uid) {
         syncWalletToFirestore(auth.currentUser.uid, target);
@@ -480,7 +518,7 @@ export function useExpenseManager() {
     const defaultNote = `Chuyển tiền: ${fromW?.name || ''} ➜ ${toW?.name || ''}${note ? ' (' + note + ')' : ''}`;
     const now = new Date().toISOString();
 
-    const newTx: Transaction = {
+    const newTx: Transaction = sanitizeData({
       id: 'tx-transfer-' + Date.now(),
       amount,
       type: 'transfer',
@@ -492,7 +530,7 @@ export function useExpenseManager() {
       toWalletId,
       createdAt: now,
       updatedAt: now,
-    };
+    });
 
     setTransactions((prev) => [newTx, ...prev]);
     if (auth?.currentUser?.uid) {
@@ -502,12 +540,12 @@ export function useExpenseManager() {
 
   const addCategory = (data: Omit<Category, 'id'>) => {
     const now = new Date().toISOString();
-    const newCat: Category = {
+    const newCat: Category = sanitizeData({
       ...data,
       id: 'cat-' + Date.now(),
       createdAt: now,
       updatedAt: now,
-    };
+    });
     setCategories((prev) => [...prev, newCat]);
     if (auth?.currentUser?.uid) {
       syncCategoryToFirestore(auth.currentUser.uid, newCat);
@@ -518,7 +556,7 @@ export function useExpenseManager() {
   const updateCategory = (id: string, data: Partial<Category>) => {
     const now = new Date().toISOString();
     setCategories((prev) => {
-      const updated = prev.map((c) => (c.id === id ? { ...c, ...data, updatedAt: now } : c));
+      const updated = prev.map((c) => (c.id === id ? sanitizeData({ ...c, ...data, updatedAt: now }) : c));
       const target = updated.find((c) => c.id === id);
       if (target && auth?.currentUser?.uid) {
         syncCategoryToFirestore(auth.currentUser.uid, target);
@@ -647,5 +685,6 @@ export function useExpenseManager() {
     exportDataJson,
     importDataJson,
     syncToCloud,
+    isAutoSyncing,
   };
 }

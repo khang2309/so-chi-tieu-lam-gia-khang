@@ -19,6 +19,7 @@ interface HeaderProps {
   onSelectLedger: (id: string) => void;
   onOpenLedgerManager: () => void;
   onOpenSettings: () => void;
+  isAutoSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectLedger,
   onOpenLedgerManager,
   onOpenSettings,
+  isAutoSyncing = false,
 }) => {
   const { user, isOnline, isOfflineMode, openAuthModal } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -76,9 +78,9 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {user ? (
                 <>
-                  <Cloud className="w-3.5 h-3.5 text-[#15803d]" />
-                  <span className="hidden sm:inline max-w-[90px] truncate">
-                    {user.displayName || user.email?.split('@')[0] || 'Đã đồng bộ'}
+                  <Cloud className={`w-3.5 h-3.5 text-[#15803d] ${isAutoSyncing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline max-w-[100px] truncate">
+                    {isAutoSyncing ? 'Đang đồng bộ...' : (user.displayName || user.email?.split('@')[0] || 'Đã đồng bộ')}
                   </span>
                 </>
               ) : !isOnline ? (
