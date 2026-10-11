@@ -244,6 +244,16 @@ export function useExpenseManager() {
     return newTx;
   };
 
+  const addBatchTransactions = (items: Array<Omit<Transaction, 'id' | 'createdAt'>>) => {
+    const newTxs: Transaction[] = items.map((data, idx) => ({
+      ...data,
+      id: 'tx-' + (Date.now() + idx) + '-' + Math.random().toString(36).substr(2, 4),
+      createdAt: new Date().toISOString(),
+    }));
+    setTransactions((prev) => [...newTxs, ...prev]);
+    return newTxs;
+  };
+
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
     setTransactions((prev) =>
       prev.map((tx) => (tx.id === id ? { ...tx, ...data } : tx))
@@ -427,6 +437,7 @@ export function useExpenseManager() {
     stats,
     categoryBreakdown,
     addTransaction,
+    addBatchTransactions,
     updateTransaction,
     deleteTransaction,
     addLedger,

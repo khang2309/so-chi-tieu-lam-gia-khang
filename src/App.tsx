@@ -210,7 +210,7 @@ export function App() {
         wallets={manager.wallets}
         categories={manager.categories}
         activeLedgerId={manager.activeLedgerId}
-        onSaveTransaction={(tx) => manager.addTransaction(tx)}
+        onSaveBatchTransactions={(items) => manager.addBatchTransactions(items)}
       />
 
       <RoommateSplitModal

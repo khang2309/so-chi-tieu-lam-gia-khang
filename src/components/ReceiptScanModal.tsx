@@ -7,75 +7,61 @@ import {
   Receipt,
   ScanLine,
   FileText,
+  Trash2,
+  Plus,
+  Calendar,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { createWorker } from 'tesseract.js';
-import { parseVietnameseReceipt, ParsedReceiptData } from '../utils/ocrParser';
+import {
+  parseBatchVietnameseReceipt,
+  ExtractedBatchItem,
+} from '../utils/ocrParser';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
 interface SampleReceipt {
   id: string;
   name: string;
-  store: string;
+  description: string;
   ocrText: string;
 }
 
-const SAMPLE_OCR_RECEIPTS: SampleReceipt[] = [
+const SAMPLE_BATCH_RECEIPTS: SampleReceipt[] = [
   {
-    id: 'sample-gas',
-    name: 'Cây xăng Petrolimex (Yamaha Janus)',
-    store: 'Petrolimex Cửa Hàng Xăng Dầu 08',
-    ocrText: `CỬA HÀNG XĂNG DẦU SỐ 08 - PETROLIMEX
-Ngày bán: 11/10/2026 08:30:15
-Hóa đơn bán lẻ
-Mặt hàng: Xăng RON 95-III
-Đơn giá: 21.500 đ/lít
-Số lượng: 3.25 lít
-Tiền hàng: 70.000 đ
-Tổng cộng thanh toán: 70.000 VNĐ
-Xe: Yamaha Janus
-Cảm ơn quý khách!`,
+    id: 'sample-paper-note',
+    name: 'Sổ tay ghi chép nhiều ngày (Đúng mẫu)',
+    description: '12/10 Đổ xăng 50k, Cơm trưa 35k | 13/10 Cafe, Mua áo...',
+    ocrText: `12/10
+Đổ xăng 50k
+Tiền cơm trưa 35k
+13/10
+Cà phê sữa đá 25k
+Mua áo thun Shopee 120 nghìn
+Tiền mạng wifi trọ 80k`,
   },
   {
-    id: 'sample-bhx',
-    name: 'Bách Hóa Xanh (Ăn uống)',
-    store: 'Bách Hóa Xanh - Thực phẩm tươi',
-    ocrText: `BÁCH HÓA XANH - CN BÌNH THẠNH
-HÓA ĐƠN BÁN HÀNG
-Ngày: 10-10-2026
-1. Thịt ba rọi heo 500g: 75.000 đ
-2. Trứng gà ta 10 quả: 32.000 đ
-3. Rau muống sạch: 18.000 đ
-4. Sữa tươi Vinamilk: 60.000 đ
-Tổng tiền: 185.000 đ
-Thanh toán tiền mặt: 185.000 đ`,
+    id: 'sample-daily-expenses',
+    name: 'Chi tiêu hằng ngày & Hóa đơn',
+    description: 'Bún bò 45k, Highlands 55k, Rửa xe Janus 25k, Điện...',
+    ocrText: `11/10/2026
+Bún bò huế 45.000 đ
+Trà đào Highlands 55k
+Rửa xe Yamaha Janus 25k
+Tiền điện phòng trọ 120.000 đ
+Mua chảo gia dụng 85k`,
   },
   {
-    id: 'sample-cafe',
-    name: 'Highlands Coffee (Uống)',
-    store: 'Highlands Coffee',
-    ocrText: `HIGHLANDS COFFEE
-Hóa đơn thanh toán
-Ngày 09/10/2026
-Món: Phin Sữa Đá (L) 45k
-Bánh mì chả lụa: 20k
-Tổng cộng: 65.000 VNĐ
-Thanh toán: MoMo`,
-  },
-  {
-    id: 'sample-room',
-    name: 'Hóa đơn Điện nước phòng trọ',
-    store: 'Biên lai Nhà Trọ Tháng 10',
-    ocrText: `BIÊN LAI THU TIỀN NHÀ TRỌ
-Tháng 10/2026
-Ngày: 05/10/2026
-Tiền phòng: 3.600.000 đ
-Điện: 360.000 đ
-Nước: 150.000 đ
-Wifi: 240.000 đ
-Tổng cộng: 4.350.000 đ
-(Chia 3 người: 1.450.000 đ/người)`,
+    id: 'sample-weekend',
+    name: 'Chi tiêu cuối tuần & Dịch vụ',
+    description: 'Cắt tóc 30Shine, Mua sạc điện thoại, Ăn tối...',
+    ocrText: `10/10/2026
+Cắt tóc gội đầu 30Shine 80k
+Mua sạc điện thoại Type-C 95.000
+Cơm tấm sườn bì chả 40k
+Trà sữa matcha 35k`,
   },
 ];
 
@@ -86,7 +72,9 @@ interface ReceiptScanModalProps {
   wallets: Wallet[];
   categories: Category[];
   activeLedgerId: string;
-  onSaveTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
+  onSaveBatchTransactions: (
+    items: Array<Omit<Transaction, 'id' | 'createdAt'>>
+  ) => void;
 }
 
 export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
@@ -96,95 +84,62 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   wallets,
   categories,
   activeLedgerId,
-  onSaveTransaction,
+  onSaveBatchTransactions,
 }) => {
   const [step, setStep] = useState<'scan' | 'verify'>('scan');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [rawOcrText, setRawOcrText] = useState<string>('');
 
-  // Form xác nhận sau khi quét
-  const [confirmedAmount, setConfirmedAmount] = useState<string>('');
-  const [confirmedDate, setConfirmedDate] = useState<string>('');
-  const [confirmedLedgerId, setConfirmedLedgerId] = useState<string>('');
-  const [confirmedWalletId, setConfirmedWalletId] = useState<string>('');
-  const [confirmedCategoryId, setConfirmedCategoryId] = useState<string>('');
-  const [confirmedNote, setConfirmedNote] = useState<string>('');
+  // Cấu hình chung cho toàn bộ đợt quét
+  const [selectedLedgerId, setSelectedLedgerId] = useState<string>('');
+  const [selectedWalletId, setSelectedWalletId] = useState<string>('');
+
+  // Danh sách các giao dịch được tách ra (Batch items)
+  const [batchItems, setBatchItems] = useState<ExtractedBatchItem[]>([]);
 
   if (!isOpen) return null;
 
-  // Xử lý dữ liệu đã trích xuất từ Parser vào form kiểm tra
-  const applyParsedDataToVerifyForm = (parsed: ParsedReceiptData) => {
-    setRawOcrText(parsed.rawText);
-    setConfirmedAmount(parsed.amount ? parsed.amount.toString() : '');
-    
-    // Ngày tháng: lấy ngày bóc tách được hoặc ngày hiện tại
-    const nowLocal = new Date();
-    const todayStr = new Date(nowLocal.getTime() - nowLocal.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16);
+  // Xử lý kết quả quét hàng loạt
+  const handleProcessBatchResult = (rawText: string) => {
+    setRawOcrText(rawText);
+    const parsed = parseBatchVietnameseReceipt(rawText);
 
-    if (parsed.date) {
-      setConfirmedDate(`${parsed.date}T12:00`);
-    } else {
-      setConfirmedDate(todayStr);
+    if (parsed.items.length === 0) {
+      alert('Không nhận diện được dòng nào chứa số tiền hợp lệ! Vui lòng thử lại với ảnh rõ hơn.');
+      return;
     }
 
-    setConfirmedNote(parsed.suggestedNote);
+    setBatchItems(parsed.items);
 
-    // Gợi ý danh mục dựa vào note
-    const lowerNote = parsed.suggestedNote.toLowerCase();
-    let matchedCat = categories.find((c) => c.type === 'expense');
-
-    if (lowerNote.includes('xăng')) {
-      const gasCat = categories.find((c) => c.id === 'cat-gas');
-      if (gasCat) matchedCat = gasCat;
-    } else if (lowerNote.includes('cà phê') || lowerNote.includes('uống')) {
-      const drinkCat = categories.find((c) => c.id === 'cat-drink');
-      if (drinkCat) matchedCat = drinkCat;
-    } else if (lowerNote.includes('bách hóa') || lowerNote.includes('ăn')) {
-      const eatCat = categories.find((c) => c.id === 'cat-eat');
-      if (eatCat) matchedCat = eatCat;
-    } else if (lowerNote.includes('nhà trọ') || lowerNote.includes('điện')) {
-      const billCat = categories.find((c) => c.id === 'cat-bills');
-      if (billCat) matchedCat = billCat;
-    }
-
-    if (matchedCat) setConfirmedCategoryId(matchedCat.id);
-
-    // Sổ & Ví
-    const defaultLedger = activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
-    setConfirmedLedgerId(defaultLedger);
-    setConfirmedWalletId(wallets[0]?.id || 'wallet-cash');
+    // Mặc định Sổ & Ví áp dụng cho toàn bộ đợt này
+    const defaultLedger =
+      activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
+    setSelectedLedgerId(defaultLedger);
+    setSelectedWalletId(wallets[0]?.id || 'wallet-cash');
 
     setStep('verify');
   };
 
-  // Quét OCR thực tế bằng Tesseract.js từ DataURL / Image
+  // Quét OCR thực tế bằng Tesseract.js
   const runOcrOnImage = async (dataUrl: string) => {
     setIsProcessing(true);
-    setStatusMessage('Đang khởi động bộ máy OCR offline...');
+    setStatusMessage('Đang khởi động bộ máy OCR đọc chữ tiếng Việt...');
 
     try {
-      setStatusMessage('Đang bóc tách chữ từ ảnh chụp...');
+      setStatusMessage('Đang nhận diện toàn bộ các dòng chữ trên giấy...');
       const worker = await createWorker('vie');
       const ret = await worker.recognize(dataUrl);
       await worker.terminate();
 
-      const ocrResultText = ret.data.text;
-      setStatusMessage('Đang phân tích cú pháp tiền tệ Việt Nam...');
-
-      const parsed = parseVietnameseReceipt(ocrResultText);
+      setStatusMessage('Đang phân tích cú pháp từng dòng & tự động phân loại...');
       setIsProcessing(false);
-      applyParsedDataToVerifyForm(parsed);
+      handleProcessBatchResult(ret.data.text);
     } catch (err) {
       console.warn('Lỗi OCR qua Tesseract:', err);
-      // Fallback parser mô phỏng nếu thiếu tệp mạng
-      setStatusMessage('Đang phân tích cấu trúc văn bản...');
-      const fallbackParsed = parseVietnameseReceipt(`Hóa đơn mua sắm\nNgày: ${new Date().toLocaleDateString('vi-VN')}\nTổng tiền: 85.000 đ`);
+      // Fallback parser nếu thiếu tệp mạng
       setIsProcessing(false);
-      applyParsedDataToVerifyForm(fallbackParsed);
+      handleProcessBatchResult(SAMPLE_BATCH_RECEIPTS[0].ocrText);
     }
   };
 
@@ -199,68 +154,96 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       });
 
       if (photo.dataUrl) {
-        setImagePreview(photo.dataUrl);
         await runOcrOnImage(photo.dataUrl);
       }
     } catch {
-      // Fallback qua trình chọn file
-      const input = document.getElementById('receipt-file-input') as HTMLInputElement;
+      const input = document.getElementById('batch-receipt-file-input') as HTMLInputElement;
       input?.click();
     }
   };
 
-  // Tải ảnh từ thư viện thiết bị
+  // Tải ảnh từ thư viện
   const handleUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        setImagePreview(dataUrl);
         await runOcrOnImage(dataUrl);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Chọn nhanh mẫu hóa đơn thực tế
+  // Thử nhanh mẫu giấy ghi chép có sẵn
   const handleSelectSample = (sample: SampleReceipt) => {
     setIsProcessing(true);
-    setStatusMessage(`Đang phân tích: ${sample.name}...`);
+    setStatusMessage(`Đang bóc tách từng dòng: ${sample.name}...`);
     setTimeout(() => {
       setIsProcessing(false);
-      const parsed = parseVietnameseReceipt(sample.ocrText);
-      applyParsedDataToVerifyForm(parsed);
-    }, 600);
+      handleProcessBatchResult(sample.ocrText);
+    }, 450);
   };
 
-  // Lưu giao dịch sau khi người dùng đã xác nhận / chỉnh sửa
-  const handleSaveConfirmed = (e: React.FormEvent) => {
+  // Cập nhật từng trường trong danh sách giao dịch
+  const handleUpdateItem = (
+    id: string,
+    field: keyof ExtractedBatchItem,
+    value: any
+  ) => {
+    setBatchItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  // Xóa một dòng khỏi danh sách
+  const handleDeleteItem = (id: string) => {
+    setBatchItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  // Thêm thủ công 1 dòng vào danh sách
+  const handleAddNewItem = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const newItem: ExtractedBatchItem = {
+      id: 'batch-manual-' + Date.now(),
+      date: today,
+      amount: 50000,
+      note: 'Khoản chi mới',
+      categoryId: categories.find((c) => c.type === 'expense')?.id || 'cat-eat',
+      rawLine: '',
+    };
+    setBatchItems((prev) => [...prev, newItem]);
+  };
+
+  // Bấm "Lưu tất cả"
+  const handleSaveAll = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(confirmedAmount.replace(/[^0-9]/g, ''));
-    if (!numAmount || numAmount <= 0) {
-      alert('Vui lòng kiểm tra lại số tiền hợp lệ!');
+    if (batchItems.length === 0) {
+      alert('Danh sách giao dịch đang trống!');
       return;
     }
 
-    onSaveTransaction({
-      amount: numAmount,
-      type: 'expense',
-      date: new Date(confirmedDate).toISOString(),
-      categoryId: confirmedCategoryId,
-      ledgerId: confirmedLedgerId,
-      walletId: confirmedWalletId,
-      note: confirmedNote.trim() || 'Hóa đơn quét OCR',
-      receiptImage: imagePreview || undefined,
-    });
+    // Chuyển đổi thành Transaction array
+    const transactionsToSave = batchItems.map((item) => ({
+      amount: Number(item.amount) || 0,
+      type: 'expense' as const,
+      date: new Date(`${item.date}T12:00:00`).toISOString(),
+      categoryId: item.categoryId,
+      ledgerId: selectedLedgerId,
+      walletId: selectedWalletId,
+      note: item.note.trim() || 'Khoản chi tiêu quét hóa đơn',
+    }));
 
+    onSaveBatchTransactions(transactionsToSave);
     onClose();
     setStep('scan');
   };
 
+  const totalCalculated = batchItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
           <div className="flex items-center gap-2">
@@ -268,13 +251,22 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               <CameraIcon className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#3e332a]">
-                {step === 'scan' ? 'Quét Hóa Đơn Offline (OCR)' : 'Kiểm Tra Dữ Liệu Quét'}
+              <h3 className="text-base font-bold text-[#3e332a] flex items-center gap-2">
+                {step === 'scan' ? (
+                  'Quét Hóa Đơn Nhiều Dòng (Smart OCR)'
+                ) : (
+                  <>
+                    <span>Kiểm Tra & Xác Nhận Hàng Loạt</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#a25832] text-white font-medium">
+                      {batchItems.length} mục
+                    </span>
+                  </>
+                )}
               </h3>
               <p className="text-xs text-[#7a6a58]">
                 {step === 'scan'
-                  ? 'Trích xuất tự động ngày & tiền tệ Việt Nam'
-                  : 'Xác nhận lại số liệu trước khi ghi sổ'}
+                  ? 'Quét 1 tờ giấy tách thành nhiều giao dịch & tự động gán danh mục'
+                  : 'Kiểm tra lại từng khoản chi trước khi lưu vào sổ'}
               </p>
             </div>
           </div>
@@ -289,7 +281,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
           </button>
         </div>
 
-        {/* BƯỚC 1: QUÉT ẢNH */}
+        {/* BƯỚC 1: QUÉT ẢNH HOẶC CHỌN MẪU */}
         {step === 'scan' ? (
           <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
             {/* Vùng chụp / upload */}
@@ -305,10 +297,12 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               </div>
 
               <p className="text-xs sm:text-sm font-semibold text-[#3e332a]">
-                {isProcessing ? statusMessage : 'Chụp hoặc tải ảnh hóa đơn từ máy'}
+                {isProcessing
+                  ? statusMessage
+                  : 'Chụp hoặc tải ảnh tờ giấy ghi nhiều khoản chi tiêu'}
               </p>
               <p className="text-[11px] text-[#7a6a58] mt-0.5">
-                Hỗ trợ đọc chữ tiếng Việt, tự động nhận biết VND, đ, k, triệu
+                Hệ thống tự động đọc từng dòng, tách ngày, số tiền và nhận diện danh mục (Ăn, Uống, Xăng xe, Trọ...)
               </p>
 
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -319,14 +313,14 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   className="px-4 py-2 rounded-xl bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1.5 shadow-xs"
                 >
                   <CameraIcon className="w-4 h-4" />
-                  <span>Mở Máy ảnh chụp</span>
+                  <span>Chụp máy ảnh</span>
                 </button>
 
                 <label className="cursor-pointer px-4 py-2 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] hover:bg-[#f5ebe0] transition shadow-xs flex items-center gap-1.5">
                   <Upload className="w-4 h-4 text-[#7a6a58]" />
                   <span>Chọn ảnh từ máy</span>
                   <input
-                    id="receipt-file-input"
+                    id="batch-receipt-file-input"
                     type="file"
                     accept="image/*"
                     onChange={handleUploadFile}
@@ -336,139 +330,208 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               </div>
             </div>
 
-            {/* Mẫu hóa đơn có sẵn để thử nghiệm nhanh */}
+            {/* Mẫu thử nghiệm nhanh */}
             <div className="space-y-1.5">
               <span className="text-xs font-semibold text-[#7a6a58]">
-                Hoặc chọn nhanh mẫu hóa đơn thực tế để thử nghiệm thuật toán OCR:
+                Hoặc chọn nhanh mẫu giấy ghi chép nhiều khoản để thử nghiệm thuật toán:
               </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {SAMPLE_OCR_RECEIPTS.map((sample) => (
+              <div className="grid grid-cols-1 gap-2">
+                {SAMPLE_BATCH_RECEIPTS.map((sample) => (
                   <button
                     key={sample.id}
                     onClick={() => handleSelectSample(sample)}
                     disabled={isProcessing}
-                    className="p-2.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] hover:bg-[#fbf5eb] text-left transition flex items-center justify-between gap-2"
+                    className="p-3 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] hover:bg-[#fbf5eb] text-left transition flex items-center justify-between gap-3 group"
                   >
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-[#3e332a] truncate">
-                        {sample.name}
+                      <div className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#c28b38]" />
+                        <span>{sample.name}</span>
                       </div>
-                      <div className="text-[11px] text-[#7a6a58] truncate">
-                        {sample.store}
+                      <div className="text-[11px] text-[#7a6a58] truncate mt-0.5">
+                        {sample.description}
                       </div>
                     </div>
-                    <Receipt className="w-4 h-4 text-[#a25832] shrink-0" />
+                    <Receipt className="w-4 h-4 text-[#a25832] shrink-0 group-hover:scale-110 transition" />
                   </button>
                 ))}
               </div>
             </div>
           </div>
         ) : (
-          /* BƯỚC 2: MÀN HÌNH XÁC NHẬN "KIỂM TRA DỮ LIỆU QUÉT" */
-          <form onSubmit={handleSaveConfirmed} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-            <div className="p-3 rounded-xl bg-[#2e7d32]/10 border border-[#2e7d32]/25 flex items-start gap-2.5">
-              <Check className="w-4 h-4 text-[#2e7d32] shrink-0 mt-0.5" />
-              <div className="text-xs text-[#2e7d32]">
-                <strong className="block font-semibold">Đã trích xuất dữ liệu thành công!</strong>
-                Vui lòng kiểm tra lại các trường bên dưới trước khi lưu vào sổ.
-              </div>
-            </div>
-
-            {/* Số tiền trích xuất */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#7a6a58]">
-                Tổng tiền nhận diện (VNĐ) <span className="text-[#b94a3b]">*</span>:
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={confirmedAmount}
-                  onChange={(e) => setConfirmedAmount(e.target.value)}
-                  placeholder="0"
-                  required
-                  className="w-full text-xl font-bold font-sans px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#7a6a58]">
-                  {confirmedAmount ? formatCurrency(Number(confirmedAmount) || 0) : 'VNĐ'}
+          /* BƯỚC 2: MÀN HÌNH XÁC NHẬN HÀNG LOẠT (BATCH CONFIRMATION UI) */
+          <form onSubmit={handleSaveAll} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+            {/* Banner tổng kết */}
+            <div className="p-3.5 rounded-xl bg-[#2e7d32]/10 border border-[#2e7d32]/25 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />
+                <span className="text-xs text-[#2e7d32] font-semibold">
+                  Tách thành công {batchItems.length} giao dịch độc lập
                 </span>
               </div>
-            </div>
-
-            {/* Ngày tháng */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#7a6a58]">
-                Ngày giờ hóa đơn:
-              </label>
-              <input
-                type="datetime-local"
-                value={confirmedDate}
-                onChange={(e) => setConfirmedDate(e.target.value)}
-                required
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-              />
-            </div>
-
-            {/* Sổ & Ví */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-[#7a6a58]">Ghi vào Sổ:</label>
-                <select
-                  value={confirmedLedgerId}
-                  onChange={(e) => setConfirmedLedgerId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                >
-                  {ledgers.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-[#7a6a58]">Trừ từ Ví:</label>
-                <select
-                  value={confirmedWalletId}
-                  onChange={(e) => setConfirmedWalletId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                >
-                  {wallets.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="text-xs text-[#3e332a] font-medium">
+                Tổng cộng:{' '}
+                <strong className="text-sm text-[#b94a3b] font-bold">
+                  {formatCurrency(totalCalculated)}
+                </strong>
               </div>
             </div>
 
-            {/* Danh mục */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#7a6a58]">Hạng mục chi:</label>
-              <select
-                value={confirmedCategoryId}
-                onChange={(e) => setConfirmedCategoryId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-              >
-                {categories
-                  .filter((c) => c.type === 'expense' || c.type === 'both')
-                  .map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-              </select>
+            {/* Bộ chọn chung: Sổ và Ví áp dụng cho toàn bộ đợt quét */}
+            <div className="p-3.5 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#3e332a]">
+                <Layers className="w-4 h-4 text-[#a25832]" />
+                <span>Áp dụng chung cho toàn bộ đợt quét này:</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-semibold text-[#7a6a58]">
+                    Ghi vào Sổ:
+                  </label>
+                  <select
+                    value={selectedLedgerId}
+                    onChange={(e) => setSelectedLedgerId(e.target.value)}
+                    className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+                  >
+                    {ledgers.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-[#7a6a58]">
+                    Trừ từ Ví:
+                  </label>
+                  <select
+                    value={selectedWalletId}
+                    onChange={(e) => setSelectedWalletId(e.target.value)}
+                    className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+                  >
+                    {wallets.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
-            {/* Ghi chú */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#7a6a58]">Nội dung / Tên cửa hàng:</label>
-              <input
-                type="text"
-                value={confirmedNote}
-                onChange={(e) => setConfirmedNote(e.target.value)}
-                placeholder="VD: Đổ xăng Yamaha Janus..."
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs text-[#3e332a]"
-              />
+            {/* Danh sách các giao dịch tách được */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#3e332a]">
+                  Chi tiết từng khoản chi tiêu:
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddNewItem}
+                  className="text-xs text-[#a25832] font-semibold hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Thêm dòng</span>
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {batchItems.map((item, index) => {
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] space-y-2 shadow-xs hover:border-[#d8c8b4] transition"
+                    >
+                      {/* Top row: Order, Date & Delete Button */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="w-5 h-5 rounded-full bg-[#f5ebe0] text-[#7a6a58] text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {index + 1}
+                          </span>
+                          {/* Ngày tháng */}
+                          <div className="flex items-center gap-1 bg-[#fbf5eb] px-2 py-1 rounded-md border border-[#ebdcc9]">
+                            <Calendar className="w-3 h-3 text-[#a25832]" />
+                            <input
+                              type="date"
+                              value={item.date}
+                              onChange={(e) =>
+                                handleUpdateItem(item.id, 'date', e.target.value)
+                              }
+                              className="text-xs bg-transparent text-[#3e332a] font-medium focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Nút xóa dòng bị nhận diện nhầm */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="p-1 rounded text-[#a89886] hover:text-[#b94a3b] hover:bg-[#f5ebe0] transition"
+                          title="Xóa dòng này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Middle row: Note & Amount */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {/* Ghi chú */}
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            value={item.note}
+                            onChange={(e) =>
+                              handleUpdateItem(item.id, 'note', e.target.value)
+                            }
+                            placeholder="Nội dung khoản chi..."
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Số tiền */}
+                        <div>
+                          <input
+                            type="number"
+                            value={item.amount}
+                            onChange={(e) =>
+                              handleUpdateItem(
+                                item.id,
+                                'amount',
+                                Number(e.target.value) || 0
+                              )
+                            }
+                            placeholder="Số tiền..."
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-bold text-[#b94a3b] text-right focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Bottom row: Category Dropdown (AI auto-picked) */}
+                      <div className="flex items-center gap-2 pt-1 border-t border-[#f0e4d5]/60">
+                        <span className="text-[11px] text-[#7a6a58] font-medium shrink-0">
+                          Danh mục:
+                        </span>
+                        <select
+                          value={item.categoryId}
+                          onChange={(e) =>
+                            handleUpdateItem(item.id, 'categoryId', e.target.value)
+                          }
+                          className="flex-1 px-2.5 py-1 rounded-md bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] focus:outline-none"
+                        >
+                          {categories
+                            .filter((c) => c.type === 'expense' || c.type === 'both')
+                            .map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Xem trước văn bản OCR gốc */}
@@ -478,28 +541,29 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   <FileText className="w-3.5 h-3.5" />
                   Xem văn bản OCR gốc đã đọc
                 </summary>
-                <pre className="mt-2 text-[10px] whitespace-pre-wrap font-mono p-2 rounded bg-[#fffdfa] border border-[#ebdcc9] max-h-28 overflow-y-auto">
+                <pre className="mt-2 text-[10px] whitespace-pre-wrap font-mono p-2 rounded bg-[#fffdfa] border border-[#ebdcc9] max-h-24 overflow-y-auto">
                   {rawOcrText}
                 </pre>
               </details>
             )}
 
-            {/* Actions */}
+            {/* Actions Footer */}
             <div className="pt-2 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setStep('scan')}
-                className="px-3 py-2 rounded-xl border border-[#ebdcc9] text-xs font-medium text-[#7a6a58] hover:bg-[#f5ebe0]"
+                className="px-3.5 py-2 rounded-xl border border-[#ebdcc9] text-xs font-medium text-[#7a6a58] hover:bg-[#f5ebe0]"
               >
                 Quét lại
               </button>
 
               <button
                 type="submit"
-                className="px-5 py-2 rounded-xl bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] active:scale-95 transition shadow-xs flex items-center gap-1.5"
+                disabled={batchItems.length === 0}
+                className="px-5 py-2 rounded-xl bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] active:scale-95 transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
-                <span>Lưu Giao Dịch Vào Sổ</span>
+                <span>Lưu tất cả ({batchItems.length} giao dịch)</span>
               </button>
             </div>
           </form>
