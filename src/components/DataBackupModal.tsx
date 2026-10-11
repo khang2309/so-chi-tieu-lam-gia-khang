@@ -41,7 +41,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onSyncToCloud,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, isOnline, loginWithEmail, registerWithEmail, logout } = useAuth();
+  const { user, isOnline, loginWithEmail, registerWithEmail, loginWithGoogleNative, logout } = useAuth();
 
   // Auth in-app state
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -49,6 +49,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   // Manual cloud sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -61,16 +62,42 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const text = event.target?.result as string;
-        const success = onImport(text);
-        if (success) {
-          alert('Khôi phục dữ liệu sao lưu thành công!');
-          onClose();
-        } else {
-          alert('Tệp dữ liệu không hợp lệ hoặc bị lỗi!');
+        try {
+          const text = event.target?.result as string;
+          const success = onImport(text);
+          if (success) {
+            alert('Khôi phục dữ liệu sao lưu thành công!');
+            onClose();
+          } else {
+            alert('Tệp dữ liệu không hợp lệ hoặc cấu trúc không đúng!');
+          }
+        } catch (err) {
+          alert('Không thể đọc file: ' + String(err));
         }
       };
+      reader.onerror = () => {
+        alert('Lỗi khi đọc file sao lưu.');
+      };
       reader.readAsText(file);
+    }
+    // Đảm bảo reset giá trị để có thể chọn lại cùng một file
+    e.target.value = '';
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthError(null);
+    setSyncFeedback(null);
+    setIsGoogleSubmitting(true);
+    try {
+      await loginWithGoogleNative();
+    } catch (err: any) {
+      console.warn('Lỗi đăng nhập Google Native:', err);
+      const msg = err?.message || '';
+      if (!msg.toLowerCase().includes('cancel')) {
+        setAuthError(msg || 'Đăng nhập bằng Google không thành công.');
+      }
+    } finally {
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -340,6 +367,52 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     )}
                   </button>
                 </form>
+
+                {/* Phân cách và Nút Đăng nhập bằng Google (Native) */}
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-[#ebdcc9]" />
+                  </div>
+                  <div className="relative flex justify-center text-[10px] uppercase">
+                    <span className="bg-[#fffdfa] px-2 text-[#7a6a58] font-medium">Hoặc</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleSubmitting || isAuthSubmitting}
+                  className="w-full py-2 px-3 rounded-lg border border-[#d8c8b4] bg-white hover:bg-[#fbf5eb] active:scale-[0.99] text-xs font-semibold text-[#3e332a] transition shadow-xs flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isGoogleSubmitting ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3.5 h-3.5 border-2 border-[#a25832] border-t-transparent rounded-full animate-spin" />
+                      <span>Đang kết nối Google...</span>
+                    </span>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.98 0 12c0 2.02.45 3.84 1.25 5.42l4.03-3.15z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                        />
+                      </svg>
+                      <span>Đăng nhập bằng Google</span>
+                    </>
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -436,7 +509,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             <input
               type="file"
               ref={fileInputRef}
-              accept=".json"
+              accept=".json,application/json,text/plain"
               onChange={handleFileUpload}
               className="hidden"
             />

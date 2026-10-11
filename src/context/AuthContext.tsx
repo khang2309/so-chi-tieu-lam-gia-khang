@@ -5,7 +5,10 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from 'firebase/auth';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { auth, isFirebaseConfigured } from '../firebase';
 
 interface AuthContextType {
@@ -16,6 +19,7 @@ interface AuthContextType {
   isFirebaseAvailable: boolean;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string) => Promise<void>;
+  loginWithGoogleNative: () => Promise<void>;
   logout: () => Promise<void>;
   continueOffline: () => void;
   openAuthModal: () => void;
@@ -89,9 +93,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
+  const loginWithGoogleNative = async () => {
+    if (!auth) {
+      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
+    }
+    try {
+      await GoogleAuth.initialize();
+      const googleUser = await GoogleAuth.signIn();
+      const idToken = googleUser.authentication?.idToken || (googleUser as any).idToken;
+      if (!idToken) {
+        throw new Error('Không nhận được mã xác thực idToken từ Google.');
+      }
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+      setIsAuthModalOpen(false);
+    } catch (err: any) {
+      const msg = err?.message?.toLowerCase() || '';
+      // Nếu người dùng đóng hộp thoại chọn tài khoản Google (cancel) thì không coi là lỗi nghiêm trọng
+      if (
+        msg.includes('cancel') ||
+        msg.includes('canceled') ||
+        msg.includes('cancelled') ||
+        msg.includes('12501')
+      ) {
+        return;
+      }
+      console.warn('Lỗi xác thực Google Native:', err);
+      throw err;
+    }
+  };
+
   const logout = async () => {
     if (auth) {
       await signOut(auth);
+    }
+    try {
+      await GoogleAuth.signOut();
+    } catch {
+      // Bỏ qua nếu chưa đăng nhập qua GoogleAuth
     }
     setUser(null);
     setIsOfflineMode(true);
@@ -118,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFirebaseAvailable: isFirebaseConfigured,
         loginWithEmail,
         registerWithEmail,
+        loginWithGoogleNative,
         logout,
         continueOffline,
         openAuthModal,

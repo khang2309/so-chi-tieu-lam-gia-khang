@@ -13,6 +13,7 @@ import {
   subscribeToUserFirestoreData,
   uploadAllLocalDataToFirestore,
 } from '../utils/firestoreSync';
+import { saveAndShareFile, utf8ToBase64 } from '../utils/fileExporter';
 
 const STORAGE_KEYS = {
   LEDGERS: 'sochitieu_ledgers_v2',
@@ -463,7 +464,7 @@ export function useExpenseManager() {
     }
   };
 
-  const exportDataJson = () => {
+  const exportDataJson = async () => {
     const data = {
       ledgers,
       wallets,
@@ -473,13 +474,9 @@ export function useExpenseManager() {
       version: '1.0.0',
     };
     const jsonStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `so-chi-tieu-lam-gia-khang-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `so-chi-tieu-lam-gia-khang-${new Date().toISOString().slice(0, 10)}.json`;
+    const base64Data = utf8ToBase64(jsonStr);
+    await saveAndShareFile(filename, base64Data, 'application/json');
   };
 
   const importDataJson = (jsonString: string): boolean => {

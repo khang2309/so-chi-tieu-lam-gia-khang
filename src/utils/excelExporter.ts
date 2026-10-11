@@ -1,17 +1,18 @@
 import * as XLSX from 'xlsx';
 import { Transaction, Category, Ledger, Wallet } from '../types';
+import { saveAndShareFile } from './fileExporter';
 
 /**
  * Xuất danh sách giao dịch ra file Excel (.xlsx)
  * Bao gồm các cột chuẩn: STT, Ngày, Tên giao dịch, Loại, Danh mục, Số tiền, Ghi chú, Sổ, Ví
  */
-export function exportTransactionsToExcel(
+export async function exportTransactionsToExcel(
   transactions: Transaction[],
   categories: Category[],
   ledgers: Ledger[],
   wallets: Wallet[],
   filename = 'Danh_Sach_Chi_Tieu.xlsx'
-): void {
+): Promise<void> {
   const getCatName = (id: string) => categories.find((c) => c.id === id)?.name || 'Khác';
   const getLedgerName = (id: string) => ledgers.find((l) => l.id === id)?.name || 'Mặc định';
   const getWalletName = (id: string) => wallets.find((w) => w.id === id)?.name || 'Tiền mặt';
@@ -68,5 +69,13 @@ export function exportTransactionsToExcel(
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Giao Dịch');
 
-  XLSX.writeFile(workbook, filename);
+  // Chuyển workbook thành Base64
+  const base64Data = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+
+  // Lưu vào Cache và chia sẻ qua Capacitor Share (Android) hoặc Web download
+  await saveAndShareFile(
+    filename,
+    base64Data,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
 }
