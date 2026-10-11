@@ -158,6 +158,12 @@ export function App() {
               transactions={manager.transactions.filter((tx) =>
                 manager.activeLedgerId === 'all' || tx.ledgerId === manager.activeLedgerId
               )}
+              activeLedgerId={manager.activeLedgerId}
+              activeLedgerName={
+                manager.activeLedgerId === 'all'
+                  ? 'Tất cả các sổ'
+                  : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name
+              }
               ledgers={manager.ledgers}
               wallets={manager.wallets}
               categories={manager.categories}

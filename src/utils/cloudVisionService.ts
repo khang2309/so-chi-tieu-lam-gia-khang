@@ -18,8 +18,9 @@ export function getSavedVisionConfig(): VisionConfig {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (!parsed.apiKey || parsed.apiKey.trim().length === 0) {
+      if (!parsed.apiKey || parsed.apiKey.trim().length === 0 || parsed.apiKey === "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ") {
         parsed.apiKey = DEFAULT_GEMINI_API_KEY;
+        saveVisionConfig(parsed);
       }
       return parsed;
     }
@@ -103,7 +104,7 @@ Quy tắc bắt buộc:
 
 Chỉ trả về duy nhất một chuỗi JSON hợp lệ. KHÔNG dùng định dạng markdown, KHÔNG dùng block code \`\`\`json, KHÔNG có bất kỳ đoạn text hoặc ký tự * nào bên ngoài cấu trúc JSON.`;
 
-export const DEFAULT_GEMINI_API_KEY = "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ";
+export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-1.5-flash';
 
