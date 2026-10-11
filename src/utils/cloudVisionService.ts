@@ -95,23 +95,26 @@ Quy tắc:
 /**
  * Prompt 2: Gộp thành 1 giao dịch duy nhất
  */
-export const VISION_INVOICE_PROMPT_MERGE = `Đọc hóa đơn/biên lai và gộp toàn bộ thành DUY NHẤT 1 giao dịch tổng thể.
-Bạn phải trả về một MẢNG JSON gồm ĐÚNG 1 phần tử (JSON Array chứa 1 Object duy nhất). Ví dụ:
-[
-  {
-    "name": "Tên cửa hàng hoặc Tổng hợp chi tiêu hóa đơn (VD: Siêu thị WinMart, Highlands Coffee, Đổ xăng Petrolimex, Quán Cơm Niêu)",
-    "amount": 150000,
-    "date": "2026-03-25",
-    "categorySuggestion": "Mua sắm"
-  }
-]
+export const VISION_INVOICE_PROMPT_MERGE = `Phân tích hóa đơn này và trả về 1 giao dịch duy nhất. Khóa totalAmount là tổng tiền hóa đơn. Khóa note (Ghi chú) bắt buộc phải bắt đầu bằng [Tên Cửa Hàng], sau đó liệt kê chi tiết từng món hàng và giá tiền tương ứng bên dưới theo định dạng: [Tên Cửa Hàng]\\n- Món A: giá\\n- Món B: giá.
 
-Quy tắc:
-1. "amount": Bắt buộc là "Tổng cộng" (Total / Tổng thanh toán) của cả hóa đơn. Không lấy tiền thối hay giảm giá.
-2. "name": Bắt buộc là tên cửa hàng, người bán, hoặc tóm tắt tổng thể chi tiêu của cả hóa đơn.
+Trả về định dạng JSON thuần túy (JSON object hoặc mảng JSON 1 phần tử) với cấu trúc:
+{
+  "totalAmount": 150000,
+  "note": "[Tên Cửa Hàng]\\n- Món A: giá\\n- Món B: giá",
+  "date": "2026-03-25",
+  "categorySuggestion": "Ăn uống"
+}
+
+Quy tắc bắt buộc:
+1. "totalAmount": Số nguyên tổng tiền cả hóa đơn (Total / Tổng thanh toán). Không lấy tiền thối hay giảm giá.
+2. "note": BẮT BUỘC phải bắt đầu bằng [Tên Cửa Hàng], sau đó xuống dòng liệt kê chi tiết từng món hàng và giá tiền tương ứng bên dưới:
+[Tên Cửa Hàng]
+- Món A: giá
+- Món B: giá
+Nếu không rõ tên cửa hàng trên hóa đơn, hãy dùng [Hóa đơn mua sắm] hoặc [Biên lai dịch vụ].
 3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe (Yamaha Janus)", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
 4. "date": YYYY-MM-DD từ hóa đơn (mặc định 2026 nếu thiếu).
-5. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc văn bản giải thích bên ngoài.`;
+5. Chỉ trả về chuỗi JSON thuần túy, không có markdown (\`\`\`json) hoặc văn bản giải thích bên ngoài.`;
 
 export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
@@ -390,36 +393,38 @@ export function parseVisionJsonResponse(jsonString: string): BatchParsedResult {
   } else if (typeof parsed === 'object' && parsed !== null) {
     // Nếu AI trả về 1 object đơn lẻ (nhất là trong chế độ gộp 1 giao dịch)
     const singleAmt = Number(parsed.totalAmount || parsed.total || parsed.amount || parsed.price || 0);
-    const singleName = String(
-      parsed.storeName || parsed.merchant || parsed.name || parsed.title || parsed.note || 'Chi tiêu hóa đơn'
+    const singleNote = String(
+      parsed.note || parsed.name || parsed.storeName || parsed.merchant || parsed.title || 'Chi tiêu hóa đơn'
     ).trim();
     if (singleAmt > 0) {
       rawItems = [
         {
-          name: singleName,
+          note: singleNote,
+          name: singleNote,
           amount: singleAmt,
+          totalAmount: singleAmt,
           date: parsed.date || defaultDate,
-          categorySuggestion: parsed.categorySuggestion || parsed.category || singleName,
+          categorySuggestion: parsed.categorySuggestion || parsed.category || singleNote,
         },
       ];
     }
   }
 
   const items: ExtractedBatchItem[] = rawItems
-    .filter((item: any) => item && (Number(item.amount) > 0 || Number(item.price) > 0))
+    .filter((item: any) => item && (Number(item.totalAmount) > 0 || Number(item.amount) > 0 || Number(item.price) > 0))
     .map((item: any, idx: number) => {
-      const amt = Number(item.amount || item.price || 0);
-      const name = String(item.name || item.title || item.note || `Món hàng ${idx + 1}`).trim();
+      const amt = Number(item.totalAmount || item.amount || item.price || 0);
+      const noteText = String(item.note || item.name || item.title || `Món hàng ${idx + 1}`).trim();
       const itemDate = item.date || defaultDate;
-      const categoryId = item.categoryId || mapCategoryNameToId(item.categorySuggestion || item.category || name);
+      const categoryId = item.categoryId || mapCategoryNameToId(item.categorySuggestion || item.category || noteText);
 
       return {
         id: `vision-item-${Date.now()}-${idx}`,
         date: itemDate,
         amount: amt,
-        note: name,
+        note: noteText,
         categoryId,
-        rawLine: `${name}: ${amt.toLocaleString('vi-VN')} đ`,
+        rawLine: `${noteText}: ${amt.toLocaleString('vi-VN')} đ`,
       };
     });
 

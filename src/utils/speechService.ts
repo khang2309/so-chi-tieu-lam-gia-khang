@@ -70,20 +70,20 @@ class SpeechService {
           }
         );
 
-        // Bắt đầu nhận diện giọng nói tiếng Việt
+        // Bắt đầu nhận diện giọng nói tiếng Việt với cấu hình nghiêm ngặt
         const startResult = await SpeechRecognition.start({
           language: 'vi-VN',
-          maxResults: 2,
-          prompt: 'Đang lắng nghe...',
-          partialResults: true,
-          popup: false,
+          maxResults: 1,
+          partialResults: false,
+          prompt: 'Đang lắng nghe tiếng Việt...',
         });
 
-        // Trên một số thiết bị Android, start() trả về kết quả matches trực tiếp khi kết thúc
+        // Khi partialResults: false, SpeechRecognition.start trả về kết quả matches cuối cùng
         if (startResult && startResult.matches && startResult.matches.length > 0) {
-          this.currentTranscript = startResult.matches[0];
-          callbacks.onPartialResult(this.currentTranscript);
-          callbacks.onFinalResult(this.currentTranscript);
+          const text = startResult.matches[0];
+          this.currentTranscript = text;
+          callbacks.onPartialResult(text);
+          callbacks.onFinalResult(text);
         }
 
         return true;

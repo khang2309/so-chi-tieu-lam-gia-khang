@@ -665,14 +665,14 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {/* Ghi chú */}
                         <div className="sm:col-span-2">
-                          <input
-                            type="text"
+                          <textarea
+                            rows={item.note && item.note.includes('\n') ? Math.min(6, item.note.split('\n').length) : 1}
                             value={item.note}
                             onChange={(e) =>
                               handleUpdateItem(item.id, 'note', e.target.value)
                             }
                             placeholder="Nội dung khoản chi..."
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none resize-y"
                           />
                         </div>
 
