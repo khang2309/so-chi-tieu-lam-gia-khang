@@ -1,4 +1,5 @@
 import { BatchParsedResult, ExtractedBatchItem, InvoiceType, predictCategory } from './ocrParser';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export type VisionProvider = 'gemini';
 
@@ -246,133 +247,111 @@ async function callGeminiVision(
   const { base64Data, mimeType } = cleanBase64(base64Image);
   const keyToUse = apiKey && apiKey.trim().length > 0 ? apiKey.trim() : DEFAULT_GEMINI_API_KEY;
 
-  const generationConfig: Record<string, any> = {
-    temperature: 0.1,
-    response_mime_type: 'application/json',
-    responseMimeType: 'application/json',
-  };
-  if (responseSchema) {
-    generationConfig.responseSchema = responseSchema;
-    generationConfig.response_schema = responseSchema;
-  }
+  const genAI = new GoogleGenerativeAI(keyToUse);
 
-  const payload: any = {
-    contents: [
-      {
-        parts: [
-          { text: promptText },
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data,
-            },
-          },
-        ],
+  const contentParts = [
+    promptText,
+    {
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Data,
       },
-    ],
-    generationConfig,
-  };
+    },
+  ];
 
   let lastError = '';
   let isKeyReportedLeaked = false;
 
   for (let i = 0; i < GEMINI_FALLBACK_MODELS.length; i++) {
-    const model = GEMINI_FALLBACK_MODELS[i];
+    const currentModel = GEMINI_FALLBACK_MODELS[i];
     if (abortSignal?.aborted) {
       throw new DOMException('Quá trình quét đã bị hủy bởi người dùng', 'AbortError');
     }
 
-    const apiVersions = ['v1beta', 'v1'];
-    let switchedDueToQuota = false;
+    try {
+      // Trong khối try, khởi tạo genAI.getGenerativeModel({ model: currentModel }) và thực hiện generateContent
+      const model = genAI.getGenerativeModel({
+        model: currentModel,
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          response_mime_type: 'application/json',
+          ...(responseSchema ? { responseSchema, response_schema: responseSchema } : {}),
+        } as any,
+      });
 
-    for (const apiVer of apiVersions) {
-      if (abortSignal?.aborted) {
+      const result = await model.generateContent(
+        contentParts,
+        abortSignal ? ({ signal: abortSignal } as any) : undefined
+      );
+
+      const responseText = result.response.text();
+      // Nếu thành công, break khỏi vòng lặp và trả về kết quả
+      if (responseText) {
+        return responseText;
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || abortSignal?.aborted) {
         throw new DOMException('Quá trình quét đã bị hủy bởi người dùng', 'AbortError');
       }
 
-      try {
-        const endpoint = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${keyToUse}`;
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: abortSignal,
-        });
+      const errMsg = error?.message || String(error);
+      console.warn(`Model Vision ${currentModel} thất bại:`, errMsg);
 
-        if (res.ok) {
-          const json = await res.json();
-          const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawContent) {
-            return rawContent;
-          }
-        } else {
-          const errText = await res.text();
-
-          // Tự động phát hiện lỗi Hết Quota / Giới hạn (429 / 503 / RESOURCE_EXHAUSTED)
-          if (isQuotaOrRateLimitError(res.status, errText)) {
-            const nextModel = GEMINI_FALLBACK_MODELS[i + 1];
-            console.warn(
-              `[Quota Fallback OCR] Model '${model}' (${apiVer}) đã hết hạn mức Quota (HTTP ${res.status}). ` +
-                (nextModel ? `Tự động chuyển ngay sang model dự phòng '${nextModel}'...` : 'Đã hết danh sách model dự phòng.')
-            );
-            if (nextModel) {
-              onModelSwitch?.(model, `hết quota (${res.status}), đang tự động chuyển sang ${nextModel}...`);
-            }
-            lastError = `Model ${model} (${apiVer} - Hết Quota 429): ${errText}`;
-            switchedDueToQuota = true;
-            break; // Ngắt ngay apiVersions loop để nhảy sang model tiếp theo trong GEMINI_FALLBACK_MODELS!
-          }
-
-          // Nếu model trả về 400 do schema, tự động fallback thử lại không có responseSchema
-          if (res.status === 400 && payload.generationConfig?.responseSchema) {
-            try {
-              const fallbackPayload = {
-                ...payload,
-                generationConfig: {
-                  temperature: 0.1,
-                  response_mime_type: 'application/json',
-                  responseMimeType: 'application/json',
-                },
-              };
-              const retryRes = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fallbackPayload),
-                signal: abortSignal,
-              });
-              if (retryRes.ok) {
-                const retryJson = await retryRes.json();
-                const retryContent = retryJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (retryContent) return retryContent;
-              }
-            } catch {
-              // Bỏ qua lỗi retry fallback
-            }
-          }
-
-          console.warn(`Model ${model} (${apiVer}) thất bại (HTTP ${res.status}):`, errText);
-          if (res.status === 403 || errText.includes('PERMISSION_DENIED') || errText.includes('leaked')) {
-            isKeyReportedLeaked = true;
-          }
-          lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
+      // Trong khối catch, kiểm tra nếu lỗi là do quá tải/hết lượt (chứa mã 429 hoặc 503).
+      // Nếu đúng, continue vòng lặp để tự động gọi model tiếp theo trong mảng.
+      if (
+        errMsg.includes('429') ||
+        errMsg.includes('503') ||
+        errMsg.includes('RESOURCE_EXHAUSTED') ||
+        errMsg.includes('UNAVAILABLE') ||
+        errMsg.toLowerCase().includes('quota') ||
+        errMsg.toLowerCase().includes('overloaded') ||
+        errMsg.toLowerCase().includes('rate limit')
+      ) {
+        const nextModel = GEMINI_FALLBACK_MODELS[i + 1];
+        console.warn(
+          `[Quota/Overload Fallback OCR] Model '${currentModel}' gặp lỗi 429/503 (Quota Exceeded / Service Unavailable). ` +
+            (nextModel ? `Tự động gọi model tiếp theo '${nextModel}'...` : '')
+        );
+        if (nextModel) {
+          onModelSwitch?.(currentModel, `quá tải/hết lượt (429/503), đang tự động chuyển sang ${nextModel}...`);
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError' || abortSignal?.aborted) {
-          throw err;
-        }
-        console.warn(`Lỗi khi gọi model ${model} (${apiVer}):`, err);
-        lastError = err?.message || String(err);
+        lastError = `Model ${currentModel} (429/503): ${errMsg}`;
+        continue;
       }
-    }
 
-    if (switchedDueToQuota) {
-      continue;
+      if (errMsg.includes('400') && responseSchema) {
+        try {
+          const fallbackModel = genAI.getGenerativeModel({
+            model: currentModel,
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              response_mime_type: 'application/json',
+            } as any,
+          });
+          const retryResult = await fallbackModel.generateContent(
+            contentParts,
+            abortSignal ? ({ signal: abortSignal } as any) : undefined
+          );
+          const retryText = retryResult.response.text();
+          if (retryText) return retryText;
+        } catch {
+          // Bỏ qua lỗi retry
+        }
+      }
+
+      if (errMsg.includes('403') || errMsg.includes('PERMISSION_DENIED') || errMsg.includes('leaked')) {
+        isKeyReportedLeaked = true;
+      }
+      lastError = `Model ${currentModel}: ${errMsg}`;
     }
   }
 
   if (isKeyReportedLeaked) {
     throw new Error(
-      `Khóa API Google Gemini của bạn đã bị thu hồi hoặc hạn chế quyền (Google báo lỗi 403/404). Vui lòng nhấn vào nút 'Cấu hình Key' và dán API Key cá nhân mới lấy miễn phí từ https://aistudio.google.com/app/apikey.`
+      `Khóa API Google Gemini của bạn đã bị thu hồi hoặc hạn chế quyền (Google báo lỗi 403). Vui lòng nhấn vào nút 'Cấu hình Key' và dán API Key cá nhân mới lấy miễn phí từ https://aistudio.google.com/app/apikey.`
     );
   }
 
@@ -381,7 +360,7 @@ async function callGeminiVision(
 
 /**
  * Gọi Google Gemini API với nội dung văn bản thuần túy (dùng cho Voice NLP, Text Extraction)
- * Tự động chuyển model kế tiếp khi gặp 429 Quota Exceeded
+ * Tự động chuyển model kế tiếp khi gặp 429 Quota Exceeded hoặc 503 Service Unavailable
  */
 export async function callGeminiText(
   promptText: string,
@@ -398,113 +377,90 @@ export async function callGeminiText(
       ? savedCfg.apiKey.trim()
       : DEFAULT_GEMINI_API_KEY;
 
-  const generationConfig: Record<string, any> = {
-    temperature: 0.1,
-    response_mime_type: 'application/json',
-    responseMimeType: 'application/json',
-  };
-  if (responseSchema) {
-    generationConfig.responseSchema = responseSchema;
-    generationConfig.response_schema = responseSchema;
-  }
-
-  const payload: any = {
-    contents: [
-      {
-        parts: [{ text: promptText }],
-      },
-    ],
-    generationConfig,
-  };
-
+  const genAI = new GoogleGenerativeAI(keyToUse);
   let lastError = '';
 
   for (let i = 0; i < GEMINI_FALLBACK_MODELS.length; i++) {
-    const model = GEMINI_FALLBACK_MODELS[i];
+    const currentModel = GEMINI_FALLBACK_MODELS[i];
     if (abortSignal?.aborted) {
       throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
     }
 
-    const apiVersions = ['v1beta', 'v1'];
-    let switchedDueToQuota = false;
+    try {
+      // Trong khối try, khởi tạo genAI.getGenerativeModel({ model: currentModel }) và thực hiện generateContent
+      const model = genAI.getGenerativeModel({
+        model: currentModel,
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          response_mime_type: 'application/json',
+          ...(responseSchema ? { responseSchema, response_schema: responseSchema } : {}),
+        } as any,
+      });
 
-    for (const apiVer of apiVersions) {
-      if (abortSignal?.aborted) {
+      const result = await model.generateContent(
+        promptText,
+        abortSignal ? ({ signal: abortSignal } as any) : undefined
+      );
+
+      const responseText = result.response.text();
+      // Nếu thành công, break khỏi vòng lặp và trả về kết quả
+      if (responseText) {
+        return responseText;
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || abortSignal?.aborted) {
         throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
       }
 
-      try {
-        const endpoint = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${keyToUse}`;
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: abortSignal,
-        });
+      const errMsg = error?.message || String(error);
+      console.warn(`Model Text ${currentModel} thất bại:`, errMsg);
 
-        if (res.ok) {
-          const json = await res.json();
-          const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawContent) {
-            return rawContent;
-          }
-        } else {
-          const errText = await res.text();
-
-          // Tự động phát hiện lỗi Hết Quota / Giới hạn (429 / 503 / RESOURCE_EXHAUSTED)
-          if (isQuotaOrRateLimitError(res.status, errText)) {
-            const nextModel = GEMINI_FALLBACK_MODELS[i + 1];
-            console.warn(
-              `[Quota Fallback Text] Model '${model}' (${apiVer}) đã hết hạn mức Quota (HTTP ${res.status}). ` +
-                (nextModel ? `Tự động chuyển ngay sang model '${nextModel}'...` : '')
-            );
-            if (nextModel) {
-              onModelSwitch?.(model, `hết quota (${res.status}), đang tự động chuyển sang ${nextModel}...`);
-            }
-            lastError = `Model ${model} (${apiVer} - Hết Quota 429): ${errText}`;
-            switchedDueToQuota = true;
-            break; // Bỏ qua apiVer còn lại, sang model tiếp theo ngay lập tức
-          }
-
-          // Nếu model trả về 400 do schema, tự động fallback thử lại không có responseSchema
-          if (res.status === 400 && payload.generationConfig?.responseSchema) {
-            try {
-              const fallbackPayload = {
-                ...payload,
-                generationConfig: {
-                  temperature: 0.1,
-                  response_mime_type: 'application/json',
-                  responseMimeType: 'application/json',
-                },
-              };
-              const retryRes = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fallbackPayload),
-                signal: abortSignal,
-              });
-              if (retryRes.ok) {
-                const retryJson = await retryRes.json();
-                const retryContent = retryJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (retryContent) return retryContent;
-              }
-            } catch {
-              // Bỏ qua lỗi retry fallback
-            }
-          }
-
-          lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
+      // Trong khối catch, kiểm tra nếu lỗi là do quá tải/hết lượt (chứa mã 429 hoặc 503).
+      // Nếu đúng, continue vòng lặp để tự động gọi model tiếp theo trong mảng.
+      if (
+        errMsg.includes('429') ||
+        errMsg.includes('503') ||
+        errMsg.includes('RESOURCE_EXHAUSTED') ||
+        errMsg.includes('UNAVAILABLE') ||
+        errMsg.toLowerCase().includes('quota') ||
+        errMsg.toLowerCase().includes('overloaded') ||
+        errMsg.toLowerCase().includes('rate limit')
+      ) {
+        const nextModel = GEMINI_FALLBACK_MODELS[i + 1];
+        console.warn(
+          `[Quota/Overload Fallback Text] Model '${currentModel}' gặp lỗi 429/503 (Quota Exceeded / Service Unavailable). ` +
+            (nextModel ? `Tự động gọi model tiếp theo '${nextModel}'...` : '')
+        );
+        if (nextModel) {
+          onModelSwitch?.(currentModel, `quá tải/hết lượt (429/503), đang tự động chuyển sang ${nextModel}...`);
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError' || abortSignal?.aborted) {
-          throw err;
-        }
-        lastError = err?.message || String(err);
+        lastError = `Model ${currentModel} (429/503): ${errMsg}`;
+        continue;
       }
-    }
 
-    if (switchedDueToQuota) {
-      continue;
+      if (errMsg.includes('400') && responseSchema) {
+        try {
+          const fallbackModel = genAI.getGenerativeModel({
+            model: currentModel,
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              response_mime_type: 'application/json',
+            } as any,
+          });
+          const retryResult = await fallbackModel.generateContent(
+            promptText,
+            abortSignal ? ({ signal: abortSignal } as any) : undefined
+          );
+          const retryText = retryResult.response.text();
+          if (retryText) return retryText;
+        } catch {
+          // Bỏ qua lỗi retry
+        }
+      }
+
+      lastError = `Model ${currentModel}: ${errMsg}`;
     }
   }
 
@@ -513,7 +469,7 @@ export async function callGeminiText(
 
 /**
  * Gọi Google Gemini với Audio input (base64) và text prompt
- * Tự động chuyển model kế tiếp khi gặp 429 Quota Exceeded (sử dụng GEMINI_AUDIO_MODELS)
+ * Tự động chuyển model kế tiếp khi gặp 429 Quota Exceeded hoặc 503 Service Unavailable
  */
 export async function callGeminiAudio(
   audioBase64: string,
@@ -543,120 +499,101 @@ export async function callGeminiAudio(
     base64Data = base64Data.split(',')[1];
   }
 
-  const generationConfig: Record<string, any> = {
-    temperature: 0.1,
-    response_mime_type: 'application/json',
-    responseMimeType: 'application/json',
-  };
-  if (responseSchema) {
-    generationConfig.responseSchema = responseSchema;
-    generationConfig.response_schema = responseSchema;
-  }
+  const genAI = new GoogleGenerativeAI(keyToUse);
 
-  const payload: any = {
-    contents: [
-      {
-        parts: [
-          {
-            inlineData: {
-              mimeType: cleanMime,
-              data: base64Data,
-            },
-          },
-          { text: promptText },
-        ],
+  const contentParts = [
+    {
+      inlineData: {
+        mimeType: cleanMime,
+        data: base64Data,
       },
-    ],
-    generationConfig,
-  };
+    },
+    promptText,
+  ];
 
   let lastError = '';
 
   for (let i = 0; i < GEMINI_AUDIO_MODELS.length; i++) {
-    const model = GEMINI_AUDIO_MODELS[i];
+    const currentModel = GEMINI_AUDIO_MODELS[i];
     if (abortSignal?.aborted) {
       throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
     }
 
-    const apiVersions = ['v1beta', 'v1'];
-    let switchedDueToQuota = false;
+    try {
+      // Trong khối try, khởi tạo genAI.getGenerativeModel({ model: currentModel }) và thực hiện generateContent
+      const model = genAI.getGenerativeModel({
+        model: currentModel,
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          response_mime_type: 'application/json',
+          ...(responseSchema ? { responseSchema, response_schema: responseSchema } : {}),
+        } as any,
+      });
 
-    for (const apiVer of apiVersions) {
-      if (abortSignal?.aborted) {
+      const result = await model.generateContent(
+        contentParts,
+        abortSignal ? ({ signal: abortSignal } as any) : undefined
+      );
+
+      const responseText = result.response.text();
+      // Nếu thành công, break khỏi vòng lặp và trả về kết quả
+      if (responseText) {
+        return responseText;
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || abortSignal?.aborted) {
         throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
       }
 
-      try {
-        const endpoint = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${keyToUse}`;
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: abortSignal,
-        });
+      const errMsg = error?.message || String(error);
+      console.warn(`Model Audio ${currentModel} thất bại:`, errMsg);
 
-        if (res.ok) {
-          const json = await res.json();
-          const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawContent) {
-            return rawContent;
-          }
-        } else {
-          const errText = await res.text();
-
-          // Tự động phát hiện lỗi Hết Quota / Giới hạn (429 / 503 / RESOURCE_EXHAUSTED)
-          if (isQuotaOrRateLimitError(res.status, errText)) {
-            const nextModel = GEMINI_AUDIO_MODELS[i + 1];
-            console.warn(
-              `[Quota Fallback Audio] Model '${model}' (${apiVer}) đã hết hạn mức Quota (HTTP ${res.status}). ` +
-                (nextModel ? `Tự động chuyển ngay sang model dự phòng '${nextModel}'...` : 'Đã hết danh sách model dự phòng.')
-            );
-            if (nextModel) {
-              onModelSwitch?.(model, `hết quota (${res.status}), đang tự động chuyển sang ${nextModel}...`);
-            }
-            lastError = `Model ${model} (${apiVer} - Hết Quota 429): ${errText}`;
-            switchedDueToQuota = true;
-            break; // Bỏ qua apiVer còn lại, chuyển model kế tiếp ngay lập tức!
-          }
-
-          if (res.status === 400 && payload.generationConfig?.responseSchema) {
-            try {
-              const fallbackPayload = {
-                ...payload,
-                generationConfig: {
-                  temperature: 0.1,
-                  response_mime_type: 'application/json',
-                  responseMimeType: 'application/json',
-                },
-              };
-              const retryRes = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fallbackPayload),
-                signal: abortSignal,
-              });
-              if (retryRes.ok) {
-                const retryJson = await retryRes.json();
-                const retryContent = retryJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (retryContent) return retryContent;
-              }
-            } catch {
-              // Ignore
-            }
-          }
-
-          lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
+      // Trong khối catch, kiểm tra nếu lỗi là do quá tải/hết lượt (chứa mã 429 hoặc 503).
+      // Nếu đúng, continue vòng lặp để tự động gọi model tiếp theo trong mảng.
+      if (
+        errMsg.includes('429') ||
+        errMsg.includes('503') ||
+        errMsg.includes('RESOURCE_EXHAUSTED') ||
+        errMsg.includes('UNAVAILABLE') ||
+        errMsg.toLowerCase().includes('quota') ||
+        errMsg.toLowerCase().includes('overloaded') ||
+        errMsg.toLowerCase().includes('rate limit')
+      ) {
+        const nextModel = GEMINI_AUDIO_MODELS[i + 1];
+        console.warn(
+          `[Quota/Overload Fallback Audio] Model '${currentModel}' gặp lỗi 429/503 (Quota Exceeded / Service Unavailable). ` +
+            (nextModel ? `Tự động gọi model tiếp theo '${nextModel}'...` : '')
+        );
+        if (nextModel) {
+          onModelSwitch?.(currentModel, `quá tải/hết lượt (429/503), đang tự động chuyển sang ${nextModel}...`);
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError' || abortSignal?.aborted) {
-          throw err;
-        }
-        lastError = err?.message || String(err);
+        lastError = `Model ${currentModel} (429/503): ${errMsg}`;
+        continue;
       }
-    }
 
-    if (switchedDueToQuota) {
-      continue;
+      if (errMsg.includes('400') && responseSchema) {
+        try {
+          const fallbackModel = genAI.getGenerativeModel({
+            model: currentModel,
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              response_mime_type: 'application/json',
+            } as any,
+          });
+          const retryResult = await fallbackModel.generateContent(
+            contentParts,
+            abortSignal ? ({ signal: abortSignal } as any) : undefined
+          );
+          const retryText = retryResult.response.text();
+          if (retryText) return retryText;
+        } catch {
+          // Bỏ qua lỗi retry
+        }
+      }
+
+      lastError = `Model ${currentModel}: ${errMsg}`;
     }
   }
 
