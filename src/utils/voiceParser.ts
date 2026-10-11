@@ -1,5 +1,5 @@
 import { Category, TransactionType } from '../types';
-import { callGeminiText } from './cloudVisionService';
+import { callGeminiText, GEMINI_VOICE_SCHEMA } from './cloudVisionService';
 
 export interface ParsedVoiceResult {
   amount: number;
@@ -504,7 +504,7 @@ export async function parseVoiceWithGemini(
   const prompt = `Trích xuất thông tin giao dịch từ câu nói này: '${cleanInput}'. Trả về duy nhất định dạng JSON: { "amount": <số tiền nguyên dương, tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số>, "note": "<nội dung giao dịch, loại bỏ số tiền>", "category": "<danh mục phù hợp nhất trong danh sách: ${categoryNames}>" }`;
 
   try {
-    const rawResponse = await callGeminiText(prompt, apiKeyOverride, abortSignal);
+    const rawResponse = await callGeminiText(prompt, apiKeyOverride, abortSignal, GEMINI_VOICE_SCHEMA);
     let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
 
     const firstBrace = cleanText.indexOf('{');

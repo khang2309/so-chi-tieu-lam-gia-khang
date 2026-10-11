@@ -111,22 +111,100 @@ Quy tắc bắt buộc:
 
 export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-1.5-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
 
 // Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định
 export const GEMINI_FALLBACK_MODELS = [
-  'gemini-1.5-flash',
-  'gemma-4-26b-a4b-it',
-  'gemma-4-31b-it',
   'gemini-3.5-flash',
-  'gemini-3-flash-preview',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
   'gemini-3.1-flash-lite',
-  'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3-flash-preview',
+  'gemini-1.5-flash',
   'gemini-1.5-flash-latest',
   'gemini-1.5-pro',
 ];
+
+/**
+ * Schema Gemini cho chế độ Gộp Hóa Đơn (Single Transaction Object)
+ */
+export const GEMINI_MERGE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    totalAmount: {
+      type: 'INTEGER',
+      description: 'Tổng số tiền thanh toán cả hóa đơn (số nguyên dương)',
+    },
+    note: {
+      type: 'STRING',
+      description: 'Ghi chú bắt đầu bằng [Tên Cửa Hàng], sau đó liệt kê từng món và giá tiền ngăn cách bằng \\n',
+    },
+    categorySuggestion: {
+      type: 'STRING',
+      description: 'Gợi ý danh mục phù hợp (Ăn, Uống, Xăng xe, Hóa đơn, Mua sắm, Cắt tóc, Đồ điện tử, Đồ gia dụng, Chi tiêu khác)',
+    },
+    date: {
+      type: 'STRING',
+      description: 'Ngày lập hóa đơn theo định dạng YYYY-MM-DD',
+    },
+  },
+  required: ['totalAmount', 'note', 'categorySuggestion', 'date'],
+};
+
+/**
+ * Schema Gemini cho chế độ Tách Hóa Đơn (Array of Transaction Objects)
+ */
+export const GEMINI_SPLIT_SCHEMA = {
+  type: 'ARRAY',
+  description: 'Danh sách các món hàng/dịch vụ trong hóa đơn',
+  items: {
+    type: 'OBJECT',
+    properties: {
+      name: {
+        type: 'STRING',
+        description: 'Tên món hàng hoặc dịch vụ',
+      },
+      amount: {
+        type: 'INTEGER',
+        description: 'Số tiền của món hàng/dịch vụ (số nguyên dương)',
+      },
+      categorySuggestion: {
+        type: 'STRING',
+        description: 'Gợi ý danh mục phù hợp cho món này',
+      },
+      date: {
+        type: 'STRING',
+        description: 'Ngày lập hóa đơn định dạng YYYY-MM-DD',
+      },
+    },
+    required: ['name', 'amount', 'categorySuggestion', 'date'],
+  },
+};
+
+/**
+ * Schema Gemini cho Voice-to-Text NLP (Single Voice Parsed Object)
+ */
+export const GEMINI_VOICE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    amount: {
+      type: 'INTEGER',
+      description: 'Số tiền nguyên dương đã tự động quy đổi từ các từ ngữ tiếng Việt',
+    },
+    note: {
+      type: 'STRING',
+      description: 'Nội dung chi tiêu hoặc thu nhập, đã loại bỏ phần số tiền',
+    },
+    category: {
+      type: 'STRING',
+      description: 'Tên danh mục phù hợp nhất từ danh sách danh mục',
+    },
+  },
+  required: ['amount', 'note', 'category'],
+};
 
 /**
  * Gọi Google Gemini Vision API với cơ chế tự động Fallback qua danh sách models
@@ -136,12 +214,22 @@ async function callGeminiVision(
   base64Image: string,
   apiKey: string,
   abortSignal?: AbortSignal,
-  promptText: string = VISION_INVOICE_PROMPT_SPLIT
+  promptText: string = VISION_INVOICE_PROMPT_SPLIT,
+  responseSchema?: any
 ): Promise<string> {
   const { base64Data, mimeType } = cleanBase64(base64Image);
   const keyToUse = apiKey && apiKey.trim().length > 0 ? apiKey.trim() : DEFAULT_GEMINI_API_KEY;
 
-  const payload = {
+  const generationConfig: Record<string, any> = {
+    temperature: 0.1,
+    response_mime_type: 'application/json',
+    responseMimeType: 'application/json',
+  };
+  if (responseSchema) {
+    generationConfig.responseSchema = responseSchema;
+  }
+
+  const payload: any = {
     contents: [
       {
         parts: [
@@ -155,10 +243,7 @@ async function callGeminiVision(
         ],
       },
     ],
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: 'application/json',
-    },
+    generationConfig,
   };
 
   let lastError = '';
@@ -191,6 +276,33 @@ async function callGeminiVision(
             return rawContent;
           }
         } else {
+          // Nếu model trả về 400 do schema, tự động fallback thử lại không có responseSchema
+          if (res.status === 400 && payload.generationConfig?.responseSchema) {
+            try {
+              const fallbackPayload = {
+                ...payload,
+                generationConfig: {
+                  temperature: 0.1,
+                  response_mime_type: 'application/json',
+                  responseMimeType: 'application/json',
+                },
+              };
+              const retryRes = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fallbackPayload),
+                signal: abortSignal,
+              });
+              if (retryRes.ok) {
+                const retryJson = await retryRes.json();
+                const retryContent = retryJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (retryContent) return retryContent;
+              }
+            } catch {
+              // Bỏ qua lỗi retry fallback
+            }
+          }
+
           const errText = await res.text();
           console.warn(`Model ${model} (${apiVer}) thất bại (HTTP ${res.status}):`, errText);
           if (res.status === 403 || errText.includes('PERMISSION_DENIED') || errText.includes('leaked')) {
@@ -223,7 +335,8 @@ async function callGeminiVision(
 export async function callGeminiText(
   promptText: string,
   apiKeyOverride?: string,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  responseSchema?: any
 ): Promise<string> {
   const savedCfg = getSavedVisionConfig();
   const keyToUse =
@@ -233,16 +346,22 @@ export async function callGeminiText(
       ? savedCfg.apiKey.trim()
       : DEFAULT_GEMINI_API_KEY;
 
-  const payload = {
+  const generationConfig: Record<string, any> = {
+    temperature: 0.1,
+    response_mime_type: 'application/json',
+    responseMimeType: 'application/json',
+  };
+  if (responseSchema) {
+    generationConfig.responseSchema = responseSchema;
+  }
+
+  const payload: any = {
     contents: [
       {
         parts: [{ text: promptText }],
       },
     ],
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: 'application/json',
-    },
+    generationConfig,
   };
 
   let lastError = '';
@@ -274,6 +393,33 @@ export async function callGeminiText(
             return rawContent;
           }
         } else {
+          // Nếu model trả về 400 do schema, tự động fallback thử lại không có responseSchema
+          if (res.status === 400 && payload.generationConfig?.responseSchema) {
+            try {
+              const fallbackPayload = {
+                ...payload,
+                generationConfig: {
+                  temperature: 0.1,
+                  response_mime_type: 'application/json',
+                  responseMimeType: 'application/json',
+                },
+              };
+              const retryRes = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fallbackPayload),
+                signal: abortSignal,
+              });
+              if (retryRes.ok) {
+                const retryJson = await retryRes.json();
+                const retryContent = retryJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (retryContent) return retryContent;
+              }
+            } catch {
+              // Bỏ qua lỗi retry fallback
+            }
+          }
+
           const errText = await res.text();
           lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
         }
@@ -563,9 +709,11 @@ export async function extractInvoiceDataWithCloudVision(
 
   const promptText =
     scanMode === 'merge' ? VISION_INVOICE_PROMPT_MERGE : VISION_INVOICE_PROMPT_SPLIT;
+  const schemaToUse =
+    scanMode === 'merge' ? GEMINI_MERGE_SCHEMA : GEMINI_SPLIT_SCHEMA;
 
   // Mặc định và duy nhất: Google Gemini Vision
-  const rawJsonText = await callGeminiVision(imageSource, effectiveKey, abortSignal, promptText);
+  const rawJsonText = await callGeminiVision(imageSource, effectiveKey, abortSignal, promptText, schemaToUse);
 
   return parseVisionJsonResponse(rawJsonText);
 }

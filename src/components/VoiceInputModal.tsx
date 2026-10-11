@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle, Loader2 } from 'lucide-react';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import { Capacitor } from '@capacitor/core';
 import { Category } from '../types';
 import { speechService } from '../utils/speechService';
 import { parseVoiceInput, parseVoiceWithGemini, ParsedVoiceResult } from '../utils/voiceParser';
@@ -50,6 +52,20 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     setPreviewResult(null);
     setIsAnalyzing(false);
     hasFinishedRef.current = false;
+
+    // BẮT BUỘC: Yêu cầu cấp quyền Micro trước khi gọi SpeechRecognition.start()
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const permStatus = await SpeechRecognition.requestPermissions();
+        if (permStatus.speechRecognition !== 'granted') {
+          alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+          setErrorMsg('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+          return;
+        }
+      } catch (err: any) {
+        console.warn('Lỗi requestPermissions:', err);
+      }
+    }
 
     const success = await speechService.startListening({
       onPartialResult: (text) => {

@@ -29,16 +29,14 @@ class SpeechService {
           console.warn('SpeechRecognition.available returned false, continuing attempt...');
         }
 
-        // Kiểm tra quyền RECORD_AUDIO
-        const permStatus = await SpeechRecognition.checkPermissions();
-        if (permStatus.speechRecognition !== 'granted') {
-          const reqStatus = await SpeechRecognition.requestPermissions();
-          if (reqStatus.speechRecognition !== 'granted') {
-            callbacks.onError('Ứng dụng chưa được cấp quyền truy cập Micro (RECORD_AUDIO).');
-            this.isListeningActive = false;
-            callbacks.onListeningStateChange?.(false);
-            return false;
-          }
+        // BẮT BUỘC gọi SpeechRecognition.requestPermissions() TRƯỚC KHI gọi SpeechRecognition.start()
+        const reqStatus = await SpeechRecognition.requestPermissions();
+        if (reqStatus.speechRecognition !== 'granted') {
+          alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+          callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+          this.isListeningActive = false;
+          callbacks.onListeningStateChange?.(false);
+          return false;
         }
 
         // Xóa các listeners cũ
@@ -139,7 +137,10 @@ class SpeechService {
 
       this.webRecognition.onerror = (event: any) => {
         console.warn('Web Speech Recognition error:', event.error);
-        if (event.error !== 'no-speech') {
+        if (event.error === 'not-allowed') {
+          alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+          callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+        } else if (event.error !== 'no-speech') {
           callbacks.onError(`Lỗi nhận diện giọng nói: ${event.error}`);
         }
         this.isListeningActive = false;
