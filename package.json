@@ -16,8 +16,7 @@
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.6.0",
-    "tesseract.js": "^7.0.0"
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.2.0",

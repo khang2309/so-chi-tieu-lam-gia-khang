@@ -464,8 +464,68 @@ export function extractFreeTextReceipt(rawText: string): ExtractedBatchItem[] {
 
 // =========================================================================
 // 3. HÀM CHÍNH ĐIỀU PHỐI (EXTRACT INVOICE DATA)
+// Hỗ trợ cả chuỗi JSON từ Cloud/LLM Vision và văn bản phân tích dòng
 // =========================================================================
 export function extractInvoiceData(rawText: string): BatchParsedResult {
+  const trimmed = (rawText || '').trim();
+
+  // Kiểm tra nếu đầu vào là kết quả JSON trả về từ Cloud LLM Vision
+  if ((trimmed.startsWith('{') || trimmed.startsWith('```json')) && (trimmed.includes('"items"') || trimmed.includes('"totalAmount"'))) {
+    try {
+      let cleanJson = trimmed;
+      if (cleanJson.startsWith('```json')) {
+        cleanJson = cleanJson.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      const parsed = JSON.parse(cleanJson);
+      const invoiceType: InvoiceType = parsed.invoiceType || 'TYPE_A_TABLE';
+      const invoiceTypeName =
+        parsed.invoiceTypeName ||
+        (invoiceType === 'TYPE_A_TABLE'
+          ? 'Hóa đơn in / Bảng (Siêu thị, Cửa hàng)'
+          : invoiceType === 'TYPE_B_TRANSFER'
+          ? 'Biên lai Chuyển khoản Ngân hàng'
+          : 'Giấy ghi chép tự do');
+
+      const defaultDate = parsed.date || new Date().toISOString().slice(0, 10);
+      const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+
+      const items: ExtractedBatchItem[] = rawItems
+        .filter((item: any) => item && (Number(item.amount) > 0 || Number(item.price) > 0))
+        .map((item: any, idx: number) => {
+          const amt = Number(item.amount || item.price || 0);
+          const name = String(item.name || item.title || item.note || `Món hàng ${idx + 1}`).trim();
+          const itemDate = item.date || defaultDate;
+          const categoryId = item.categoryId || predictCategory(item.categorySuggestion || item.category || name);
+
+          return {
+            id: `vision-item-${Date.now()}-${idx}`,
+            date: itemDate,
+            amount: amt,
+            note: name,
+            categoryId,
+            rawLine: `${name}: ${amt.toLocaleString('vi-VN')} đ`,
+          };
+        });
+
+      const totalAmount =
+        Number(parsed.totalAmount) ||
+        items.reduce((acc, it) => acc + it.amount, 0);
+
+      return {
+        rawText,
+        invoiceType,
+        invoiceTypeName,
+        items,
+        totalAmount,
+      };
+    } catch (err) {
+      console.warn('Lỗi parse JSON Vision, chuyển sang bộ phân tích cú pháp:', err);
+    }
+  }
+
   const invoiceType = classifyInvoice(rawText);
   let items: ExtractedBatchItem[] = [];
 
@@ -500,3 +560,4 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
 
 // Giữ lại alias parseBatchVietnameseReceipt để tương thích
 export const parseBatchVietnameseReceipt = extractInvoiceData;
+

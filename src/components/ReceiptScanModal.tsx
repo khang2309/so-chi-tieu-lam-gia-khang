@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Camera as CameraIcon,
@@ -13,14 +13,22 @@ import {
   Layers,
   Sparkles,
   Wand2,
+  Key,
+  ExternalLink,
+  Cpu,
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { createWorker } from 'tesseract.js';
 import {
   extractInvoiceData,
   ExtractedBatchItem,
   InvoiceType,
 } from '../utils/ocrParser';
+import {
+  extractInvoiceDataWithCloudVision,
+  getSavedVisionConfig,
+  saveVisionConfig,
+  VisionConfig,
+} from '../utils/cloudVisionService';
 import { preprocessImage } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -35,43 +43,69 @@ interface SampleReceipt {
 const SAMPLE_BATCH_RECEIPTS: SampleReceipt[] = [
   {
     id: 'sample-type-a',
-    name: 'Loại A: Hóa đơn in nhiệt / Siêu thị (Bảng)',
-    description: 'Hóa đơn bán lẻ có bảng mặt hàng, SL, thành tiền, tổng cộng',
-    ocrText: `HÓA ĐƠN BÁN LẺ
-Ngày: 11/10/2026
-Mặt hàng       SL   Đơn giá    Thành tiền
-1. Cơm sườn bì  1    40.000     40.000
-2. Trà đá       2     5.000     10.000
-3. Canh khổ qua 1    15.000     15.000
-4. Khăn lạnh    2     3.000      6.000
------------------------------------------
-Cộng tiền hàng:                 71.000 đ
-Tổng cộng:                      71.000 đ
-Cảm ơn quý khách!`,
+    name: 'Loại A: Hóa đơn in nhiệt / Siêu thị (Gemini Vision JSON)',
+    description: 'Bóc tách chuẩn từng món: Cơm sườn, Trà đá, Canh khổ qua, Khăn lạnh',
+    ocrText: JSON.stringify(
+      {
+        invoiceType: 'TYPE_A_TABLE',
+        invoiceTypeName: 'Hóa đơn in / Bảng (Siêu thị)',
+        date: '2026-10-11',
+        totalAmount: 71000,
+        items: [
+          { name: 'Cơm sườn bì chả', amount: 40000, date: '2026-10-11', categorySuggestion: 'Ăn' },
+          { name: 'Trà đá đường', amount: 10000, date: '2026-10-11', categorySuggestion: 'Uống' },
+          { name: 'Canh khổ qua nhồi thịt', amount: 15000, date: '2026-10-11', categorySuggestion: 'Ăn' },
+          { name: 'Khăn lạnh', amount: 6000, date: '2026-10-11', categorySuggestion: 'Chi tiêu khác' },
+        ],
+      },
+      null,
+      2
+    ),
   },
   {
     id: 'sample-type-b',
-    name: 'Loại B: Biên lai Chuyển khoản (App Ngân hàng)',
-    description: 'Chuyển khoản thành công, tài khoản nhận, nội dung giao dịch',
-    ocrText: `GIAO DỊCH THÀNH CÔNG
-Ngày: 12/10/2026 19:30
-Số tiền: 250.000 VND
-Ngân hàng: MB Bank
-Tài khoản nhận: NGUYEN VAN A - 0987654321
-Nội dung giao dịch: Tien an lau toi thu 7
-Mã giao dịch: FT261012987654`,
+    name: 'Loại B: Biên lai Chuyển khoản (Gemini Vision JSON)',
+    description: 'Chuyển khoản thành công 250k - Lẩu bò tối thứ 7',
+    ocrText: JSON.stringify(
+      {
+        invoiceType: 'TYPE_B_TRANSFER',
+        invoiceTypeName: 'Biên lai Chuyển khoản Ngân hàng',
+        date: '2026-10-12',
+        totalAmount: 250000,
+        items: [
+          {
+            name: 'Chuyển khoản NGUYEN VAN A - Tiền ăn lẩu bò',
+            amount: 250000,
+            date: '2026-10-12',
+            categorySuggestion: 'Ăn',
+          },
+        ],
+      },
+      null,
+      2
+    ),
   },
   {
     id: 'sample-type-c',
-    name: 'Loại C: Giấy ghi chép tự do / Ghi tay',
-    description: 'Nhiều ngày, nhiều món: Đổ xăng 50k, Cafe 25k, Mua áo...',
-    ocrText: `12/10
-Đổ xăng 50k
-Tiền cơm trưa 35k
-13/10
-Cà phê sữa đá 25k
-Mua áo thun Shopee 120 nghìn
-Tiền mạng wifi trọ 80k`,
+    name: 'Loại C: Giấy ghi chép tay (Gemini Vision JSON)',
+    description: 'Đổ xăng Janus 50k, Cơm trưa 35k, Shopee 120k, Wifi trọ 80k...',
+    ocrText: JSON.stringify(
+      {
+        invoiceType: 'TYPE_C_FREE_TEXT',
+        invoiceTypeName: 'Giấy ghi chép tự do',
+        date: '2026-10-13',
+        totalAmount: 310000,
+        items: [
+          { name: 'Đổ xăng Yamaha Janus', amount: 50000, date: '2026-10-12', categorySuggestion: 'Xăng xe (Yamaha Janus)' },
+          { name: 'Cơm trưa sườn trứng', amount: 35000, date: '2026-10-12', categorySuggestion: 'Ăn' },
+          { name: 'Cà phê sữa đá Highlands', amount: 25000, date: '2026-10-13', categorySuggestion: 'Uống' },
+          { name: 'Mua áo thun Shopee', amount: 120000, date: '2026-10-13', categorySuggestion: 'Mua sắm' },
+          { name: 'Tiền mạng Wifi phòng trọ', amount: 80000, date: '2026-10-13', categorySuggestion: 'Hóa đơn' },
+        ],
+      },
+      null,
+      2
+    ),
   },
 ];
 
@@ -101,17 +135,44 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [rawOcrText, setRawOcrText] = useState<string>('');
 
+  // Cấu hình Cloud Vision API (Gemini / OpenAI)
+  const [visionConfig, setVisionConfig] = useState<VisionConfig>(getSavedVisionConfig());
+  const [showConfig, setShowConfig] = useState<boolean>(!getSavedVisionConfig().apiKey);
+  const [apiKeyInput, setApiKeyInput] = useState<string>(getSavedVisionConfig().apiKey);
+  const [providerInput, setProviderInput] = useState<'gemini' | 'openai'>('gemini');
+
   // Cấu hình chung cho toàn bộ đợt quét
   const [selectedLedgerId, setSelectedLedgerId] = useState<string>('');
   const [selectedWalletId, setSelectedWalletId] = useState<string>('');
 
   // Danh sách các giao dịch được tách ra (Batch items)
   const [batchItems, setBatchItems] = useState<ExtractedBatchItem[]>([]);
-  const [invoiceType, setInvoiceType] = useState<InvoiceType>('TYPE_C_FREE_TEXT');
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>('TYPE_A_TABLE');
   const [invoiceTypeName, setInvoiceTypeName] = useState<string>('');
   const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
 
+  useEffect(() => {
+    const cfg = getSavedVisionConfig();
+    setVisionConfig(cfg);
+    setApiKeyInput(cfg.apiKey);
+    setProviderInput(cfg.provider === 'openai' ? 'openai' : 'gemini');
+    if (!cfg.apiKey) {
+      setShowConfig(true);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleSaveVisionConfig = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const newCfg: VisionConfig = {
+      provider: providerInput,
+      apiKey: apiKeyInput.trim(),
+    };
+    saveVisionConfig(newCfg);
+    setVisionConfig(newCfg);
+    setShowConfig(false);
+  };
 
   // Xử lý kết quả quét hàng loạt
   const handleProcessBatchResult = (rawText: string) => {
@@ -136,34 +197,51 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setStep('verify');
   };
 
-  // Quét OCR thực tế bằng Tesseract.js có TIỀN XỬ LÝ ẢNH (Image Pre-processing)
-  const runOcrOnImage = async (dataUrl: string) => {
+  // Phân tích hóa đơn bằng Cloud LLM Vision (Google Gemini Flash / OpenAI)
+  const runCloudVisionOnImage = async (dataUrl: string) => {
     setIsProcessing(true);
-    setStatusMessage('Đang tiền xử lý ảnh (Grayscale, Tăng tương phản, Làm nét)...');
+    setStatusMessage('Đang tiền xử lý ảnh (Làm nét & Tăng tương phản)...');
 
     try {
-      // BƯỚC TIỀN XỬ LÝ: Chuyển thang độ xám, tăng tương phản 70%, áp dụng kernel làm nét 3x3
+      // 1. Tiền xử lý ảnh qua Canvas API để chữ rõ nhất
       const enhancedDataUrl = await preprocessImage(dataUrl, {
-        contrast: 70,
+        contrast: 60,
         sharpen: true,
       });
       setProcessedImageUrl(enhancedDataUrl);
 
-      setStatusMessage('Đang khởi động bộ máy OCR đọc chữ tiếng Việt...');
-      const worker = await createWorker('vie');
+      // 2. Kiểm tra API Key
+      const cfg = visionConfig.apiKey ? visionConfig : getSavedVisionConfig();
+      if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
+        setIsProcessing(false);
+        setShowConfig(true);
+        alert(
+          'Chưa có API Key! Vui lòng dán Google Gemini API Key (miễn phí từ Google AI Studio) để AI phân tích hóa đơn.'
+        );
+        return;
+      }
 
-      setStatusMessage('Đang nhận diện toàn bộ các dòng chữ trên ảnh đã làm nét...');
-      const ret = await worker.recognize(enhancedDataUrl);
-      await worker.terminate();
+      setStatusMessage(
+        `Đang gửi ảnh lên ${cfg.provider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 1.5 Flash'}...`
+      );
+      const parsedResult = await extractInvoiceDataWithCloudVision(enhancedDataUrl, cfg);
 
-      setStatusMessage('Đang phân tích cú pháp & tự động phân loại chi tiêu...');
       setIsProcessing(false);
-      handleProcessBatchResult(ret.data.text);
-    } catch (err) {
-      console.warn('Lỗi OCR qua Tesseract:', err);
-      // Fallback parser nếu thiếu tệp mạng
+      setRawOcrText(parsedResult.rawText);
+      setInvoiceType(parsedResult.invoiceType);
+      setInvoiceTypeName(parsedResult.invoiceTypeName);
+      setBatchItems(parsedResult.items);
+
+      const defaultLedger =
+        activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
+      setSelectedLedgerId(defaultLedger);
+      setSelectedWalletId(wallets[0]?.id || 'wallet-cash');
+
+      setStep('verify');
+    } catch (err: any) {
+      console.warn('Lỗi gọi Cloud Vision API:', err);
       setIsProcessing(false);
-      handleProcessBatchResult(SAMPLE_BATCH_RECEIPTS[0].ocrText);
+      alert(`Lỗi nhận diện Cloud AI: ${err?.message || err}. Vui lòng kiểm tra lại API Key hoặc kết nối mạng.`);
     }
   };
 
@@ -178,7 +256,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       });
 
       if (photo.dataUrl) {
-        await runOcrOnImage(photo.dataUrl);
+        await runCloudVisionOnImage(photo.dataUrl);
       }
     } catch {
       const input = document.getElementById('batch-receipt-file-input') as HTMLInputElement;
@@ -193,7 +271,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        await runOcrOnImage(dataUrl);
+        await runCloudVisionOnImage(dataUrl);
       };
       reader.readAsDataURL(file);
     }
@@ -308,6 +386,99 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         {/* BƯỚC 1: QUÉT ẢNH HOẶC CHỌN MẪU */}
         {step === 'scan' ? (
           <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+            {/* Hộp cấu hình Cloud AI Vision */}
+            <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
+                    <Cpu className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
+                      <span>Động cơ: Cloud AI Vision</span>
+                      {visionConfig.apiKey ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
+                          Đã kích hoạt
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fee2e2] text-[#b91c1c] font-semibold border border-[#fecaca]">
+                          Chưa có API Key
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[#7a6a58]">
+                      {visionConfig.provider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 1.5 Flash (Khuyên dùng)'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(!showConfig)}
+                  className="text-xs font-semibold text-[#a25832] hover:underline flex items-center gap-1"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>{showConfig ? 'Đóng' : 'Cấu hình Key'}</span>
+                </button>
+              </div>
+
+              {showConfig && (
+                <form onSubmit={handleSaveVisionConfig} className="pt-2 border-t border-[#f0e4d5] space-y-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58]">
+                        Nhà cung cấp AI:
+                      </label>
+                      <select
+                        value={providerInput}
+                        onChange={(e) => setProviderInput(e.target.value as any)}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+                      >
+                        <option value="gemini">Google Gemini (Miễn phí 100%)</option>
+                        <option value="openai">OpenAI (GPT-4o-mini)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
+                        <span>API Key:</span>
+                        {providerInput === 'gemini' && (
+                          <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-[#a25832] hover:underline flex items-center gap-0.5 font-medium"
+                          >
+                            <span>Lấy key miễn phí</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </label>
+                      <input
+                        type="password"
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        placeholder={providerInput === 'gemini' ? 'Dán Gemini API Key (AIzaSy...)' : 'Dán OpenAI Key (sk-...)'}
+                        className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-mono text-[#3e332a] focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <p className="text-[10px] text-[#7a6a58] italic">
+                      * Key được lưu bảo mật trong LocalStorage trình duyệt/thiết bị của bạn.
+                    </p>
+                    <button
+                      type="submit"
+                      className="px-3 py-1 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition shadow-xs"
+                    >
+                      Lưu Key
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
             {/* Vùng chụp / upload */}
             <div className="relative border-2 border-dashed border-[#ebdcc9] rounded-2xl p-6 text-center bg-[#fbf5eb] flex flex-col items-center justify-center overflow-hidden">
               {isProcessing && (
@@ -323,10 +494,10 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               <p className="text-xs sm:text-sm font-semibold text-[#3e332a]">
                 {isProcessing
                   ? statusMessage
-                  : 'Chụp hoặc tải ảnh tờ giấy ghi nhiều khoản chi tiêu'}
+                  : 'Chụp hoặc tải ảnh hóa đơn / biên lai'}
               </p>
               <p className="text-[11px] text-[#7a6a58] mt-0.5">
-                Hệ thống tự động đọc từng dòng, tách ngày, số tiền và nhận diện danh mục (Ăn, Uống, Xăng xe, Trọ...)
+                AI Vision tự động nhận diện chữ tiếng Việt, bóc tách mặt hàng, giá tiền và phân loại danh mục
               </p>
 
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
