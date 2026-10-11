@@ -67,15 +67,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   // Chế độ bộ lọc thời gian: Mặc định là 'month' (Tháng)
   const [filterMode, setFilterMode] = useState<FilterMode>('month');
 
-  // Khóa mốc thời gian đang chọn cho từng chế độ (Mặc định chọn đúng tháng hiện tại YYYY-MM)
+  // Khóa mốc thời gian đang chọn cho từng chế độ
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [selectedDayKey, setSelectedDayKey] = useState<string>('today');
-  const [selectedWeekKey, setSelectedWeekKey] = useState<string>('this_week');
-  const [selectedQuarterKey, setSelectedQuarterKey] = useState<string>('current_q');
-  const [selectedYearKey, setSelectedYearKey] = useState<string>('current_year');
+  const [selectedDayKey, setSelectedDayKey] = useState<string>(() => {
+    return new Date().toISOString().slice(0, 10);
+  });
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string>('week_0');
+  const [selectedQuarterKey, setSelectedQuarterKey] = useState<string>(() => {
+    return 'q' + (Math.floor(new Date().getMonth() / 3) + 1);
+  });
+  const [selectedYearKey, setSelectedYearKey] = useState<string>(() => {
+    return String(new Date().getFullYear());
+  });
 
   // Cho chế độ Ngày cụ thể hoặc Tùy chỉnh khoảng thời gian
   const [specificDate, setSpecificDate] = useState<string>(
@@ -136,63 +142,122 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     return tabs;
   }, []);
 
-  // Sinh danh sách các tabs cuộn ngang cho Ngày
+  // Sinh danh sách các tabs cuộn ngang cho Ngày (14 ngày gần nhất: 13 ngày trước -> Hôm nay -> Ngày mai)
   const dayTabs = useMemo(() => {
     const now = new Date();
-    const makeDateKey = (offsetDays: number) => {
+    const tabs: Array<{ key: string; label: string; dateStr: string }> = [];
+
+    for (let offset = -13; offset <= 1; offset++) {
       const d = new Date(now);
-      d.setDate(now.getDate() + offsetDays);
-      return d.toISOString().slice(0, 10);
-    };
+      d.setDate(now.getDate() + offset);
+      const dateStr = d.toISOString().slice(0, 10);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
 
-    const dMinus2 = makeDateKey(-2);
-    const dMinus1 = makeDateKey(-1);
-    const dToday = makeDateKey(0);
-    const dPlus1 = makeDateKey(1);
+      let label = `${day}/${month}`;
+      if (offset === 0) {
+        label = `Hôm nay (${day}/${month})`;
+      } else if (offset === -1) {
+        label = `Hôm qua (${day}/${month})`;
+      } else if (offset === 1) {
+        label = `Ngày mai (${day}/${month})`;
+      }
 
-    return [
-      { key: dMinus2, label: `Hôm kia (${dMinus2.slice(8, 10)}/${dMinus2.slice(5, 7)})` },
-      { key: dMinus1, label: `Hôm qua (${dMinus1.slice(8, 10)}/${dMinus1.slice(5, 7)})` },
-      { key: 'today', label: `HÔM NAY (${dToday.slice(8, 10)}/${dToday.slice(5, 7)})` },
-      { key: dPlus1, label: `Ngày mai (${dPlus1.slice(8, 10)}/${dPlus1.slice(5, 7)})` },
-      { key: 'picker', label: '📅 Chọn ngày khác...' },
-    ];
+      tabs.push({
+        key: dateStr,
+        label,
+        dateStr,
+      });
+    }
+
+    tabs.push({
+      key: 'picker',
+      label: '📅 Chọn ngày khác...',
+      dateStr: '',
+    });
+
+    return tabs;
   }, []);
 
-  // Sinh danh sách các tabs cuộn ngang cho Tuần
+  // Sinh danh sách các tabs cuộn ngang cho Tuần (Tuần này, các tuần trước và tuần tới)
   const weekTabs = useMemo(() => {
-    return [
-      { key: 'week_-2', label: '2 tuần trước' },
-      { key: 'week_-1', label: 'Tuần trước' },
-      { key: 'this_week', label: 'TUẦN NÀY' },
-      { key: 'next_week', label: 'Tuần tới' },
-      { key: 'all_weeks', label: 'Tất cả các tuần' },
-    ];
+    const now = new Date();
+    const currentDay = now.getDay();
+    const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const currentMonday = new Date(now);
+    currentMonday.setDate(now.getDate() + diffToMonday);
+
+    const tabs: Array<{
+      key: string;
+      label: string;
+      startDate: string;
+      endDate: string;
+    }> = [];
+
+    // Sinh 6 tuần: 4 tuần trước đến tuần tới
+    for (let w = -4; w <= 1; w++) {
+      const mon = new Date(currentMonday);
+      mon.setDate(currentMonday.getDate() + w * 7);
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+
+      const monStr = `${String(mon.getDate()).padStart(2, '0')}/${String(mon.getMonth() + 1).padStart(2, '0')}`;
+      const sunStr = `${String(sun.getDate()).padStart(2, '0')}/${String(sun.getMonth() + 1).padStart(2, '0')}`;
+
+      let label = `Tuần ${monStr} - ${sunStr}`;
+      if (w === 0) label = `Tuần này (${monStr} - ${sunStr})`;
+      else if (w === -1) label = `Tuần trước (${monStr} - ${sunStr})`;
+      else if (w === 1) label = `Tuần tới (${monStr} - ${sunStr})`;
+
+      tabs.push({
+        key: `week_${w}`,
+        label,
+        startDate: mon.toISOString().slice(0, 10),
+        endDate: sun.toISOString().slice(0, 10),
+      });
+    }
+
+    tabs.push({
+      key: 'all_weeks',
+      label: 'TẤT CẢ CÁC TUẦN',
+      startDate: '',
+      endDate: '',
+    });
+
+    return tabs;
   }, []);
 
-  // Sinh danh sách các tabs cuộn ngang cho Quý
+  // Sinh danh sách các tabs cuộn ngang cho Quý (Quý 1 | Quý 2 | Quý 3 | Quý 4)
   const quarterTabs = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    const currentQuarter = Math.floor(new Date().getMonth() / 3) + 1;
 
     return [
-      { key: 'q1', label: `Quý 1/${currentYear}` },
-      { key: 'q2', label: `Quý 2/${currentYear}` },
-      { key: 'q3', label: `Quý 3/${currentYear}` },
-      { key: 'current_q', label: `QUÝ ${currentQuarter}/${currentYear} (Hiện tại)` },
-      { key: 'prev_year_q', label: `Quý năm ${currentYear - 1}` },
+      { key: 'q1', label: `Quý 1 (${currentYear})` },
+      { key: 'q2', label: `Quý 2 (${currentYear})` },
+      { key: 'q3', label: `Quý 3 (${currentYear})` },
+      { key: 'q4', label: `Quý 4 (${currentYear})` },
+      { key: 'all_quarters', label: `TẤT CẢ QUÝ (${currentYear})` },
     ];
   }, []);
 
-  // Sinh danh sách các tabs cuộn ngang cho Năm
+  // Sinh danh sách các tabs cuộn ngang cho Năm (Ví dụ: 2023 | 2024 | 2025 | 2026 | 2027 | 2028)
   const yearTabs = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    return [
-      { key: String(currentYear - 2), label: `Năm ${currentYear - 2}` },
-      { key: String(currentYear - 1), label: `Năm ${currentYear - 1}` },
-      { key: 'current_year', label: `NĂM NAY (${currentYear})` },
-      { key: 'all_years', label: 'Tất cả các năm' },
-    ];
+    const tabs: Array<{ key: string; label: string }> = [];
+
+    for (let y = currentYear - 3; y <= currentYear + 2; y++) {
+      tabs.push({
+        key: String(y),
+        label: y === currentYear ? `Năm ${y} (Hiện tại)` : `Năm ${y}`,
+      });
+    }
+
+    tabs.push({
+      key: 'all_years',
+      label: 'TẤT CẢ CÁC NĂM',
+    });
+
+    return tabs;
   }, []);
 
   // Tự động cuộn đến tab đang chọn khi chuyển đổi chế độ
@@ -210,10 +275,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     const txDateStr = (tx.date || '').slice(0, 10);
     if (!txDateStr) return false;
 
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const currentDayStr = now.toISOString().slice(0, 10);
+    const currentYear = new Date().getFullYear();
 
     const txDateObj = new Date(txDateStr + 'T12:00:00');
     if (isNaN(txDateObj.getTime())) return false;
@@ -223,12 +285,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     switch (filterMode) {
       case 'month': {
         if (selectedMonthKey === 'all_months') return true;
-        if (selectedMonthKey === 'current') {
-          return txYear === currentYear && txMonth === currentMonth;
-        }
-        if (selectedMonthKey === 'future') {
-          return txYear > currentYear || (txYear === currentYear && txMonth > currentMonth);
-        }
         const [targetYear, targetMonth] = selectedMonthKey.split('-').map(Number);
         return txYear === targetYear && txMonth === targetMonth;
       }
@@ -237,53 +293,27 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         if (selectedDayKey === 'picker') {
           return txDateStr === specificDate;
         }
-        if (selectedDayKey === 'today') {
-          return txDateStr === currentDayStr;
-        }
         return txDateStr === selectedDayKey;
       }
 
       case 'week': {
         if (selectedWeekKey === 'all_weeks') return true;
-
-        const currentDay = now.getDay();
-        const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-        const currentMonday = new Date(now);
-        currentMonday.setDate(now.getDate() + diffToMonday);
-        currentMonday.setHours(0, 0, 0, 0);
-
-        let targetMonday = new Date(currentMonday);
-        if (selectedWeekKey === 'week_-1') {
-          targetMonday.setDate(currentMonday.getDate() - 7);
-        } else if (selectedWeekKey === 'week_-2') {
-          targetMonday.setDate(currentMonday.getDate() - 14);
-        } else if (selectedWeekKey === 'next_week') {
-          targetMonday.setDate(currentMonday.getDate() + 7);
+        const targetWeek = weekTabs.find((w) => w.key === selectedWeekKey);
+        if (targetWeek && targetWeek.startDate && targetWeek.endDate) {
+          return txDateStr >= targetWeek.startDate && txDateStr <= targetWeek.endDate;
         }
-
-        const targetSunday = new Date(targetMonday);
-        targetSunday.setDate(targetMonday.getDate() + 6);
-        targetSunday.setHours(23, 59, 59, 999);
-
-        return txDateObj >= targetMonday && txDateObj <= targetSunday;
+        return true;
       }
 
       case 'quarter': {
+        if (selectedQuarterKey === 'all_quarters') return txYear === currentYear;
         const txQuarter = Math.floor((txMonth - 1) / 3) + 1;
-        if (selectedQuarterKey === 'current_q') {
-          const curQ = Math.floor((currentMonth - 1) / 3) + 1;
-          return txYear === currentYear && txQuarter === curQ;
-        }
-        if (selectedQuarterKey === 'q1') return txYear === currentYear && txQuarter === 1;
-        if (selectedQuarterKey === 'q2') return txYear === currentYear && txQuarter === 2;
-        if (selectedQuarterKey === 'q3') return txYear === currentYear && txQuarter === 3;
-        if (selectedQuarterKey === 'prev_year_q') return txYear === currentYear - 1;
-        return true;
+        const qNum = Number(selectedQuarterKey.replace('q', ''));
+        return txYear === currentYear && txQuarter === qNum;
       }
 
       case 'year': {
         if (selectedYearKey === 'all_years') return true;
-        if (selectedYearKey === 'current_year') return txYear === currentYear;
         return txYear === Number(selectedYearKey);
       }
 
@@ -534,7 +564,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               return (
                 <button
                   key={item.mode}
-                  onClick={() => setFilterMode(item.mode)}
+                  onClick={() => {
+                    setFilterMode(item.mode);
+                    setTimeout(() => {
+                      if (scrollContainerRef.current) {
+                        const activeEl = scrollContainerRef.current.querySelector('[data-active="true"]');
+                        if (activeEl) {
+                          activeEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                        }
+                      }
+                    }, 50);
+                  }}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition text-center ${
                     active
                       ? 'bg-[#a25832] text-white shadow-xs'

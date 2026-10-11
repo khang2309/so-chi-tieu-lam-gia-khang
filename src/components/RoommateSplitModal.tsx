@@ -48,8 +48,8 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   const [internetFee, setInternetFee] = useState<number | ''>('');
   const [garbageFee, setGarbageFee] = useState<number | ''>('');
 
-  // Số người chia tiền (mặc định 3 người)
-  const [roommatesCount, setRoommatesCount] = useState<number>(3);
+  // Số người chia tiền (mặc định 1 người)
+  const [roommatesCount, setRoommatesCount] = useState<number>(1);
 
   // Sổ và Ví
   const defaultRoomLedger = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];

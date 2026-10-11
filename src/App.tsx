@@ -80,10 +80,7 @@ export function App() {
         activeLedgerId={manager.activeLedgerId}
         onSelectLedger={manager.setActiveLedgerId}
         onOpenLedgerManager={() => setIsLedgerManagerModalOpen(true)}
-        onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
-        onOpenRoommateSplit={() => setIsRoommateSplitModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenNewTransaction={handleOpenNewTransaction}
       />
 
       {/* Main Content Container */}
@@ -193,8 +190,8 @@ export function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-2 px-4 sm:hidden safe-bottom shadow-lg">
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-2 px-4 safe-bottom shadow-lg">
         <div className="flex items-center justify-around max-w-md mx-auto">
           {/* Sổ cái / Dashboard */}
           <button

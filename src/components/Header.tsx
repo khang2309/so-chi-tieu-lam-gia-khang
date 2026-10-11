@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   BookMarked,
   FolderPlus,
-  Camera,
-  Users,
   Settings,
   ChevronDown,
   Sparkles,
@@ -20,10 +18,7 @@ interface HeaderProps {
   activeLedgerId: string;
   onSelectLedger: (id: string) => void;
   onOpenLedgerManager: () => void;
-  onOpenReceiptScan: () => void;
-  onOpenRoommateSplit: () => void;
   onOpenSettings: () => void;
-  onOpenNewTransaction: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,10 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeLedgerId,
   onSelectLedger,
   onOpenLedgerManager,
-  onOpenReceiptScan,
-  onOpenRoommateSplit,
   onOpenSettings,
-  onOpenNewTransaction,
 }) => {
   const { user, isOnline, isOfflineMode, openAuthModal } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -102,46 +94,14 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Quick scan receipt */}
-            <button
-              onClick={onOpenReceiptScan}
-              title="Quét hóa đơn thông minh"
-              className="p-2 sm:px-3 sm:py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:border-[#d8c8b4] hover:bg-[#f5ebe0] transition flex items-center gap-1.5 text-xs font-medium"
-            >
-              <Camera className="w-4 h-4 text-[#a25832]" />
-              <span className="hidden sm:inline">Quét HĐ</span>
-            </button>
-
-            {/* Roommate split calculator (Special spotlight for Tiền trọ) */}
-            <button
-              onClick={onOpenRoommateSplit}
-              title="Tính & chia tiền trọ 3 người"
-              className={`p-2 sm:px-3 sm:py-1.5 rounded-lg border transition flex items-center gap-1.5 text-xs font-medium ${
-                activeLedgerId === 'ledger-room'
-                  ? 'bg-[#3d7a5a]/10 border-[#3d7a5a]/30 text-[#3d7a5a] font-semibold'
-                  : 'bg-[#fbf5eb] border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0]'
-              }`}
-            >
-              <Users className="w-4 h-4 text-[#3d7a5a]" />
-              <span className="hidden sm:inline">Chia tiền trọ</span>
-            </button>
-
             {/* Settings & Backup */}
             <button
               onClick={onOpenSettings}
               title="Cài đặt & Sao lưu dữ liệu"
-              className="p-2 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition"
+              className="p-1.5 sm:p-2 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition flex items-center gap-1.5 text-xs font-medium"
             >
-              <Settings className="w-4 h-4" />
-            </button>
-
-            {/* Main Add Button */}
-            <button
-              onClick={onOpenNewTransaction}
-              className="px-3 py-1.5 rounded-lg bg-[#a25832] text-white hover:bg-[#8c4623] active:scale-95 transition shadow-sm flex items-center gap-1 text-xs sm:text-sm font-medium"
-            >
-              <span className="text-base leading-none font-bold">+</span>
-              <span>Ghi chép</span>
+              <Settings className="w-4 h-4 text-[#7a6a58]" />
+              <span className="hidden sm:inline">Cài đặt</span>
             </button>
           </div>
         </div>
