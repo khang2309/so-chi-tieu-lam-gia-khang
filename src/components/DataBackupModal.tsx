@@ -8,12 +8,14 @@ import {
   Sliders,
   ShieldCheck,
   Smartphone,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface DataBackupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onExport: () => void;
+  onExportExcel?: () => void;
   onImport: (jsonString: string) => boolean;
   onReset: () => void;
   onOpenCategoryManager: () => void;
@@ -23,6 +25,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   isOpen,
   onClose,
   onExport,
+  onExportExcel,
   onImport,
   onReset,
   onOpenCategoryManager,
@@ -100,6 +103,32 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             </div>
             <span className="text-xs text-[#a25832] font-semibold">Chỉnh sửa →</span>
           </button>
+
+          {/* Export Excel (.xlsx) */}
+          {onExportExcel && (
+            <div className="p-3.5 rounded-xl border border-[#107c41]/25 bg-[#fffdfa] space-y-2">
+              <div className="flex items-start gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#107c41]/10 text-[#107c41] flex items-center justify-center shrink-0">
+                  <FileSpreadsheet className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-[#3e332a]">
+                    Xuất dữ liệu ra Excel (.xlsx)
+                  </div>
+                  <div className="text-[11px] text-[#7a6a58]">
+                    Đầy đủ cột Ngày, Tên món, Danh mục, Số tiền, Sổ, Ví để xem bảng tính.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={onExportExcel}
+                className="w-full py-2 rounded-lg bg-[#107c41]/10 border border-[#107c41]/30 text-xs font-bold text-[#107c41] hover:bg-[#107c41] hover:text-white transition flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Tải bảng tính Excel (.xlsx)</span>
+              </button>
+            </div>
+          )}
 
           {/* Export JSON */}
           <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] space-y-2">

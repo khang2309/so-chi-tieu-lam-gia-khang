@@ -8,9 +8,12 @@ import {
   ChevronDown,
   Sparkles,
   BookOpen,
+  Cloud,
+  WifiOff,
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   ledgers: Ledger[];
@@ -33,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenNewTransaction,
 }) => {
+  const { user, isOnline, isOfflineMode, openAuthModal } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const activeLedger = ledgers.find((l) => l.id === activeLedgerId);
@@ -60,6 +64,44 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Account / Cloud Sync / Offline Status Button */}
+            <button
+              onClick={openAuthModal}
+              title={
+                user
+                  ? `Tài khoản: ${user.email} (Đã đồng bộ Đám mây)`
+                  : !isOnline
+                  ? 'Thiết bị đang mất mạng (Chế độ Ngoại tuyến)'
+                  : 'Tài khoản & Đồng bộ Đám mây (Đang dùng Ngoại tuyến)'
+              }
+              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 shadow-xs ${
+                user
+                  ? 'bg-[#dcfce7] border-[#bbf7d0] text-[#15803d]'
+                  : !isOnline || isOfflineMode
+                  ? 'bg-[#fef3c7] border-[#fde68a] text-[#92400e]'
+                  : 'bg-[#fbf5eb] border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a]'
+              }`}
+            >
+              {user ? (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-[#15803d]" />
+                  <span className="hidden sm:inline max-w-[90px] truncate">
+                    {user.displayName || user.email?.split('@')[0] || 'Đã đồng bộ'}
+                  </span>
+                </>
+              ) : !isOnline ? (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 text-[#b45309]" />
+                  <span className="hidden sm:inline">Ngoại tuyến</span>
+                </>
+              ) : (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-[#a25832]" />
+                  <span className="hidden sm:inline">Tài khoản</span>
+                </>
+              )}
+            </button>
+
             {/* Quick scan receipt */}
             <button
               onClick={onOpenReceiptScan}

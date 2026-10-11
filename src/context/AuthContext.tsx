@@ -1,0 +1,154 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  User,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import { auth, googleProvider, isFirebaseConfigured } from '../firebase';
+
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  isOfflineMode: boolean;
+  isOnline: boolean;
+  isFirebaseAvailable: boolean;
+  loginWithGoogle: () => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  registerWithEmail: (email: string, pass: string) => Promise<void>;
+  logout: () => Promise<void>;
+  continueOffline: () => void;
+  openAuthModal: () => void;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const STORAGE_OFFLINE_KEY = 'sochitieu_user_offline_preference';
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(() => {
+    // Nếu chưa cấu hình Firebase, mặc định là Offline mode
+    if (!isFirebaseConfigured) return true;
+    return localStorage.getItem(STORAGE_OFFLINE_KEY) === 'true';
+  });
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => {
+    if (!isFirebaseConfigured) return false;
+    const hasChosenOffline = localStorage.getItem(STORAGE_OFFLINE_KEY) === 'true';
+    return !hasChosenOffline;
+  });
+
+  // Lắng nghe trạng thái online/offline của thiết bị
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Lắng nghe Firebase Auth State
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+      if (currentUser) {
+        setIsOfflineMode(false);
+        localStorage.removeItem(STORAGE_OFFLINE_KEY);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const loginWithGoogle = async () => {
+    if (!auth) {
+      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
+    }
+    await signInWithPopup(auth, googleProvider);
+    setIsAuthModalOpen(false);
+  };
+
+  const loginWithEmail = async (email: string, pass: string) => {
+    if (!auth) {
+      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
+    }
+    await signInWithEmailAndPassword(auth, email, pass);
+    setIsAuthModalOpen(false);
+  };
+
+  const registerWithEmail = async (email: string, pass: string) => {
+    if (!auth) {
+      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
+    }
+    await createUserWithEmailAndPassword(auth, email, pass);
+    setIsAuthModalOpen(false);
+  };
+
+  const logout = async () => {
+    if (auth) {
+      await signOut(auth);
+    }
+    setUser(null);
+    setIsOfflineMode(true);
+    localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
+  };
+
+  const continueOffline = () => {
+    setIsOfflineMode(true);
+    localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
+    setIsAuthModalOpen(false);
+  };
+
+  const openAuthModal = () => {
+    setIsAuthModalOpen(true);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        isOfflineMode,
+        isOnline,
+        isFirebaseAvailable: isFirebaseConfigured,
+        loginWithGoogle,
+        loginWithEmail,
+        registerWithEmail,
+        logout,
+        continueOffline,
+        openAuthModal,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

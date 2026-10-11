@@ -12,7 +12,9 @@ import { WalletManagerModal } from './components/WalletManagerModal';
 import { WalletTransferModal } from './components/WalletTransferModal';
 import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { DataBackupModal } from './components/DataBackupModal';
+import { AuthModal } from './components/AuthModal';
 import { WalletTab } from './components/WalletTab';
+import { exportTransactionsToExcel } from './utils/excelExporter';
 import { Transaction } from './types';
 import {
   Plus,
@@ -345,10 +347,22 @@ export function App() {
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
         onExport={manager.exportDataJson}
+        onExportExcel={() => {
+          exportTransactionsToExcel(
+            manager.transactions,
+            manager.categories,
+            manager.ledgers,
+            manager.wallets,
+            `Chi_Tieu_Toan_Bo_${new Date().toISOString().slice(0, 10)}.xlsx`
+          );
+        }}
         onImport={manager.importDataJson}
         onReset={manager.resetToDefaults}
         onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
       />
+
+      {/* Firebase Auth & Offline First Modal */}
+      <AuthModal />
     </div>
   );
 }

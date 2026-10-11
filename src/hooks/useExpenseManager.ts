@@ -2,6 +2,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { Ledger, Wallet, Category, Transaction, TimeFilter } from '../types';
 import { DEFAULT_LEDGERS, DEFAULT_WALLETS, DEFAULT_CATEGORIES, DEFAULT_TRANSACTIONS } from '../data/initialData';
 import { isWithinTimeFilter } from '../utils/formatters';
+import { auth } from '../firebase';
+import {
+  syncTransactionToFirestore,
+  removeTransactionFromFirestore,
+  syncWalletToFirestore,
+  removeWalletFromFirestore,
+  syncLedgerToFirestore,
+  removeLedgerFromFirestore,
+  subscribeToUserFirestoreData,
+} from '../utils/firestoreSync';
 
 const STORAGE_KEYS = {
   LEDGERS: 'sochitieu_ledgers_v2',
@@ -105,6 +115,35 @@ export function useExpenseManager() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TIME_FILTER, timeFilter);
   }, [timeFilter]);
+
+  // Đồng bộ thời gian thực từ Firestore khi người dùng đăng nhập
+  useEffect(() => {
+    if (!auth) return;
+    const unsubAuth = auth.onAuthStateChanged((currentUser: any) => {
+      if (currentUser?.uid) {
+        const unsubData = subscribeToUserFirestoreData(currentUser.uid, {
+          onTransactions: (fireTxs) => {
+            if (fireTxs && fireTxs.length > 0) {
+              setTransactions(fireTxs);
+            }
+          },
+          onWallets: (fireWallets) => {
+            if (fireWallets && fireWallets.length > 0) {
+              setWallets(fireWallets);
+            }
+          },
+          onLedgers: (fireLedgers) => {
+            if (fireLedgers && fireLedgers.length > 0) {
+              setLedgers(fireLedgers);
+            }
+          },
+        });
+        return () => unsubData();
+      }
+    });
+
+    return () => unsubAuth();
+  }, []);
 
   // 3. Computed Wallet Balances
   const walletBalances = useMemo(() => {
@@ -241,6 +280,9 @@ export function useExpenseManager() {
       createdAt: new Date().toISOString(),
     };
     setTransactions((prev) => [newTx, ...prev]);
+    if (auth?.currentUser?.uid) {
+      syncTransactionToFirestore(auth.currentUser.uid, newTx);
+    }
     return newTx;
   };
 
@@ -251,17 +293,28 @@ export function useExpenseManager() {
       createdAt: new Date().toISOString(),
     }));
     setTransactions((prev) => [...newTxs, ...prev]);
+    if (auth?.currentUser?.uid) {
+      newTxs.forEach((tx) => syncTransactionToFirestore(auth.currentUser.uid, tx));
+    }
     return newTxs;
   };
 
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
-    setTransactions((prev) =>
-      prev.map((tx) => (tx.id === id ? { ...tx, ...data } : tx))
-    );
+    setTransactions((prev) => {
+      const updated = prev.map((tx) => (tx.id === id ? { ...tx, ...data } : tx));
+      const target = updated.find((tx) => tx.id === id);
+      if (target && auth?.currentUser?.uid) {
+        syncTransactionToFirestore(auth.currentUser.uid, target);
+      }
+      return updated;
+    });
   };
 
   const deleteTransaction = (id: string) => {
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    if (auth?.currentUser?.uid) {
+      removeTransactionFromFirestore(auth.currentUser.uid, id);
+    }
   };
 
   const addLedger = (data: Omit<Ledger, 'id' | 'createdAt'>) => {
@@ -271,13 +324,21 @@ export function useExpenseManager() {
       createdAt: new Date().toISOString(),
     };
     setLedgers((prev) => [...prev, newLedger]);
+    if (auth?.currentUser?.uid) {
+      syncLedgerToFirestore(auth.currentUser.uid, newLedger);
+    }
     return newLedger;
   };
 
   const updateLedger = (id: string, data: Partial<Ledger>) => {
-    setLedgers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, ...data } : l))
-    );
+    setLedgers((prev) => {
+      const updated = prev.map((l) => (l.id === id ? { ...l, ...data } : l));
+      const target = updated.find((l) => l.id === id);
+      if (target && auth?.currentUser?.uid) {
+        syncLedgerToFirestore(auth.currentUser.uid, target);
+      }
+      return updated;
+    });
   };
 
   const deleteLedger = (id: string) => {
@@ -286,6 +347,9 @@ export function useExpenseManager() {
       return;
     }
     setLedgers((prev) => prev.filter((l) => l.id !== id));
+    if (auth?.currentUser?.uid) {
+      removeLedgerFromFirestore(auth.currentUser.uid, id);
+    }
     if (activeLedgerId === id) {
       const remaining = ledgers.filter((l) => l.id !== id);
       setActiveLedgerId(remaining[0]?.id || 'all');
@@ -299,13 +363,21 @@ export function useExpenseManager() {
       createdAt: new Date().toISOString(),
     };
     setWallets((prev) => [...prev, newWallet]);
+    if (auth?.currentUser?.uid) {
+      syncWalletToFirestore(auth.currentUser.uid, newWallet);
+    }
     return newWallet;
   };
 
   const updateWallet = (id: string, data: Partial<Wallet>) => {
-    setWallets((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, ...data } : w))
-    );
+    setWallets((prev) => {
+      const updated = prev.map((w) => (w.id === id ? { ...w, ...data } : w));
+      const target = updated.find((w) => w.id === id);
+      if (target && auth?.currentUser?.uid) {
+        syncWalletToFirestore(auth.currentUser.uid, target);
+      }
+      return updated;
+    });
   };
 
   const deleteWallet = (id: string) => {
@@ -314,6 +386,9 @@ export function useExpenseManager() {
       return;
     }
     setWallets((prev) => prev.filter((w) => w.id !== id));
+    if (auth?.currentUser?.uid) {
+      removeWalletFromFirestore(auth.currentUser.uid, id);
+    }
     if (activeWalletId === id) {
       setActiveWalletId('all');
     }

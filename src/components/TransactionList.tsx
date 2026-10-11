@@ -9,10 +9,12 @@ import {
   Receipt,
   FileQuestion,
   Plus,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
+import { exportTransactionsToExcel } from '../utils/excelExporter';
 
 export type FilterMode = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
 
@@ -65,8 +67,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   // Chế độ bộ lọc thời gian: Mặc định là 'month' (Tháng)
   const [filterMode, setFilterMode] = useState<FilterMode>('month');
 
-  // Khóa mốc thời gian đang chọn cho từng chế độ
-  const [selectedMonthKey, setSelectedMonthKey] = useState<string>('current');
+  // Khóa mốc thời gian đang chọn cho từng chế độ (Mặc định chọn đúng tháng hiện tại YYYY-MM)
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [selectedDayKey, setSelectedDayKey] = useState<string>('today');
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>('this_week');
   const [selectedQuarterKey, setSelectedQuarterKey] = useState<string>('current_q');
@@ -93,47 +98,34 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     return transactions;
   }, [transactions, activeLedgerId]);
 
-  // Sinh danh sách các tabs cuộn ngang cho Tháng
+  // Sinh danh sách các tabs cuộn ngang cho Tháng (Tự động sinh đủ 12 tháng từ 01/YYYY đến 12/YYYY)
   const monthTabs = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1; // 1 - 12
 
-    const tabs: Array<{ key: string; label: string; year: number; month: number; isCurrent?: boolean; isFuture?: boolean }> = [];
+    const tabs: Array<{
+      key: string;
+      label: string;
+      year: number;
+      month: number;
+      isCurrent?: boolean;
+    }> = [];
 
-    // 5 tháng gần nhất trước tháng hiện tại
-    for (let i = 5; i >= 1; i--) {
-      const d = new Date(currentYear, currentMonth - 1 - i, 1);
-      const y = d.getFullYear();
-      const m = d.getMonth() + 1;
+    // Tự động sinh mảng đủ 12 tháng của năm (từ tháng 01 đến tháng 12)
+    for (let m = 1; m <= 12; m++) {
       const mStr = String(m).padStart(2, '0');
+      const isCur = m === currentMonth;
       tabs.push({
-        key: `${y}-${mStr}`,
-        label: `${mStr}/${y}`,
-        year: y,
+        key: `${currentYear}-${mStr}`,
+        label: isCur ? `Tháng ${mStr} (Hiện tại)` : `Tháng ${mStr}/${currentYear}`,
+        year: currentYear,
         month: m,
+        isCurrent: isCur,
       });
     }
 
-    // Tháng hiện tại (THÁNG NÀY)
-    const curMStr = String(currentMonth).padStart(2, '0');
-    tabs.push({
-      key: 'current',
-      label: `THÁNG NÀY (${curMStr}/${currentYear})`,
-      year: currentYear,
-      month: currentMonth,
-      isCurrent: true,
-    });
-
-    // Mốc tương lai và tất cả
-    tabs.push({
-      key: 'future',
-      label: 'TƯƠNG LAI',
-      year: currentYear,
-      month: currentMonth,
-      isFuture: true,
-    });
-
+    // Tab Xem tất cả các tháng
     tabs.push({
       key: 'all_months',
       label: 'TẤT CẢ THÁNG',
@@ -420,6 +412,23 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     });
   }, [filteredList]);
 
+  // Xuất danh sách giao dịch đang hiển thị ra file Excel (.xlsx)
+  const handleExportExcel = () => {
+    if (filteredList.length === 0) {
+      alert('Không có giao dịch nào trong khoảng thời gian đang chọn để xuất Excel!');
+      return;
+    }
+    const cleanLedger = (activeLedgerName || 'Tat_Ca').replace(/\s+/g, '_');
+    const filename = `Chi_Tieu_${cleanLedger}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    exportTransactionsToExcel(
+      filteredList,
+      categories,
+      ledgers,
+      wallets,
+      filename
+    );
+  };
+
   return (
     <section className="rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper overflow-hidden">
       {/* 1. TOP HEADER & TÌM KIẾM */}
@@ -440,38 +449,51 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             </span>
           </div>
 
-          {/* Type Filter Buttons */}
-          <div className="flex items-center bg-[#f5ebe0] p-0.5 rounded-lg border border-[#ebdcc9] self-start sm:self-auto">
+          {/* Actions & Type Filter */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {/* Nút Xuất Excel */}
             <button
-              onClick={() => onTypeFilterChange('all')}
-              className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
-                typeFilter === 'all'
-                  ? 'bg-[#fffdfa] text-[#3e332a] shadow-xs'
-                  : 'text-[#7a6a58] hover:text-[#3e332a]'
-              }`}
+              onClick={handleExportExcel}
+              title="Xuất danh sách giao dịch ra file Excel (.xlsx)"
+              className="px-2.5 py-1 text-xs rounded-lg font-bold bg-[#107c41]/10 text-[#107c41] hover:bg-[#107c41] hover:text-white border border-[#107c41]/30 transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
-              Tất cả
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Xuất Excel</span>
             </button>
-            <button
-              onClick={() => onTypeFilterChange('expense')}
-              className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
-                typeFilter === 'expense'
-                  ? 'bg-[#b94a3b] text-white shadow-xs'
-                  : 'text-[#7a6a58] hover:text-[#3e332a]'
-              }`}
-            >
-              Chi tiêu
-            </button>
-            <button
-              onClick={() => onTypeFilterChange('income')}
-              className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
-                typeFilter === 'income'
-                  ? 'bg-[#2e7d32] text-white shadow-xs'
-                  : 'text-[#7a6a58] hover:text-[#3e332a]'
-              }`}
-            >
-              Thu nhập
-            </button>
+
+            {/* Type Filter Buttons */}
+            <div className="flex items-center bg-[#f5ebe0] p-0.5 rounded-lg border border-[#ebdcc9]">
+              <button
+                onClick={() => onTypeFilterChange('all')}
+                className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                  typeFilter === 'all'
+                    ? 'bg-[#fffdfa] text-[#3e332a] shadow-xs'
+                    : 'text-[#7a6a58] hover:text-[#3e332a]'
+                }`}
+              >
+                Tất cả
+              </button>
+              <button
+                onClick={() => onTypeFilterChange('expense')}
+                className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                  typeFilter === 'expense'
+                    ? 'bg-[#b94a3b] text-white shadow-xs'
+                    : 'text-[#7a6a58] hover:text-[#3e332a]'
+                }`}
+              >
+                Chi tiêu
+              </button>
+              <button
+                onClick={() => onTypeFilterChange('income')}
+                className={`px-2.5 py-1 text-xs rounded-md font-medium transition ${
+                  typeFilter === 'income'
+                    ? 'bg-[#2e7d32] text-white shadow-xs'
+                    : 'text-[#7a6a58] hover:text-[#3e332a]'
+                }`}
+              >
+                Thu nhập
+              </button>
+            </div>
           </div>
         </div>
 
