@@ -113,18 +113,44 @@ export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
 
-// Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định
+// Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định (có hạn mức Quota độc lập)
 export const GEMINI_FALLBACK_MODELS = [
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash-8b',
   'gemini-2.0-flash',
-  'gemini-2.0-flash-exp',
   'gemini-flash-latest',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-flash-latest',
+  'gemini-2.5-flash',
   'gemini-flash-lite-latest',
   'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
 ];
+
+// Danh sách các model hỗ trợ Audio multimodal và tự động fallback khi hết quota
+export const GEMINI_AUDIO_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash',
+  'gemini-flash-latest',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-flash-latest',
+];
+
+/**
+ * Kiểm tra xem lỗi trả về từ Google Gemini API có phải do cạn kiệt Quota / Rate Limit (HTTP 429 / 503 / RESOURCE_EXHAUSTED) hay không
+ */
+export function isQuotaOrRateLimitError(status: number, errText: string): boolean {
+  if (status === 429 || status === 503) return true;
+  const lower = (errText || '').toLowerCase();
+  return (
+    lower.includes('resource_exhausted') ||
+    lower.includes('quota') ||
+    lower.includes('rate limit') ||
+    lower.includes('rate_limit') ||
+    lower.includes('too many requests')
+  );
+}
 
 /**
  * Schema Gemini cho chế độ Gộp Hóa Đơn (Single Transaction Object)
@@ -206,6 +232,7 @@ export const GEMINI_VOICE_SCHEMA = {
 
 /**
  * Gọi Google Gemini Vision API với cơ chế tự động Fallback qua danh sách models
+ * Khi một model bị hết quota (HTTP 429 / RESOURCE_EXHAUSTED), tự động chuyển ngay lập tức sang model dự phòng tiếp theo
  * Hỗ trợ tự động thử cả v1beta và v1 endpoints nếu gặp lỗi 404, tích hợp AbortSignal để hủy tức thì
  */
 async function callGeminiVision(
@@ -213,7 +240,8 @@ async function callGeminiVision(
   apiKey: string,
   abortSignal?: AbortSignal,
   promptText: string = VISION_INVOICE_PROMPT_SPLIT,
-  responseSchema?: any
+  responseSchema?: any,
+  onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<string> {
   const { base64Data, mimeType } = cleanBase64(base64Image);
   const keyToUse = apiKey && apiKey.trim().length > 0 ? apiKey.trim() : DEFAULT_GEMINI_API_KEY;
@@ -225,6 +253,7 @@ async function callGeminiVision(
   };
   if (responseSchema) {
     generationConfig.responseSchema = responseSchema;
+    generationConfig.response_schema = responseSchema;
   }
 
   const payload: any = {
@@ -233,8 +262,8 @@ async function callGeminiVision(
         parts: [
           { text: promptText },
           {
-            inline_data: {
-              mime_type: mimeType,
+            inlineData: {
+              mimeType: mimeType,
               data: base64Data,
             },
           },
@@ -247,12 +276,15 @@ async function callGeminiVision(
   let lastError = '';
   let isKeyReportedLeaked = false;
 
-  for (const model of GEMINI_FALLBACK_MODELS) {
+  for (let i = 0; i < GEMINI_FALLBACK_MODELS.length; i++) {
+    const model = GEMINI_FALLBACK_MODELS[i];
     if (abortSignal?.aborted) {
       throw new DOMException('Quá trình quét đã bị hủy bởi người dùng', 'AbortError');
     }
 
     const apiVersions = ['v1beta', 'v1'];
+    let switchedDueToQuota = false;
+
     for (const apiVer of apiVersions) {
       if (abortSignal?.aborted) {
         throw new DOMException('Quá trình quét đã bị hủy bởi người dùng', 'AbortError');
@@ -274,6 +306,23 @@ async function callGeminiVision(
             return rawContent;
           }
         } else {
+          const errText = await res.text();
+
+          // Tự động phát hiện lỗi Hết Quota / Giới hạn (429 / 503 / RESOURCE_EXHAUSTED)
+          if (isQuotaOrRateLimitError(res.status, errText)) {
+            const nextModel = GEMINI_FALLBACK_MODELS[i + 1];
+            console.warn(
+              `[Quota Fallback OCR] Model '${model}' (${apiVer}) đã hết hạn mức Quota (HTTP ${res.status}). ` +
+                (nextModel ? `Tự động chuyển ngay sang model dự phòng '${nextModel}'...` : 'Đã hết danh sách model dự phòng.')
+            );
+            if (nextModel) {
+              onModelSwitch?.(model, `hết quota (${res.status}), đang tự động chuyển sang ${nextModel}...`);
+            }
+            lastError = `Model ${model} (${apiVer} - Hết Quota 429): ${errText}`;
+            switchedDueToQuota = true;
+            break; // Ngắt ngay apiVersions loop để nhảy sang model tiếp theo trong GEMINI_FALLBACK_MODELS!
+          }
+
           // Nếu model trả về 400 do schema, tự động fallback thử lại không có responseSchema
           if (res.status === 400 && payload.generationConfig?.responseSchema) {
             try {
@@ -301,7 +350,6 @@ async function callGeminiVision(
             }
           }
 
-          const errText = await res.text();
           console.warn(`Model ${model} (${apiVer}) thất bại (HTTP ${res.status}):`, errText);
           if (res.status === 403 || errText.includes('PERMISSION_DENIED') || errText.includes('leaked')) {
             isKeyReportedLeaked = true;
@@ -316,6 +364,10 @@ async function callGeminiVision(
         lastError = err?.message || String(err);
       }
     }
+
+    if (switchedDueToQuota) {
+      continue;
+    }
   }
 
   if (isKeyReportedLeaked) {
@@ -329,12 +381,14 @@ async function callGeminiVision(
 
 /**
  * Gọi Google Gemini API với nội dung văn bản thuần túy (dùng cho Voice NLP, Text Extraction)
+ * Tự động chuyển model kế tiếp khi gặp 429 Quota Exceeded
  */
 export async function callGeminiText(
   promptText: string,
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
-  responseSchema?: any
+  responseSchema?: any,
+  onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<string> {
   const savedCfg = getSavedVisionConfig();
   const keyToUse =
@@ -351,6 +405,7 @@ export async function callGeminiText(
   };
   if (responseSchema) {
     generationConfig.responseSchema = responseSchema;
+    generationConfig.response_schema = responseSchema;
   }
 
   const payload: any = {
@@ -364,12 +419,15 @@ export async function callGeminiText(
 
   let lastError = '';
 
-  for (const model of GEMINI_FALLBACK_MODELS) {
+  for (let i = 0; i < GEMINI_FALLBACK_MODELS.length; i++) {
+    const model = GEMINI_FALLBACK_MODELS[i];
     if (abortSignal?.aborted) {
       throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
     }
 
     const apiVersions = ['v1beta', 'v1'];
+    let switchedDueToQuota = false;
+
     for (const apiVer of apiVersions) {
       if (abortSignal?.aborted) {
         throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
@@ -391,6 +449,23 @@ export async function callGeminiText(
             return rawContent;
           }
         } else {
+          const errText = await res.text();
+
+          // Tự động phát hiện lỗi Hết Quota / Giới hạn (429 / 503 / RESOURCE_EXHAUSTED)
+          if (isQuotaOrRateLimitError(res.status, errText)) {
+            const nextModel = GEMINI_FALLBACK_MODELS[i + 1];
+            console.warn(
+              `[Quota Fallback Text] Model '${model}' (${apiVer}) đã hết hạn mức Quota (HTTP ${res.status}). ` +
+                (nextModel ? `Tự động chuyển ngay sang model '${nextModel}'...` : '')
+            );
+            if (nextModel) {
+              onModelSwitch?.(model, `hết quota (${res.status}), đang tự động chuyển sang ${nextModel}...`);
+            }
+            lastError = `Model ${model} (${apiVer} - Hết Quota 429): ${errText}`;
+            switchedDueToQuota = true;
+            break; // Bỏ qua apiVer còn lại, sang model tiếp theo ngay lập tức
+          }
+
           // Nếu model trả về 400 do schema, tự động fallback thử lại không có responseSchema
           if (res.status === 400 && payload.generationConfig?.responseSchema) {
             try {
@@ -418,7 +493,6 @@ export async function callGeminiText(
             }
           }
 
-          const errText = await res.text();
           lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
         }
       } catch (err: any) {
@@ -428,13 +502,18 @@ export async function callGeminiText(
         lastError = err?.message || String(err);
       }
     }
+
+    if (switchedDueToQuota) {
+      continue;
+    }
   }
 
   throw new Error(`Không thể kết nối Gemini API: ${lastError}`);
 }
 
 /**
- * Gọi Google Gemini 1.5 Flash với Audio input (base64) và text prompt
+ * Gọi Google Gemini với Audio input (base64) và text prompt
+ * Tự động chuyển model kế tiếp khi gặp 429 Quota Exceeded (sử dụng GEMINI_AUDIO_MODELS)
  */
 export async function callGeminiAudio(
   audioBase64: string,
@@ -442,7 +521,8 @@ export async function callGeminiAudio(
   promptText: string,
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
-  responseSchema?: any
+  responseSchema?: any,
+  onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<string> {
   const savedCfg = getSavedVisionConfig();
   const keyToUse =
@@ -490,19 +570,17 @@ export async function callGeminiAudio(
     generationConfig,
   };
 
-  const audioModels = [
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-latest',
-  ];
-
   let lastError = '';
 
-  for (const model of audioModels) {
+  for (let i = 0; i < GEMINI_AUDIO_MODELS.length; i++) {
+    const model = GEMINI_AUDIO_MODELS[i];
     if (abortSignal?.aborted) {
       throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
     }
 
     const apiVersions = ['v1beta', 'v1'];
+    let switchedDueToQuota = false;
+
     for (const apiVer of apiVersions) {
       if (abortSignal?.aborted) {
         throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
@@ -524,6 +602,23 @@ export async function callGeminiAudio(
             return rawContent;
           }
         } else {
+          const errText = await res.text();
+
+          // Tự động phát hiện lỗi Hết Quota / Giới hạn (429 / 503 / RESOURCE_EXHAUSTED)
+          if (isQuotaOrRateLimitError(res.status, errText)) {
+            const nextModel = GEMINI_AUDIO_MODELS[i + 1];
+            console.warn(
+              `[Quota Fallback Audio] Model '${model}' (${apiVer}) đã hết hạn mức Quota (HTTP ${res.status}). ` +
+                (nextModel ? `Tự động chuyển ngay sang model dự phòng '${nextModel}'...` : 'Đã hết danh sách model dự phòng.')
+            );
+            if (nextModel) {
+              onModelSwitch?.(model, `hết quota (${res.status}), đang tự động chuyển sang ${nextModel}...`);
+            }
+            lastError = `Model ${model} (${apiVer} - Hết Quota 429): ${errText}`;
+            switchedDueToQuota = true;
+            break; // Bỏ qua apiVer còn lại, chuyển model kế tiếp ngay lập tức!
+          }
+
           if (res.status === 400 && payload.generationConfig?.responseSchema) {
             try {
               const fallbackPayload = {
@@ -550,7 +645,6 @@ export async function callGeminiAudio(
             }
           }
 
-          const errText = await res.text();
           lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
         }
       } catch (err: any) {
@@ -559,6 +653,10 @@ export async function callGeminiAudio(
         }
         lastError = err?.message || String(err);
       }
+    }
+
+    if (switchedDueToQuota) {
+      continue;
     }
   }
 
@@ -836,7 +934,8 @@ export async function extractInvoiceDataWithCloudVision(
   imageSource: string,
   configOverride?: Partial<VisionConfig>,
   abortSignal?: AbortSignal,
-  scanMode: 'split' | 'merge' = 'split'
+  scanMode: 'split' | 'merge' = 'split',
+  onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<BatchParsedResult> {
   const currentConfig = { ...getSavedVisionConfig(), ...configOverride };
   const effectiveKey = currentConfig.apiKey?.trim() || DEFAULT_GEMINI_API_KEY;
@@ -846,8 +945,15 @@ export async function extractInvoiceDataWithCloudVision(
   const schemaToUse =
     scanMode === 'merge' ? GEMINI_MERGE_SCHEMA : GEMINI_SPLIT_SCHEMA;
 
-  // Mặc định và duy nhất: Google Gemini Vision
-  const rawJsonText = await callGeminiVision(imageSource, effectiveKey, abortSignal, promptText, schemaToUse);
+  // Mặc định và duy nhất: Google Gemini Vision với cơ chế tự động chuyển model khi hết Quota
+  const rawJsonText = await callGeminiVision(
+    imageSource,
+    effectiveKey,
+    abortSignal,
+    promptText,
+    schemaToUse,
+    onModelSwitch
+  );
 
   return parseVisionJsonResponse(rawJsonText);
 }

@@ -133,7 +133,10 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         enhancedDataUrl,
         cfg,
         controller.signal,
-        scanMode
+        scanMode,
+        (modelName, reason) => {
+          setStatusMessage(`Model ${modelName} ${reason}`);
+        }
       );
 
       if (controller.signal.aborted) return;

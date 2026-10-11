@@ -24,6 +24,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewResult, setPreviewResult] = useState<ParsedVoiceResult | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('Google Gemini AI đang nghe & phân tích...');
 
   useEffect(() => {
     if (!isOpen) {
@@ -33,6 +34,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
       setRecordingDuration(0);
       setErrorMsg(null);
       setPreviewResult(null);
+      setStatusMessage('Google Gemini AI đang nghe & phân tích...');
       return;
     }
 
@@ -84,6 +86,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     if (isAnalyzing) return;
     setIsRecording(false);
     setIsAnalyzing(true);
+    setStatusMessage('Google Gemini AI đang nghe & phân tích...');
     setErrorMsg(null);
 
     try {
@@ -95,7 +98,12 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
       const parsed = await parseVoiceAudioWithGemini(
         audioResult.base64Data,
         audioResult.mimeType,
-        categories
+        categories,
+        undefined,
+        undefined,
+        (modelName, reason) => {
+          setStatusMessage(`Model ${modelName} ${reason}`);
+        }
       );
 
       setPreviewResult(parsed);
@@ -146,7 +154,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
         <h3 className="text-lg font-bold text-[#3e332a] mb-6">
           {isAnalyzing
-            ? 'Google Gemini AI đang nghe & phân tích...'
+            ? statusMessage
             : isRecording
             ? `Đang ghi âm... (${recordingDuration}s)`
             : 'Đã dừng ghi âm'}

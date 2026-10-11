@@ -1,5 +1,11 @@
 import { Category, TransactionType } from '../types';
-import { callGeminiText, callGeminiAudio, GEMINI_VOICE_SCHEMA } from './cloudVisionService';
+import {
+  callGeminiText,
+  callGeminiAudio,
+  GEMINI_VOICE_SCHEMA,
+  extractCleanJsonString,
+  escapeNewlinesInJsonStrings,
+} from './cloudVisionService';
 
 export interface ParsedVoiceResult {
   amount: number;
@@ -485,7 +491,8 @@ export async function parseVoiceWithGemini(
   text: string,
   categories: Category[],
   apiKeyOverride?: string,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<ParsedVoiceResult> {
   const cleanInput = text.trim();
   if (!cleanInput) {
@@ -504,19 +511,25 @@ export async function parseVoiceWithGemini(
   const prompt = `Trích xuất thông tin giao dịch từ câu nói này: '${cleanInput}'. Trả về duy nhất định dạng JSON: { "amount": <số tiền nguyên dương, tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số>, "note": "<nội dung giao dịch, loại bỏ số tiền>", "category": "<danh mục phù hợp nhất trong danh sách: ${categoryNames}>" }`;
 
   try {
-    const rawResponse = await callGeminiText(prompt, apiKeyOverride, abortSignal, GEMINI_VOICE_SCHEMA);
+    const rawResponse = await callGeminiText(
+      prompt,
+      apiKeyOverride,
+      abortSignal,
+      GEMINI_VOICE_SCHEMA,
+      onModelSwitch
+    );
     let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const cleanJson = extractCleanJsonString(cleanText);
 
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleanJson);
+    } catch {
+      parsed = JSON.parse(escapeNewlinesInJsonStrings(cleanJson));
     }
 
-    const parsed = JSON.parse(cleanText);
-
     const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
-    const rawNote = String(parsed.note || '').trim();
+    const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
     const note = rawNote || cleanInput;
     const categoryName = String(parsed.category || '').trim().toLowerCase();
 
@@ -557,14 +570,16 @@ export async function parseVoiceWithGemini(
 }
 
 /**
- * Phân tích trực tiếp từ dữ liệu âm thanh ghi âm (Audio Base64) bằng Google Gemini 1.5 Flash
+ * Phân tích trực tiếp từ dữ liệu âm thanh ghi âm (Audio Base64) bằng Google Gemini
+ * Tự động chuyển đổi các model dự phòng khi hết Quota
  */
 export async function parseVoiceAudioWithGemini(
   audioBase64: string,
   mimeType: string,
   categories: Category[],
   apiKeyOverride?: string,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<ParsedVoiceResult> {
   const categoryNames = categories.map((c) => c.name).join(', ');
 
@@ -576,20 +591,27 @@ export async function parseVoiceAudioWithGemini(
     prompt,
     apiKeyOverride,
     abortSignal,
-    GEMINI_VOICE_SCHEMA
+    GEMINI_VOICE_SCHEMA,
+    onModelSwitch
   );
 
   let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-  const firstBrace = cleanText.indexOf('{');
-  const lastBrace = cleanText.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+  const cleanJson = extractCleanJsonString(cleanText);
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch (err: any) {
+    try {
+      parsed = JSON.parse(escapeNewlinesInJsonStrings(cleanJson));
+    } catch {
+      console.error('Không thể parse JSON từ Gemini Audio:', cleanJson, err);
+      throw new Error(`Phản hồi từ Gemini không phải JSON hợp lệ: ${cleanJson.slice(0, 100)}`);
+    }
   }
 
-  const parsed = JSON.parse(cleanText);
-
   const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
-  const rawNote = String(parsed.note || '').trim();
+  const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
   const note = rawNote || 'Giao dịch giọng nói';
   const categoryName = String(parsed.category || '').trim().toLowerCase();
 
