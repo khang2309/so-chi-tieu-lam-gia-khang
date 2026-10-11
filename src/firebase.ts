@@ -13,12 +13,12 @@ import {
  * Để trống mặc định để người dùng tự điền khóa API vào file .env
  */
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBSwAvAYzffjqdTtMaB-9K1asxdK-b2yX8',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'sochitieu-khanglam.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'sochitieu-khanglam',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'sochitieu-khanglam.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1049457866930',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1049457866930:web:df621c7298b0e4e14d71ab',
 };
 
 export const isFirebaseConfigured = Boolean(
