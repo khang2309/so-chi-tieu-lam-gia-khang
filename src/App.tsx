@@ -21,7 +21,6 @@ import { ParsedVoiceResult } from './utils/voiceParser';
 import {
   Plus,
   Camera,
-  Users,
   Wallet as WalletIcon,
   Receipt,
   Mic,
@@ -102,6 +101,7 @@ export function App() {
         onSelectLedger={manager.setActiveLedgerId}
         onOpenLedgerManager={() => setIsLedgerManagerModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenRoommateSplit={() => setIsRoommateSplitModalOpen(true)}
         isAutoSyncing={manager.isAutoSyncing}
       />
 
@@ -241,69 +241,64 @@ export function App() {
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-2 px-3 safe-bottom shadow-lg">
-        <div className="flex items-center justify-around max-w-md mx-auto">
-          {/* Sổ cái / Dashboard */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-1.5 px-2 safe-bottom shadow-lg">
+        <div className="grid grid-cols-5 items-center max-w-md mx-auto relative">
+          {/* Nút 1 (Bên trái 1): Sổ cái / Dashboard */}
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex flex-col items-center gap-0.5 transition ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 transition ${
               activeTab === 'dashboard'
                 ? 'text-[#a25832] font-bold'
                 : 'text-[#7a6a58] hover:text-[#3e332a]'
             }`}
           >
             <Receipt className="w-5 h-5" />
-            <span className="text-[10px]">Sổ cái</span>
+            <span className="text-[11px] leading-tight font-medium">Sổ cái</span>
           </button>
 
-          {/* Quick Wallets Tab */}
+          {/* Nút 2 (Bên trái 2): Ví tiền */}
           <button
             onClick={() => setActiveTab('wallets')}
-            className={`flex flex-col items-center gap-0.5 transition ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 transition ${
               activeTab === 'wallets'
                 ? 'text-[#a25832] font-bold'
                 : 'text-[#7a6a58] hover:text-[#3e332a]'
             }`}
           >
             <WalletIcon className="w-5 h-5" />
-            <span className="text-[10px]">Ví tiền</span>
+            <span className="text-[11px] leading-tight font-medium">Ví tiền</span>
           </button>
 
-          {/* Floating Center Voice Button (NÓI ĐỂ GHI) */}
+          {/* Nút 3 (CĂN GIỮA TUYỆT ĐỐI): Micro Floating Action Button (Màu cam nổi bật) */}
+          <div className="flex flex-col items-center justify-center relative">
+            <button
+              onClick={handleOpenVoiceInput}
+              className="-mt-7 w-14 h-14 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all border-4 border-[#fffdfa] ring-2 ring-[#ea580c]/30 group"
+              title="Đọc hóa đơn bằng giọng nói"
+            >
+              <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition" />
+            </button>
+            <span className="text-[10px] font-bold text-[#ea580c] mt-0.5 leading-tight">Giọng nói</span>
+          </div>
+
+          {/* Nút 4 (Bên phải 1): Quét Hóa Đơn */}
           <button
-            onClick={handleOpenVoiceInput}
-            className="-mt-5 w-12 h-12 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] text-white flex items-center justify-center shadow-lg active:scale-95 transition border-2 border-[#fffdfa] ring-2 ring-[#ea580c]/30 group"
-            title="Đọc hóa đơn bằng giọng nói"
+            onClick={() => setIsReceiptScanModalOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 py-1 text-[#7a6a58] hover:text-[#3e332a] transition"
+            title="Quét hóa đơn AI"
           >
-            <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition" />
+            <Camera className="w-5 h-5 text-[#a25832]" />
+            <span className="text-[11px] font-medium leading-tight">Quét HĐ</span>
           </button>
 
-          {/* Quick Add Manual */}
+          {/* Nút 5 (Bên phải 2): Thêm giao dịch thủ công */}
           <button
             onClick={handleOpenNewTransaction}
-            className="flex flex-col items-center gap-0.5 text-[#7a6a58] hover:text-[#3e332a] transition"
+            className="flex flex-col items-center justify-center gap-1 py-1 text-[#7a6a58] hover:text-[#3e332a] transition"
             title="Thêm thủ công"
           >
             <Plus className="w-5 h-5 text-[#a25832]" />
-            <span className="text-[10px] font-medium">Thêm tay</span>
-          </button>
-
-          {/* Quick Scan */}
-          <button
-            onClick={() => setIsReceiptScanModalOpen(true)}
-            className="flex flex-col items-center gap-0.5 text-[#7a6a58] hover:text-[#3e332a] transition"
-          >
-            <Camera className="w-5 h-5 text-[#a25832]" />
-            <span className="text-[10px] font-medium">Quét HĐ</span>
-          </button>
-
-          {/* Quick Room Split */}
-          <button
-            onClick={() => setIsRoommateSplitModalOpen(true)}
-            className="flex flex-col items-center gap-0.5 text-[#7a6a58] hover:text-[#3e332a] transition"
-          >
-            <Users className="w-5 h-5 text-[#3d7a5a]" />
-            <span className="text-[10px] font-medium">Chia trọ</span>
+            <span className="text-[11px] font-medium leading-tight">Thêm tay</span>
           </button>
         </div>
       </nav>

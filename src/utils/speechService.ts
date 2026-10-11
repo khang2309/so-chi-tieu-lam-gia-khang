@@ -23,7 +23,18 @@ class SpeechService {
 
     if (this.isNative) {
       try {
-        // Ép xin quyền một lần để chắc chắn, bỏ qua kết quả trả về (không chặn luồng!)
+        // Dọn dẹp phiên trước: gọi stop() và remove listeners
+        try {
+          await SpeechRecognition.stop();
+        } catch {}
+        try {
+          await SpeechRecognition.removeAllListeners();
+        } catch {}
+
+        // Bắt buộc thêm khoảng trễ 400ms (300ms - 500ms) để Android và plugin giải phóng tài nguyên
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // Ép xin quyền một lần để chắc chắn, bỏ qua kết quả trả về
         await SpeechRecognition.requestPermissions().catch((e) => {
           console.warn('requestPermissions caught:', e);
         });
@@ -75,18 +86,23 @@ class SpeechService {
 
         return true;
       } catch (error: any) {
-        console.warn('Lỗi native speech recognition, tự động fallback sang Web Speech API:', error);
+        console.warn('Native SpeechRecognition gặp lỗi, tự động fallback sang Web Speech API:', error);
 
-        // Thử fallback sang Web Speech API của Android WebView
+        // Tự động chuyển sang sử dụng API mặc định của trình duyệt (window.SpeechRecognition || window.webkitSpeechRecognition)
         const webFallbackStarted = this.startWebSpeechFallback(callbacks);
         if (webFallbackStarted) {
           return true;
         }
 
-        // Chỉ hiện cảnh báo nếu lệnh start() thực sự bị crash văng ra lỗi
-        const errDetail = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-        alert('Lỗi khởi động Mic: ' + errDetail);
-        callbacks.onError('Lỗi khởi động Mic: ' + errDetail);
+        const errMsg = String(error?.message || error || '').toLowerCase();
+        // Nếu có lỗi aborted văng ra, tuyệt đối KHÔNG hiển thị dòng chữ đỏ báo lỗi. Chỉ reset lại giao diện
+        if (errMsg.includes('aborted') || errMsg.includes('abort') || errMsg.includes('no-speech')) {
+          this.isListeningActive = false;
+          callbacks.onListeningStateChange?.(false);
+          return false;
+        }
+
+        callbacks.onError(error?.message || 'Lỗi nhận diện giọng nói');
         this.isListeningActive = false;
         callbacks.onListeningStateChange?.(false);
         return false;
@@ -151,10 +167,19 @@ class SpeechService {
 
       this.webRecognition.onerror = (event: any) => {
         console.warn('Web Speech Recognition error:', event.error);
-        if (event.error === 'not-allowed') {
+        const errType = String(event.error || '').toLowerCase();
+
+        // Nếu là aborted hoặc no-speech, tuyệt đối KHÔNG hiển thị dòng chữ đỏ báo lỗi, chỉ reset giao diện
+        if (errType.includes('abort') || errType.includes('no-speech')) {
+          this.isListeningActive = false;
+          callbacks.onListeningStateChange?.(false);
+          return;
+        }
+
+        if (errType === 'not-allowed') {
           alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
           callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
-        } else if (event.error !== 'no-speech') {
+        } else {
           callbacks.onError(`Lỗi nhận diện giọng nói: ${event.error}`);
         }
         this.isListeningActive = false;

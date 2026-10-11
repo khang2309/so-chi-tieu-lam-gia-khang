@@ -83,7 +83,13 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
         }
       },
       onError: (err) => {
-        setErrorMsg(err);
+        const lower = String(err || '').toLowerCase();
+        // Nếu có lỗi aborted hoặc no-speech, tuyệt đối KHÔNG hiển thị dòng chữ đỏ, chỉ reset lại trạng thái
+        if (lower.includes('aborted') || lower.includes('abort') || lower.includes('no-speech')) {
+          setErrorMsg(null);
+        } else {
+          setErrorMsg(err);
+        }
         setIsListening(false);
         setIsAnalyzing(false);
       },
@@ -123,22 +129,6 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     speechService.stopListening();
     onParsedResult(res);
     onClose();
-  };
-
-  const handleSelectExample = async (exampleText: string) => {
-    setTranscript(exampleText);
-    setIsAnalyzing(true);
-    try {
-      const parsed = await parseVoiceWithGemini(exampleText, categories);
-      setPreviewResult(parsed);
-      handleConfirm(parsed);
-    } catch {
-      const fallback = parseVoiceInput(exampleText, categories);
-      setPreviewResult(fallback);
-      handleConfirm(fallback);
-    } finally {
-      setIsAnalyzing(false);
-    }
   };
 
   if (!isOpen) return null;
@@ -280,32 +270,8 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           </div>
         )}
 
-        {/* Gợi ý các mẫu câu nói phổ biến */}
-        <div className="w-full pt-2 border-t border-[#f0e4d5]">
-          <div className="text-[11px] text-[#7a6a58] mb-2 font-medium">
-            Hoặc thử bấm nhanh mẫu câu ví dụ:
-          </div>
-          <div className="flex flex-wrap gap-1.5 justify-center">
-            {[
-              'Đổ xăng 50 nghìn',
-              'Ăn cơm trưa 35k',
-              'Cà phê 30 ngàn',
-              'Tiền phòng 2 triệu 500',
-              'Lương tháng này 15 triệu',
-            ].map((eg, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSelectExample(eg)}
-                className="px-2.5 py-1 rounded-lg bg-[#f5ebe0] hover:bg-[#ebdcc9] text-[11px] text-[#5c4f42] font-medium transition active:scale-95"
-              >
-                {eg}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Action button */}
-        <div className="w-full mt-5 flex gap-2">
+        <div className="w-full mt-2 flex gap-2">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition"

@@ -8,6 +8,7 @@ import {
   BookOpen,
   Cloud,
   WifiOff,
+  Users,
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
@@ -19,6 +20,7 @@ interface HeaderProps {
   onSelectLedger: (id: string) => void;
   onOpenLedgerManager: () => void;
   onOpenSettings: () => void;
+  onOpenRoommateSplit?: () => void;
   isAutoSyncing?: boolean;
 }
 
@@ -28,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectLedger,
   onOpenLedgerManager,
   onOpenSettings,
+  onOpenRoommateSplit,
   isAutoSyncing = false,
 }) => {
   const { user, isOnline, isOfflineMode, openAuthModal } = useAuth();
@@ -95,6 +98,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
             </button>
+
+            {/* Chia tiền phòng / trọ */}
+            {onOpenRoommateSplit && (
+              <button
+                onClick={onOpenRoommateSplit}
+                title="Chia tiền phòng / trọ"
+                className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#3d7a5a] hover:text-[#2d5c43] hover:bg-[#eef8f2] transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+              >
+                <Users className="w-3.5 h-3.5 text-[#3d7a5a]" />
+                <span className="hidden sm:inline">Chia trọ</span>
+              </button>
+            )}
 
             {/* Settings & Backup */}
             <button
