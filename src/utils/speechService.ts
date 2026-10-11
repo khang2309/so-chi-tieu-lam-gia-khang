@@ -23,52 +23,10 @@ class SpeechService {
 
     if (this.isNative) {
       try {
-        const { available } = await SpeechRecognition.available().catch(() => ({ available: false }));
-        if (!available) {
-          // Thử tiếp tục nếu là thiết bị Android một số dòng máy
-          console.warn('SpeechRecognition.available returned false, continuing attempt...');
-        }
-
-        // Bước 1: Dùng SpeechRecognition.checkPermissions() để kiểm tra trạng thái thực tế
-        let isGranted = false;
-        try {
-          const permStatus = await SpeechRecognition.checkPermissions();
-          if (permStatus.speechRecognition === 'granted') {
-            isGranted = true;
-          }
-        } catch (checkErr) {
-          console.warn('SpeechRecognition.checkPermissions error:', checkErr);
-        }
-
-        // Bước 2: Nếu chưa được cấp quyền (prompt / denied), mới gọi SpeechRecognition.requestPermissions()
-        if (!isGranted) {
-          try {
-            const reqStatus = await SpeechRecognition.requestPermissions();
-            if (reqStatus.speechRecognition === 'granted') {
-              isGranted = true;
-            }
-          } catch (reqErr) {
-            console.warn('SpeechRecognition.requestPermissions error:', reqErr);
-          }
-        }
-
-        // Bước 3: Nếu Native plugin vẫn báo denied hoặc chưa có quyền
-        // Tự động chuyển hướng (fallback) sang Web Speech API của HTML5 mặc định trên Android WebView
-        if (!isGranted) {
-          console.warn(
-            'Native SpeechRecognition báo chưa có quyền. Tự động chuyển hướng (fallback) sang Web Speech API của Android WebView...'
-          );
-          const webFallbackStarted = this.startWebSpeechFallback(callbacks);
-          if (webFallbackStarted) {
-            return true;
-          }
-
-          alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
-          callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
-          this.isListeningActive = false;
-          callbacks.onListeningStateChange?.(false);
-          return false;
-        }
+        // Ép xin quyền một lần để chắc chắn, bỏ qua kết quả trả về (không chặn luồng!)
+        await SpeechRecognition.requestPermissions().catch((e) => {
+          console.warn('requestPermissions caught:', e);
+        });
 
         // Xóa các listeners cũ
         await SpeechRecognition.removeAllListeners().catch(() => {});
@@ -99,7 +57,7 @@ class SpeechService {
           }
         );
 
-        // Bắt đầu nhận diện giọng nói tiếng Việt với cấu hình nghiêm ngặt
+        // FORCE START: Gọi Start luôn! Để hệ điều hành Android tự quyết định việc chặn hay không
         const startResult = await SpeechRecognition.start({
           language: 'vi-VN',
           maxResults: 1,
@@ -116,14 +74,19 @@ class SpeechService {
         }
 
         return true;
-      } catch (err: any) {
-        console.warn('Lỗi native speech recognition, tự động fallback sang Web Speech API:', err);
+      } catch (error: any) {
+        console.warn('Lỗi native speech recognition, tự động fallback sang Web Speech API:', error);
+
+        // Thử fallback sang Web Speech API của Android WebView
         const webFallbackStarted = this.startWebSpeechFallback(callbacks);
         if (webFallbackStarted) {
           return true;
         }
-        alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
-        callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+
+        // Chỉ hiện cảnh báo nếu lệnh start() thực sự bị crash văng ra lỗi
+        const errDetail = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        alert('Lỗi khởi động Mic: ' + errDetail);
+        callbacks.onError('Lỗi khởi động Mic: ' + errDetail);
         this.isListeningActive = false;
         callbacks.onListeningStateChange?.(false);
         return false;
