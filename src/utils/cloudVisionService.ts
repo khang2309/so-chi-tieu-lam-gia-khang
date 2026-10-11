@@ -112,30 +112,40 @@ Quy tắc bắt buộc:
 
 export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
-// Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định (có hạn mức Quota độc lập)
+// Danh sách toàn bộ các model Gemini ưu tiên cao nhất theo TỐC ĐỘ XỬ LÝ & ĐỘ CHÍNH XÁC (từ hạn mức tài khoản thực tế)
 export const GEMINI_FALLBACK_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-flash',
-  'gemini-flash-latest',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-flash-latest',
-  'gemini-2.5-flash',
-  'gemini-flash-lite-latest',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash-lite',
+  'gemini-3.5-flash-lite', // Ưu tiên #1: Tốc độ phản hồi tức thì (<1s), chính xác cao thế hệ 3.5, Quota khủng (15 RPM / 500 RPD)
+  'gemini-3.5-flash',      // Ưu tiên #2: Flagship dòng 3.5, nhận diện hóa đơn & giọng nói chính xác tối đa
+  'gemini-3.1-flash-lite', // Ưu tiên #3: Siêu tốc độ thế hệ 3.1, Quota khủng (15 RPM / 500 RPD)
+  'gemini-3.8-flash',      // Ưu tiên #4: Phiên bản Gemini 3.8 mới nhất, thông minh & chính xác cao
+  'gemini-3.7-flash',      // Ưu tiên #5: Gemini 3.7 Flash, xử lý nhanh & chính xác
+  'gemini-3.6-flash',      // Ưu tiên #6: Gemini 3.6 Flash
+  'gemini-3-flash',        // Ưu tiên #7: Gemini 3 Flash
+  'gemini-2.5-flash-lite', // Ưu tiên #8: Dòng Lite 2.5 (10 RPM / 20 RPD)
+  'gemini-2.5-flash',      // Ưu tiên #9: Dòng Flash 2.5
+  'gemini-2.0-flash',      // Ưu tiên #10: Dòng Flash 2.0
+  'gemini-flash-latest',   // Ưu tiên #11: Alias tự động trỏ model Flash mới nhất
+  'gemini-1.5-flash',      // Ưu tiên #12: Fallback thế hệ 1.5
+  'gemini-1.5-flash-8b',   // Ưu tiên #13: Fallback siêu nhẹ 8B
 ];
 
-// Danh sách các model hỗ trợ Audio multimodal và tự động fallback khi hết quota
+// Danh sách các model hỗ trợ Audio multimodal theo thứ tự ưu tiên Tốc độ & Độ chính xác
 export const GEMINI_AUDIO_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-flash',
-  'gemini-flash-latest',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-flash-latest',
+  'gemini-3.5-flash-lite', // Nghe & trích xuất âm thanh tức thì, hạn mức 500 RPD
+  'gemini-3.5-flash',      // Bóc tách giọng nói phức tạp chính xác cao nhất
+  'gemini-3.1-flash-lite', // Tốc độ xử lý audio cực nhanh (15 RPM / 500 RPD)
+  'gemini-3.8-flash',      // Nhận diện audio mới nhất
+  'gemini-3.7-flash',      // Xử lý audio nhanh & chính xác
+  'gemini-3.6-flash',      // Audio đa phương thức
+  'gemini-3-flash',        // Multimodal Audio 3.0
+  'gemini-2.5-flash-lite', // Audio 2.5 Lite
+  'gemini-2.5-flash',      // Audio 2.5 Flash
+  'gemini-2.0-flash',      // Audio 2.0 Flash
+  'gemini-flash-latest',   // Audio Flash Latest
+  'gemini-1.5-flash',      // Audio 1.5 Flash
+  'gemini-1.5-flash-8b',   // Audio 1.5 Flash 8B
 ];
 
 /**
