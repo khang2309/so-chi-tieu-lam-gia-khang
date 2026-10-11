@@ -4,14 +4,12 @@ import {
   Camera as CameraIcon,
   Upload,
   Check,
-  Receipt,
   ScanLine,
   FileText,
   Trash2,
   Plus,
   Calendar,
   Layers,
-  Sparkles,
   Wand2,
   Key,
   ExternalLink,
@@ -19,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {
-  extractInvoiceData,
   ExtractedBatchItem,
   InvoiceType,
 } from '../utils/ocrParser';
@@ -33,81 +30,7 @@ import { preprocessImage } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
-interface SampleReceipt {
-  id: string;
-  name: string;
-  description: string;
-  ocrText: string;
-}
 
-const SAMPLE_BATCH_RECEIPTS: SampleReceipt[] = [
-  {
-    id: 'sample-type-a',
-    name: 'Loại A: Hóa đơn in nhiệt / Siêu thị (Gemini Vision JSON)',
-    description: 'Bóc tách chuẩn từng món: Cơm sườn, Trà đá, Canh khổ qua, Khăn lạnh',
-    ocrText: JSON.stringify(
-      {
-        invoiceType: 'TYPE_A_TABLE',
-        invoiceTypeName: 'Hóa đơn in / Bảng (Siêu thị)',
-        date: '2026-10-11',
-        totalAmount: 71000,
-        items: [
-          { name: 'Cơm sườn bì chả', amount: 40000, date: '2026-10-11', categorySuggestion: 'Ăn' },
-          { name: 'Trà đá đường', amount: 10000, date: '2026-10-11', categorySuggestion: 'Uống' },
-          { name: 'Canh khổ qua nhồi thịt', amount: 15000, date: '2026-10-11', categorySuggestion: 'Ăn' },
-          { name: 'Khăn lạnh', amount: 6000, date: '2026-10-11', categorySuggestion: 'Chi tiêu khác' },
-        ],
-      },
-      null,
-      2
-    ),
-  },
-  {
-    id: 'sample-type-b',
-    name: 'Loại B: Biên lai Chuyển khoản (Gemini Vision JSON)',
-    description: 'Chuyển khoản thành công 250k - Lẩu bò tối thứ 7',
-    ocrText: JSON.stringify(
-      {
-        invoiceType: 'TYPE_B_TRANSFER',
-        invoiceTypeName: 'Biên lai Chuyển khoản Ngân hàng',
-        date: '2026-10-12',
-        totalAmount: 250000,
-        items: [
-          {
-            name: 'Chuyển khoản NGUYEN VAN A - Tiền ăn lẩu bò',
-            amount: 250000,
-            date: '2026-10-12',
-            categorySuggestion: 'Ăn',
-          },
-        ],
-      },
-      null,
-      2
-    ),
-  },
-  {
-    id: 'sample-type-c',
-    name: 'Loại C: Giấy ghi chép tay (Gemini Vision JSON)',
-    description: 'Đổ xăng Janus 50k, Cơm trưa 35k, Shopee 120k, Wifi trọ 80k...',
-    ocrText: JSON.stringify(
-      {
-        invoiceType: 'TYPE_C_FREE_TEXT',
-        invoiceTypeName: 'Giấy ghi chép tự do',
-        date: '2026-10-13',
-        totalAmount: 310000,
-        items: [
-          { name: 'Đổ xăng Yamaha Janus', amount: 50000, date: '2026-10-12', categorySuggestion: 'Xăng xe (Yamaha Janus)' },
-          { name: 'Cơm trưa sườn trứng', amount: 35000, date: '2026-10-12', categorySuggestion: 'Ăn' },
-          { name: 'Cà phê sữa đá Highlands', amount: 25000, date: '2026-10-13', categorySuggestion: 'Uống' },
-          { name: 'Mua áo thun Shopee', amount: 120000, date: '2026-10-13', categorySuggestion: 'Mua sắm' },
-          { name: 'Tiền mạng Wifi phòng trọ', amount: 80000, date: '2026-10-13', categorySuggestion: 'Hóa đơn' },
-        ],
-      },
-      null,
-      2
-    ),
-  },
-];
 
 interface ReceiptScanModalProps {
   isOpen: boolean;
@@ -174,28 +97,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setShowConfig(false);
   };
 
-  // Xử lý kết quả quét hàng loạt
-  const handleProcessBatchResult = (rawText: string) => {
-    setRawOcrText(rawText);
-    const parsed = extractInvoiceData(rawText);
-
-    if (parsed.items.length === 0) {
-      alert('Không nhận diện được dòng nào chứa số tiền hợp lệ! Vui lòng thử lại với ảnh rõ hơn.');
-      return;
-    }
-
-    setInvoiceType(parsed.invoiceType);
-    setInvoiceTypeName(parsed.invoiceTypeName);
-    setBatchItems(parsed.items);
-
-    // Mặc định Sổ & Ví áp dụng cho toàn bộ đợt này
-    const defaultLedger =
-      activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
-    setSelectedLedgerId(defaultLedger);
-    setSelectedWalletId(wallets[0]?.id || 'wallet-cash');
-
-    setStep('verify');
-  };
 
   // Phân tích hóa đơn bằng Cloud LLM Vision (Google Gemini Flash / OpenAI)
   const runCloudVisionOnImage = async (dataUrl: string) => {
@@ -277,15 +178,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
   };
 
-  // Thử nhanh mẫu giấy ghi chép có sẵn
-  const handleSelectSample = (sample: SampleReceipt) => {
-    setIsProcessing(true);
-    setStatusMessage(`Đang bóc tách từng dòng: ${sample.name}...`);
-    setTimeout(() => {
-      setIsProcessing(false);
-      handleProcessBatchResult(sample.ocrText);
-    }, 450);
-  };
 
   // Cập nhật từng trường trong danh sách giao dịch
   const handleUpdateItem = (
@@ -525,33 +417,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               </div>
             </div>
 
-            {/* Mẫu thử nghiệm nhanh */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-semibold text-[#7a6a58]">
-                Hoặc chọn nhanh mẫu giấy ghi chép nhiều khoản để thử nghiệm thuật toán:
-              </span>
-              <div className="grid grid-cols-1 gap-2">
-                {SAMPLE_BATCH_RECEIPTS.map((sample) => (
-                  <button
-                    key={sample.id}
-                    onClick={() => handleSelectSample(sample)}
-                    disabled={isProcessing}
-                    className="p-3 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] hover:bg-[#fbf5eb] text-left transition flex items-center justify-between gap-3 group"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-[#c28b38]" />
-                        <span>{sample.name}</span>
-                      </div>
-                      <div className="text-[11px] text-[#7a6a58] truncate mt-0.5">
-                        {sample.description}
-                      </div>
-                    </div>
-                    <Receipt className="w-4 h-4 text-[#a25832] shrink-0 group-hover:scale-110 transition" />
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         ) : (
           /* BƯỚC 2: MÀN HÌNH XÁC NHẬN HÀNG LOẠT (BATCH CONFIRMATION UI) */

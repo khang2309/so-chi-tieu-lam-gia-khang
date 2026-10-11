@@ -105,8 +105,10 @@ Chỉ trả về duy nhất một chuỗi JSON hợp lệ. KHÔNG dùng định 
 
 export const DEFAULT_GEMINI_API_KEY = "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ";
 
+export const DEFAULT_GEMINI_MODEL = 'gemini-1.5-flash';
+
 // Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định
-const GEMINI_MODELS = [
+export const GEMINI_FALLBACK_MODELS = [
   'gemini-1.5-flash',
   'gemma-4-26b-a4b-it',
   'gemma-4-31b-it',
@@ -122,6 +124,7 @@ const GEMINI_MODELS = [
 
 /**
  * 1. Gọi Google Gemini Vision API với cơ chế tự động Fallback qua danh sách models
+ * Hỗ trợ tự động thử cả v1beta và v1 endpoints nếu gặp lỗi 404
  */
 async function callGeminiVision(base64Image: string, apiKey: string): Promise<string> {
   const { base64Data, mimeType } = cleanBase64(base64Image);
@@ -148,31 +151,45 @@ async function callGeminiVision(base64Image: string, apiKey: string): Promise<st
   };
 
   let lastError = '';
+  let isKeyReportedLeaked = false;
 
-  for (const model of GEMINI_MODELS) {
-    try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyToUse}`;
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+  for (const model of GEMINI_FALLBACK_MODELS) {
+    const apiVersions = ['v1beta', 'v1'];
+    for (const apiVer of apiVersions) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${keyToUse}`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      if (res.ok) {
-        const json = await res.json();
-        const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawContent) {
-          return rawContent;
+        if (res.ok) {
+          const json = await res.json();
+          const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawContent) {
+            return rawContent;
+          }
+        } else {
+          const errText = await res.text();
+          console.warn(`Model ${model} (${apiVer}) thất bại (HTTP ${res.status}):`, errText);
+          if (res.status === 403 || errText.includes('PERMISSION_DENIED') || errText.includes('leaked')) {
+            isKeyReportedLeaked = true;
+          }
+          lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
+          // Nếu lỗi 404, thử tiếp API version khác hoặc model kế tiếp
         }
-      } else {
-        const errText = await res.text();
-        console.warn(`Model ${model} thất bại (HTTP ${res.status}):`, errText);
-        lastError = `Model ${model} (${res.status}): ${errText}`;
+      } catch (err: any) {
+        console.warn(`Lỗi khi gọi model ${model} (${apiVer}):`, err);
+        lastError = err?.message || String(err);
       }
-    } catch (err: any) {
-      console.warn(`Lỗi khi gọi model ${model}:`, err);
-      lastError = err?.message || String(err);
     }
+  }
+
+  if (isKeyReportedLeaked) {
+    throw new Error(
+      `Khóa API Google Gemini của bạn đã bị thu hồi hoặc hạn chế quyền (Google báo lỗi 403/404). Vui lòng nhấn vào nút 'Cấu hình Key' và dán API Key cá nhân mới lấy miễn phí từ https://aistudio.google.com/app/apikey.`
+    );
   }
 
   throw new Error(`Tất cả các model Gemini đều không phản hồi: ${lastError}`);

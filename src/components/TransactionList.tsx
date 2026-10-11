@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Trash2,
@@ -9,10 +9,17 @@ import {
   Receipt,
   FileQuestion,
   Plus,
+  Calendar,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
+import {
+  SmartDateFilterState,
+  SmartDateFilterType,
+  SMART_DATE_FILTER_OPTIONS,
+  isTransactionWithinSmartFilter,
+} from '../utils/dateFilterUtils';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -45,9 +52,34 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onOpenNewTransaction,
   onOpenReceiptScan,
 }) => {
+  const [smartFilter, setSmartFilter] = useState<SmartDateFilterState>({
+    type: 'all',
+    specificDate: new Date().toISOString().slice(0, 10),
+    startDate: '',
+    endDate: '',
+  });
+
   const getCategory = (catId: string) => categories.find((c) => c.id === catId);
   const getWallet = (wId: string) => wallets.find((w) => w.id === wId);
   const getLedger = (lId: string) => ledgers.find((l) => l.id === lId);
+
+  // Lọc giao dịch theo Smart Date Filter
+  const displayTransactions = useMemo(() => {
+    return transactions.filter((tx) =>
+      isTransactionWithinSmartFilter(tx.date, smartFilter)
+    );
+  }, [transactions, smartFilter]);
+
+  // Thống kê nhanh cho khoảng thời gian đang lọc
+  const filterStats = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    displayTransactions.forEach((tx) => {
+      if (tx.type === 'income') income += tx.amount;
+      else if (tx.type === 'expense') expense += tx.amount;
+    });
+    return { income, expense, count: displayTransactions.length };
+  }, [displayTransactions]);
 
   return (
     <section className="rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper overflow-hidden">
@@ -60,7 +92,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               Nhật Ký Giao Dịch
             </h2>
             <span className="text-xs px-2 py-0.5 rounded-full bg-[#f5ebe0] text-[#7a6a58] font-medium">
-              {transactions.length}
+              {displayTransactions.length}
             </span>
           </div>
 
@@ -99,30 +131,140 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           </div>
         </div>
 
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-[#a89886] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm theo ghi chú, danh mục, số tiền..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs sm:text-sm text-[#3e332a] placeholder-[#a89886] focus:outline-none focus:border-[#a25832] focus:bg-[#fffdfa] transition"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#a89886] hover:text-[#3e332a]"
-            >
-              ✕
-            </button>
-          )}
+        {/* Search bar & Smart Date Filter Toolbar */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+          {/* Search bar */}
+          <div className="relative sm:col-span-6">
+            <Search className="w-4 h-4 text-[#a89886] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Tìm theo ghi chú, danh mục, số tiền..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs sm:text-sm text-[#3e332a] placeholder-[#a89886] focus:outline-none focus:border-[#a25832] focus:bg-[#fffdfa] transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#a89886] hover:text-[#3e332a]"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Smart Date Filter Dropdown */}
+          <div className="relative sm:col-span-6 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Calendar className="w-4 h-4 text-[#a25832] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={smartFilter.type}
+                onChange={(e) =>
+                  setSmartFilter((prev) => ({
+                    ...prev,
+                    type: e.target.value as SmartDateFilterType,
+                  }))
+                }
+                className="w-full pl-9 pr-7 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] focus:outline-none focus:border-[#a25832] focus:bg-[#fffdfa] transition cursor-pointer appearance-none"
+              >
+                {SMART_DATE_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7a6a58] pointer-events-none text-xs">
+                ▼
+              </span>
+            </div>
+
+            {smartFilter.type !== 'all' && (
+              <button
+                onClick={() =>
+                  setSmartFilter({
+                    type: 'all',
+                    specificDate: new Date().toISOString().slice(0, 10),
+                    startDate: '',
+                    endDate: '',
+                  })
+                }
+                title="Bỏ lọc thời gian"
+                className="px-2.5 py-2 rounded-xl bg-[#f5ebe0] text-[#7a6a58] hover:text-[#3e332a] text-xs font-semibold border border-[#ebdcc9] transition shrink-0"
+              >
+                Đặt lại
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Dynamic Inputs when selecting "Ngày cụ thể" or "Tùy chỉnh khoảng thời gian" */}
+        {smartFilter.type === 'specific_date' && (
+          <div className="p-2.5 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] flex items-center gap-2 text-xs">
+            <span className="font-semibold text-[#7a6a58] whitespace-nowrap">
+              Chọn ngày cần xem:
+            </span>
+            <input
+              type="date"
+              value={smartFilter.specificDate || ''}
+              onChange={(e) =>
+                setSmartFilter((prev) => ({ ...prev, specificDate: e.target.value }))
+              }
+              className="px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] focus:outline-none focus:border-[#a25832]"
+            />
+          </div>
+        )}
+
+        {smartFilter.type === 'custom_range' && (
+          <div className="p-2.5 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-semibold text-[#7a6a58]">Khoảng thời gian:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#7a6a58]">Từ:</span>
+              <input
+                type="date"
+                value={smartFilter.startDate || ''}
+                onChange={(e) =>
+                  setSmartFilter((prev) => ({ ...prev, startDate: e.target.value }))
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#7a6a58]">Đến:</span>
+              <input
+                type="date"
+                value={smartFilter.endDate || ''}
+                onChange={(e) =>
+                  setSmartFilter((prev) => ({ ...prev, endDate: e.target.value }))
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Quick summary banner for filtered journal */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-[#7a6a58]">
+          <div className="flex items-center gap-3">
+            <span>
+              Tìm thấy: <strong className="text-[#3e332a]">{filterStats.count}</strong> giao dịch
+            </span>
+            {filterStats.expense > 0 && (
+              <span>
+                Tổng chi: <strong className="text-[#b94a3b]">-{formatCurrency(filterStats.expense)}</strong>
+              </span>
+            )}
+            {filterStats.income > 0 && (
+              <span>
+                Tổng thu: <strong className="text-[#2e7d32]">+{formatCurrency(filterStats.income)}</strong>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Transactions List */}
       <div className="divide-y divide-[#f0e4d5]">
-        {transactions.length === 0 ? (
+        {displayTransactions.length === 0 ? (
           <div className="p-8 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-[#f5ebe0] text-[#a89886] flex items-center justify-center mx-auto">
               <FileQuestion className="w-6 h-6" />
@@ -152,7 +294,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             </div>
           </div>
         ) : (
-          transactions.map((tx) => {
+          displayTransactions.map((tx) => {
             const category = getCategory(tx.categoryId);
             const wallet = getWallet(tx.walletId);
             const toWallet = tx.toWalletId ? getWallet(tx.toWalletId) : null;

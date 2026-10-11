@@ -4,9 +4,7 @@ import {
   TrendingDown,
   Scale,
   Calendar,
-  Wallet as WalletIcon,
   PieChart,
-  ArrowRightLeft,
 } from 'lucide-react';
 import { TimeFilter, Wallet } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -21,12 +19,12 @@ interface DashboardProps {
   };
   timeFilter: TimeFilter;
   onChangeTimeFilter: (filter: TimeFilter) => void;
-  wallets: Wallet[];
-  walletBalances: Record<string, number>;
-  activeWalletId: string;
-  onSelectWallet: (id: string) => void;
-  includeAllWallets: boolean;
-  onToggleIncludeAllWallets: (value: boolean) => void;
+  wallets?: Wallet[];
+  walletBalances?: Record<string, number>;
+  activeWalletId?: string;
+  onSelectWallet?: (id: string) => void;
+  includeAllWallets?: boolean;
+  onToggleIncludeAllWallets?: (value: boolean) => void;
   categoryBreakdown: Array<{
     categoryId: string;
     name: string;
@@ -35,127 +33,22 @@ interface DashboardProps {
     amount: number;
     percentage: number;
   }>;
-  onOpenTransferModal: () => void;
-  onOpenWalletManager: () => void;
+  onOpenTransferModal?: () => void;
+  onOpenWalletManager?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   stats,
   timeFilter,
   onChangeTimeFilter,
-  wallets,
-  walletBalances,
-  activeWalletId,
-  onSelectWallet,
-  includeAllWallets,
-  onToggleIncludeAllWallets,
   categoryBreakdown,
-  onOpenTransferModal,
-  onOpenWalletManager,
 }) => {
-  const currentSelectedWallet = wallets.find((w) => w.id === activeWalletId);
-
   return (
     <section className="space-y-4">
-      {/* 1. Notebook Styled Ruled Balance Card */}
+      {/* 1. Statistics Card (Tổng Thu Nhập, Tổng Chi Tiêu, Chênh Lệch) */}
       <div className="relative rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper overflow-hidden">
         {/* Decorative notebook top binder edge */}
         <div className="h-1.5 w-full bg-gradient-to-r from-[#a25832] via-[#c28b38] to-[#3d7a5a]" />
-
-        {/* Paper lined background area */}
-        <div className="paper-lined-bg p-4 sm:p-6 border-b border-[#ebdcc9]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Wallet scope badge */}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#f5ebe0] border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58]">
-                <WalletIcon className="w-3.5 h-3.5 text-[#a25832]" />
-                {includeAllWallets ? (
-                  'Tổng tất cả các ví'
-                ) : (
-                  <span>Ví: <strong className="text-[#3e332a]">{currentSelectedWallet?.name || 'Tất cả'}</strong></span>
-                )}
-              </span>
-
-              {/* Quick transfer button */}
-              <button
-                onClick={onOpenTransferModal}
-                title="Chuyển tiền giữa các ví"
-                className="px-2 py-1 rounded-md text-xs font-medium text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition flex items-center gap-1 border border-[#ebdcc9]"
-              >
-                <ArrowRightLeft className="w-3 h-3 text-[#a25832]" />
-                <span className="hidden sm:inline">Chuyển ví</span>
-              </button>
-            </div>
-
-            {/* Toggle: Tính tổng tất cả các ví */}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-[#7a6a58] font-medium hidden xs:inline">Tính tổng ví:</span>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeAllWallets}
-                  onChange={(e) => onToggleIncludeAllWallets(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-[#d8c8b4] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#a25832]"></div>
-              </label>
-            </div>
-          </div>
-
-          {/* Balance Display with Ruled lines aesthetic */}
-          <div className="mt-3">
-            <div className="text-xs font-serif uppercase tracking-wider text-[#a89886]">
-              Số Dư Khả Dụng Hiện Tại
-            </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <div className="text-2xl sm:text-4xl font-bold font-sans text-[#3e332a] tracking-tight">
-                {formatCurrency(stats.balance)}
-              </div>
-              <span className="text-xs text-[#7a6a58] italic font-serif">
-                (Sổ cái thực tế)
-              </span>
-            </div>
-          </div>
-
-          {/* When toggle is off: Horizontal pill list to select wallet */}
-          {!includeAllWallets && (
-            <div className="mt-3 pt-2.5 border-t border-[#ebdcc9]/60 flex items-center gap-1.5 overflow-x-auto pb-1">
-              <span className="text-[11px] text-[#7a6a58] whitespace-nowrap mr-1 font-medium">
-                Chọn ví xem:
-              </span>
-              <button
-                onClick={() => onSelectWallet('all')}
-                className={`px-2.5 py-1 rounded-md text-xs whitespace-nowrap transition border ${
-                  activeWalletId === 'all'
-                    ? 'bg-[#3e332a] text-[#fdf8f0] border-[#3e332a]'
-                    : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
-                }`}
-              >
-                Tất cả ví
-              </button>
-              {wallets.map((wallet) => {
-                const isSelected = activeWalletId === wallet.id;
-                return (
-                  <button
-                    key={wallet.id}
-                    onClick={() => onSelectWallet(wallet.id)}
-                    className={`px-2.5 py-1 rounded-md text-xs whitespace-nowrap transition border flex items-center gap-1.5 ${
-                      isSelected
-                        ? 'bg-[#3e332a] text-[#fdf8f0] border-[#3e332a]'
-                        : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
-                    }`}
-                  >
-                    <DynamicIcon name={wallet.icon} className="w-3 h-3" />
-                    <span>{wallet.name}</span>
-                    <span className="text-[10px] opacity-75">
-                      ({formatCurrency(walletBalances[wallet.id] || 0)})
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
         {/* 2. Time Filter Bar */}
         <div className="bg-[#fbf5eb] px-4 py-2.5 flex items-center justify-between border-b border-[#ebdcc9]">
@@ -297,64 +190,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       )}
-
-      {/* 5. Wallet Quick Cards Section */}
-      <div className="rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper p-4">
-        <div className="flex items-center justify-between pb-2.5 border-b border-[#f0e4d5]">
-          <div className="flex items-center gap-2">
-            <WalletIcon className="w-4 h-4 text-[#a25832]" />
-            <h3 className="text-sm font-semibold text-[#3e332a]">
-              Nguồn tiền & Ví ({wallets.length})
-            </h3>
-          </div>
-          <button
-            onClick={onOpenWalletManager}
-            className="text-xs text-[#a25832] font-medium hover:underline"
-          >
-            Quản lý ví →
-          </button>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
-          {wallets.map((wallet) => {
-            const balance = walletBalances[wallet.id] || 0;
-            return (
-              <div
-                key={wallet.id}
-                onClick={() => {
-                  onSelectWallet(wallet.id);
-                  onToggleIncludeAllWallets(false);
-                }}
-                className={`p-2.5 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-                  !includeAllWallets && activeWalletId === wallet.id
-                    ? 'border-[#a25832] bg-[#fbf5eb] ring-1 ring-[#a25832]'
-                    : 'border-[#ebdcc9] bg-[#fdfaf5] hover:border-[#d8c8b4]'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs"
-                    style={{ backgroundColor: wallet.color }}
-                  >
-                    <DynamicIcon name={wallet.icon} className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-[10px] text-[#a89886] truncate max-w-[60px]">
-                    {wallet.accountNumber || ''}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <div className="text-xs font-medium text-[#3e332a] truncate">
-                    {wallet.name}
-                  </div>
-                  <div className="text-xs font-bold text-[#7a6a58] mt-0.5 truncate">
-                    {formatCurrency(balance)}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </section>
   );
 };
