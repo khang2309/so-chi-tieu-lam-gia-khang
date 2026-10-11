@@ -4,14 +4,14 @@ import { DEFAULT_LEDGERS, DEFAULT_WALLETS, DEFAULT_CATEGORIES, DEFAULT_TRANSACTI
 import { isWithinTimeFilter } from '../utils/formatters';
 
 const STORAGE_KEYS = {
-  LEDGERS: 'sochitieu_ledgers_v1',
-  WALLETS: 'sochitieu_wallets_v1',
-  CATEGORIES: 'sochitieu_categories_v1',
-  TRANSACTIONS: 'sochitieu_transactions_v1',
-  ACTIVE_LEDGER: 'sochitieu_active_ledger_v1',
-  ACTIVE_WALLET: 'sochitieu_active_wallet_v1',
-  INCLUDE_ALL_WALLETS: 'sochitieu_include_all_wallets_v1',
-  TIME_FILTER: 'sochitieu_time_filter_v1',
+  LEDGERS: 'sochitieu_ledgers_v2',
+  WALLETS: 'sochitieu_wallets_v2',
+  CATEGORIES: 'sochitieu_categories_v2',
+  TRANSACTIONS: 'sochitieu_transactions_v2',
+  ACTIVE_LEDGER: 'sochitieu_active_ledger_v2',
+  ACTIVE_WALLET: 'sochitieu_active_wallet_v2',
+  INCLUDE_ALL_WALLETS: 'sochitieu_include_all_wallets_v2',
+  TIME_FILTER: 'sochitieu_time_filter_v2',
 };
 
 export function useExpenseManager() {
