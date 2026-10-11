@@ -1,3 +1,5 @@
+export type InvoiceType = 'TYPE_A_TABLE' | 'TYPE_B_TRANSFER' | 'TYPE_C_FREE_TEXT';
+
 export interface ExtractedBatchItem {
   id: string;
   date: string; // YYYY-MM-DD
@@ -9,6 +11,8 @@ export interface ExtractedBatchItem {
 
 export interface BatchParsedResult {
   rawText: string;
+  invoiceType: InvoiceType;
+  invoiceTypeName: string;
   items: ExtractedBatchItem[];
   totalAmount: number;
 }
@@ -18,238 +22,448 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'cat-eat': [
     'cơm', 'phở', 'bún', 'ăn', 'thịt', 'rau', 'bánh', 'trưa', 'sáng',
     'tối', 'mì', 'cháo', 'lẩu', 'hủ tiếu', 'cơm tấm', 'bánh mì', 'trứng',
-    'hải sản', 'gà', 'vịt', 'bò', 'canh', 'quán ăn', 'nhà hàng'
+    'hải sản', 'gà', 'vịt', 'bò', 'canh', 'quán ăn', 'nhà hàng', 'thực phẩm',
+    'cá', 'tôm', 'mực', 'thức ăn', 'chả'
   ],
   'cat-drink': [
     'nước', 'cafe', 'cà phê', 'trà sữa', 'bia', 'sinh tố', 'sting',
     'nước ngọt', 'matcha', 'highlands', 'phúc long', 'coca', 'pepsi',
-    'trà', 'nước suối', 'lavie', 'aquafina', 'sữa tươi', 'uống'
+    'trà', 'nước suối', 'lavie', 'aquafina', 'sữa tươi', 'uống', 'sữa'
   ],
   'cat-gas': [
     'xăng', 'nhớt', 'xe', 'vá', 'janus', 'yamaha', 'rửa xe', 'petrolimex',
-    'thay nhớt', 'ruột xe', 'bơm xe', 'gửi xe', 'bảo dưỡng', 'xăng xe', 'sửa xe'
+    'thay nhớt', 'ruột xe', 'bơm xe', 'gửi xe', 'bảo dưỡng', 'xăng xe', 'sửa xe',
+    'ron 95', 'ron 92', 'e5'
   ],
   'cat-bills': [
     'điện', 'nước', 'wifi', 'mạng', 'trọ', 'phòng', 'rác', 'vệ sinh',
-    'tiền nhà', 'hóa đơn', 'internet', 'truyền hình', 'phí quản lý'
+    'tiền nhà', 'hóa đơn', 'internet', 'truyền hình', 'phí quản lý',
+    'tiền trọ', 'phòng trọ', 'kwh', 'khối nước'
   ],
   'cat-shopping': [
     'áo', 'quần', 'shopee', 'lazada', 'tiki', 'mua', 'giày', 'dép',
-    'váy', 'túi', 'sắm', 'siêu thị', 'quần áo', 'mỹ phẩm', 'đầm', 'nón'
+    'váy', 'túi', 'sắm', 'siêu thị', 'quần áo', 'mỹ phẩm', 'đầm', 'nón',
+    'balo', 'thời trang'
   ],
   'cat-haircut': [
     'cắt tóc', 'gội đầu', 'barber', '30shine', 'cắt', 'uốn tóc', 'nhuộm', 'tóc'
   ],
   'cat-electronics': [
     'điện thoại', 'laptop', 'tai nghe', 'sạc', 'chuột', 'bàn phím',
-    'cáp', 'điện tử', 'pin', 'máy tính', 'cục sạc', 'ốp lưng', 'màn hình'
+    'cáp', 'điện tử', 'pin', 'máy tính', 'cục sạc', 'ốp lưng', 'màn hình',
+    'type-c', 'usb', 'phụ kiện'
   ],
   'cat-furniture': [
     'gia dụng', 'chảo', 'nồi', 'quạt', 'bếp', 'khăn', 'xô', 'chổi',
     'móc áo', 'ly', 'chén', 'đũa', 'nệm', 'gối', 'màn', 'chiếu'
   ],
   'cat-salary': [
-    'lương', 'thưởng', 'thu nhập', 'lương tháng', 'hoa hồng', 'tiền lương'
+    'lương', 'thưởng', 'thu nhập', 'lương tháng', 'hoa hồng', 'tiền lương',
+    'nhận lương', 'phụ cấp'
   ],
 };
 
 /**
- * Tự động đoán danh mục dựa trên văn bản dòng
+ * Tự động phân loại danh mục dựa trên văn bản
  */
 export function predictCategory(text: string): string {
   const normalized = text.toLowerCase();
-
-  // Kiểm tra từng danh mục theo từ khóa
   for (const [catId, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     for (const kw of keywords) {
-      // Tìm từ khóa nguyên từ hoặc có khoảng cách
       if (normalized.includes(kw)) {
         return catId;
       }
     }
   }
-
   return 'cat-other-expense'; // Mặc định: Chi tiêu khác
 }
 
-/**
- * Hàm phân tích số tiền và làm sạch ghi chú trên một dòng
- */
-function extractAmountAndCleanNote(line: string): { amount: number; note: string } | null {
-  const trimmed = line.trim();
-  if (!trimmed) return null;
+// =========================================================================
+// 1. CƠ CHẾ PHÂN LOẠI HÓA ĐƠN (PRE-CLASSIFICATION)
+// =========================================================================
+export function classifyInvoice(rawText: string): InvoiceType {
+  const text = (rawText || '').toLowerCase();
 
-  let detectedAmount: number | null = null;
-  let matchedSubstr = '';
-
-  // 1. Kiểm tra hậu tố 'tr' hoặc 'triệu' (VD: 1.5tr, 2 triệu)
-  const millionMatch = trimmed.match(/(\d+(?:[\.,]\d+)?)\s*(?:tr|triệu)\b/i);
-  if (millionMatch) {
-    const val = parseFloat(millionMatch[1].replace(',', '.'));
-    if (!isNaN(val)) {
-      detectedAmount = Math.round(val * 1000000);
-      matchedSubstr = millionMatch[0];
-    }
+  // Kiểm tra Loại B: Biên lai chuyển khoản ngân hàng
+  const transferKeywords = [
+    'chuyển khoản thành công', 'giao dịch thành công', 'chuyển tiền thành công',
+    'tài khoản nhận', 'nội dung giao dịch', 'người thụ hưởng', 'mã giao dịch',
+    'nội dung chuyển khoản', 'lời nhắn', 'tài khoản thụ hưởng', 'tài khoản nguồn',
+    'ngân hàng nhận', 'số tham chiếu', 'ft2', 'vcb', 'mbbank', 'timo'
+  ];
+  let transferScore = 0;
+  for (const kw of transferKeywords) {
+    if (text.includes(kw)) transferScore++;
+  }
+  if (transferScore >= 2 || text.includes('chuyển khoản thành công') || text.includes('giao dịch thành công')) {
+    return 'TYPE_B_TRANSFER';
   }
 
-  // 2. Kiểm tra hậu tố 'k', 'nghìn', 'ngàn' (VD: 50k, 120 nghìn)
-  if (detectedAmount === null) {
-    const thousandMatch = trimmed.match(/(\d+(?:[\.,]\d+)?)\s*(?:k|nghìn|ngàn)\b/i);
-    if (thousandMatch) {
-      const val = parseFloat(thousandMatch[1].replace(',', '.'));
-      if (!isNaN(val)) {
-        detectedAmount = Math.round(val * 1000);
-        matchedSubstr = thousandMatch[0];
-      }
-    }
+  // Kiểm tra Loại A: Hóa đơn in nhiệt / Siêu thị có bảng
+  const tableKeywords = [
+    'hóa đơn', 'phiếu thanh toán', 'số phiếu', 'mặt hàng', 'tên hàng',
+    'đơn giá', 'thành tiền', 'sl', 'đvt', 'cảm ơn', 'vat', 'thu ngân',
+    'tổng cộng', 'cộng tiền hàng', 'bàn số', 'hóa đơn bán lẻ', 'khách đưa'
+  ];
+  let tableScore = 0;
+  for (const kw of tableKeywords) {
+    if (text.includes(kw)) tableScore++;
+  }
+  if (tableScore >= 2) {
+    return 'TYPE_A_TABLE';
   }
 
-  // 3. Kiểm tra số có phân cách hàng nghìn (100.000, 100,000, 35000đ, 70000 VND)
-  if (detectedAmount === null) {
-    const currencyMatch = trimmed.match(/\b(\d{1,3}(?:[\.,\s]\d{3})+(?:[\.,]\d{1,2})?|\d{4,9})\s*(?:vnđ|vnd|đ|d)?\b/i);
-    if (currencyMatch) {
-      let rawNum = currencyMatch[1].replace(/\s+/g, '');
-      let cleanNum = 0;
-      if (rawNum.includes('.') && !rawNum.includes(',')) {
-        cleanNum = parseInt(rawNum.replace(/\./g, ''), 10);
-      } else if (rawNum.includes(',') && !rawNum.includes('.')) {
-        cleanNum = parseInt(rawNum.replace(/,/g, ''), 10);
-      } else if (rawNum.includes('.') && rawNum.includes(',')) {
-        cleanNum = parseInt(rawNum.replace(/[\.,]/g, '').slice(0, -2), 10);
-      } else {
-        cleanNum = parseInt(rawNum, 10);
-      }
-
-      // Loại bỏ số giống năm hiện tại (2024..2027)
-      if (cleanNum >= 1000 && cleanNum < 1000000000 && cleanNum !== 2024 && cleanNum !== 2025 && cleanNum !== 2026 && cleanNum !== 2027) {
-        detectedAmount = cleanNum;
-        matchedSubstr = currencyMatch[0];
-      }
-    }
-  }
-
-  if (detectedAmount === null || detectedAmount <= 0) {
-    return null;
-  }
-
-  // Làm sạch phần ghi chú (loại bỏ phần số tiền và từ nối)
-  let cleanNote = trimmed;
-  if (matchedSubstr) {
-    cleanNote = cleanNote.replace(matchedSubstr, '');
-  }
-  // Loại bỏ các ký tự dấu thừa ở đầu/cuối: ':', '-', '+', '=', ',', '.'
-  cleanNote = cleanNote.replace(/^[\s:\-–—+=,.]+/, '').replace(/[\s:\-–—+=,.]+$/, '').trim();
-
-  // Nếu note sau khi xóa tiền bị trống (ví dụ dòng chỉ ghi mỗi "50k"), đặt ghi chú chung
-  if (!cleanNote) {
-    cleanNote = 'Khoản chi tiêu ' + detectedAmount.toLocaleString('vi-VN') + ' đ';
-  } else {
-    // Viết hoa chữ cái đầu
-    cleanNote = cleanNote.charAt(0).toUpperCase() + cleanNote.slice(1);
-  }
-
-  return {
-    amount: detectedAmount,
-    note: cleanNote,
-  };
+  // Loại C: Ghi chép tự do / ghi tay
+  return 'TYPE_C_FREE_TEXT';
 }
 
-/**
- * Kiểm tra xem dòng có chứa thông tin Ngày tháng hay không và trích xuất ngày YYYY-MM-DD
- */
-function extractDateFromLine(line: string, currentYear: number): { date: string; remainingLine: string } | null {
-  // Định dạng ngày đầy đủ: dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy
-  const fullDateRegex = /(?:ngày\s+)?\b([0-2]?[0-9]|3[01])[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](20\d{2}|\d{2})\b/i;
-  const fullMatch = line.match(fullDateRegex);
-  if (fullMatch) {
-    let day = parseInt(fullMatch[1], 10);
-    let month = parseInt(fullMatch[2], 10);
-    let year = parseInt(fullMatch[3], 10);
+// =========================================================================
+// HELPER: TRÍCH XUẤT NGÀY THÁNG TIẾNG VIỆT
+// =========================================================================
+function extractDateFromText(text: string, defaultDate: string): string {
+  // Tìm cụm Ngày: hoặc Date: gần đầu văn bản trước
+  const labeledDateRegex = /(?:ngày|date|thời\s*gian|ngay)[\s:\.]*([0-2]?[0-9]|3[01])[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](20\d{2}|\d{2})\b/i;
+  const labeledMatch = text.match(labeledDateRegex);
+  if (labeledMatch) {
+    let day = parseInt(labeledMatch[1], 10);
+    let month = parseInt(labeledMatch[2], 10);
+    let year = parseInt(labeledMatch[3], 10);
     if (year < 100) year += 2000;
-
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      const paddedMonth = month.toString().padStart(2, '0');
-      const paddedDay = day.toString().padStart(2, '0');
-      const remaining = line.replace(fullMatch[0], '').trim();
-      return {
-        date: `${year}-${paddedMonth}-${paddedDay}`,
-        remainingLine: remaining,
-      };
+      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
     }
   }
 
-  // Định dạng ngày ngắn: dd/mm, dd-mm (ví dụ: 12/10, 05-09)
-  const shortDateRegex = /(?:ngày\s+)?\b([0-2]?[0-9]|3[01])[\/\-\.](0?[1-9]|1[0-2])\b/i;
-  const shortMatch = line.match(shortDateRegex);
-  if (shortMatch) {
-    let day = parseInt(shortMatch[1], 10);
-    let month = parseInt(shortMatch[2], 10);
-
+  // Regex mở rộng \b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b
+  const generalDateRegex = /\b([0-2]?[0-9]|3[01])[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](20\d{2}|\d{2})\b/;
+  const generalMatch = text.match(generalDateRegex);
+  if (generalMatch) {
+    let day = parseInt(generalMatch[1], 10);
+    let month = parseInt(generalMatch[2], 10);
+    let year = parseInt(generalMatch[3], 10);
+    if (year < 100) year += 2000;
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      const paddedMonth = month.toString().padStart(2, '0');
-      const paddedDay = day.toString().padStart(2, '0');
-      const remaining = line.replace(shortMatch[0], '').trim();
-      return {
-        date: `${currentYear}-${paddedMonth}-${paddedDay}`,
-        remainingLine: remaining,
-      };
+      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
     }
+  }
+
+  return defaultDate;
+}
+
+// =========================================================================
+// HELPER: CHUẨN HÓA SỐ TIỀN TIẾNG VIỆT
+// =========================================================================
+function parseMoneyNumber(rawStr: string): number | null {
+  if (!rawStr) return null;
+  let str = rawStr.trim();
+
+  // 1. Kiểm tra 'tr' hoặc 'triệu'
+  const trMatch = str.match(/(\d+(?:[\.,]\d+)?)\s*(?:tr|triệu)\b/i);
+  if (trMatch) {
+    const v = parseFloat(trMatch[1].replace(',', '.'));
+    if (!isNaN(v)) return Math.round(v * 1000000);
+  }
+
+  // 2. Kiểm tra 'k', 'nghìn', 'ngàn'
+  const kMatch = str.match(/(\d+(?:[\.,]\d+)?)\s*(?:k|nghìn|ngàn)\b/i);
+  if (kMatch) {
+    const v = parseFloat(kMatch[1].replace(',', '.'));
+    if (!isNaN(v)) return Math.round(v * 1000);
+  }
+
+  // 3. Chuẩn hóa số nguyên có dấu chấm/phẩy phân cách: 100.000 hoặc 100,000
+  let cleanStr = str.replace(/[^\d\.,]/g, '');
+  if (!cleanStr) return null;
+
+  let cleanNum = 0;
+  if (cleanStr.includes('.') && !cleanStr.includes(',')) {
+    cleanNum = parseInt(cleanStr.replace(/\./g, ''), 10);
+  } else if (cleanStr.includes(',') && !cleanStr.includes('.')) {
+    cleanNum = parseInt(cleanStr.replace(/,/g, ''), 10);
+  } else if (cleanStr.includes('.') && cleanStr.includes(',')) {
+    cleanNum = parseInt(cleanStr.replace(/[\.,]/g, '').slice(0, -2), 10);
+  } else {
+    cleanNum = parseInt(cleanStr, 10);
+  }
+
+  // Lọc số năm hiện tại (2024..2027) hoặc số quá nhỏ (< 1000)
+  if (cleanNum >= 1000 && cleanNum < 1000000000) {
+    if (cleanNum >= 2024 && cleanNum <= 2027) return null;
+    return cleanNum;
   }
 
   return null;
 }
 
-/**
- * NÂNG CẤP: Quét từng dòng (Line-by-line) & Tự động tách nhiều giao dịch (Smart Batch Extraction)
- */
-export function parseBatchVietnameseReceipt(rawText: string): BatchParsedResult {
-  const text = rawText || '';
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+// =========================================================================
+// 2. CHIẾN LƯỢC TRÍCH XUẤT CHO TỪNG LOẠI (EXTRACTION STRATEGIES)
+// =========================================================================
 
+/**
+ * CHIẾN LƯỢC CHO LOẠI A: Hóa đơn in nhiệt / Siêu thị có bảng
+ * Tách từng món trong phần thân bảng, gán cùng ngày hóa đơn
+ */
+export function extractThermalReceipt(rawText: string): ExtractedBatchItem[] {
+  const lines = (rawText || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const invoiceDate = extractDateFromText(rawText, todayStr);
+
+  const items: ExtractedBatchItem[] = [];
+
+  // Tìm điểm bắt đầu bảng (sau chữ Mặt hàng, Tên hàng, SL, ĐVT, Đơn giá...)
+  let startIndex = -1;
+  const tableHeaderRegex = /(?:mặt\s*hàng|tên\s*hàng|tên\s*món|mô\s*tả|sl\b|đvt\b|đơn\s*giá|thành\s*tiền|đơn\s*vị)/i;
+  for (let i = 0; i < lines.length; i++) {
+    if (tableHeaderRegex.test(lines[i])) {
+      startIndex = i + 1;
+      break;
+    }
+  }
+
+  // Nếu không thấy header rõ ràng, tìm sau dòng tiêu đề hóa đơn / ngày
+  if (startIndex === -1) {
+    for (let i = 0; i < Math.min(lines.length, 6); i++) {
+      if (/hóa\s*đơn|phiếu\s*thanh\s*toán|ngày/i.test(lines[i])) {
+        startIndex = i + 1;
+      }
+    }
+  }
+  if (startIndex === -1) startIndex = 0;
+
+  // Tìm điểm kết thúc bảng (Tổng, Tổng cộng, Total, Thanh toán...)
+  let endIndex = lines.length;
+  const tableFooterRegex = /(?:tổng\s*cộng|tổng\s*tiền|tổng\b|total\b|thanh\s*toán|cộng\s*tiền\s*hàng|tiền\s*mặt|thuế\s*vat|cảm\s*ơn|điểm\s*tích)/i;
+  for (let i = startIndex; i < lines.length; i++) {
+    if (tableFooterRegex.test(lines[i])) {
+      endIndex = i;
+      break;
+    }
+  }
+
+  // Quét các dòng trong thân bảng
+  for (let i = startIndex; i < endIndex; i++) {
+    const line = lines[i];
+
+    // Bỏ qua các dòng kẻ ngang hoặc số thứ tự rác
+    if (/^[\-=_\.\s]{3,}$/.test(line) || /^stt\b/i.test(line)) continue;
+
+    // Tìm tất cả các cụm số tiền có trên dòng
+    const moneyMatches = Array.from(
+      line.matchAll(/\b(\d{1,3}(?:[\.,\s]\d{3})+(?:[\.,]\d{1,2})?|\d{4,9}|\d+(?:[\.,]\d+)?\s*(?:k|nghìn|ngàn|tr|triệu))\s*(?:vnđ|vnd|đ|d)?\b/gi)
+    );
+
+    if (moneyMatches.length > 0) {
+      // Số tiền ở cuối dòng thường là THÀNH TIỀN của món
+      const lastMatch = moneyMatches[moneyMatches.length - 1];
+      const parsedAmt = parseMoneyNumber(lastMatch[0]);
+
+      if (parsedAmt && parsedAmt >= 1000) {
+        // Cắt bỏ phần số tiền và số lượng để lấy TÊN MÓN
+        const firstMatchIndex = moneyMatches[0].index ?? line.length;
+        let itemName = line.slice(0, firstMatchIndex).trim();
+
+        // Xóa số thứ tự ở đầu dòng nếu có (ví dụ: '1.', '2/', '1 ')
+        itemName = itemName.replace(/^\d+[\.\/\-)\s]+/, '').trim();
+        // Xóa dấu thừa
+        itemName = itemName.replace(/^[\s:\-–—+=,.]+/, '').replace(/[\s:\-–—+=,.]+$/, '').trim();
+
+        if (!itemName || itemName.length < 2) {
+          itemName = `Món ăn / Hàng hóa ${parsedAmt.toLocaleString('vi-VN')} đ`;
+        } else {
+          itemName = itemName.charAt(0).toUpperCase() + itemName.slice(1);
+        }
+
+        items.push({
+          id: 'item-thermal-' + Date.now() + '-' + i,
+          date: invoiceDate,
+          amount: parsedAmt,
+          note: itemName,
+          categoryId: predictCategory(itemName),
+          rawLine: line,
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
+ * CHIẾN LƯỢC CHO LOẠI B: Biên lai Chuyển khoản Ngân hàng
+ * Chỉ tạo 1 giao dịch duy nhất với số tiền giao dịch và nội dung chuyển
+ */
+export function extractBankTransferReceipt(rawText: string): ExtractedBatchItem[] {
+  const lines = (rawText || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const transferDate = extractDateFromText(rawText, todayStr);
+
+  // 1. Tìm số tiền chuyển lớn nhất đi kèm VND, đ hoặc ở dòng có chữ 'Số tiền'
+  let transferAmount = 0;
+  for (const line of lines) {
+    const isAmountLine = /(?:số\s*tiền|số\s*tiền\s*chuyển|tiền\s*chuyển|amount)/i.test(line);
+    const matches = Array.from(
+      line.matchAll(/\b(\d{1,3}(?:[\.,\s]\d{3})+(?:[\.,]\d{1,2})?|\d{4,9}|\d+(?:[\.,]\d+)?\s*(?:k|nghìn|ngàn|tr|triệu))\s*(?:vnđ|vnd|đ|d)?\b/gi)
+    );
+    for (const m of matches) {
+      const amt = parseMoneyNumber(m[0]);
+      if (amt && amt >= 1000) {
+        if (isAmountLine) {
+          transferAmount = amt;
+          break;
+        } else if (amt > transferAmount) {
+          transferAmount = amt;
+        }
+      }
+    }
+    if (transferAmount > 0 && isAmountLine) break;
+  }
+
+  // 2. Tìm nội dung chuyển khoản / lời nhắn
+  let transferNote = '';
+  const notePrefixRegex = /(?:nội\s*dung\s*chuyển\s*khoản|nội\s*dung\s*giao\s*dịch|nội\s*dung|lời\s*nhắn|chi\s*tiết|ghi\s*chú)[\s:\.]*(.+)/i;
+  for (const line of lines) {
+    const match = line.match(notePrefixRegex);
+    if (match && match[1] && match[1].trim().length > 1) {
+      transferNote = match[1].trim();
+      break;
+    }
+  }
+
+  // Nếu không thấy chữ sau tiền tố, tìm tên người nhận
+  if (!transferNote) {
+    const receiverRegex = /(?:người\s*thụ\s*hưởng|người\s*nhận|tài\s*khoản\s*nhận)[\s:\.]*(.+)/i;
+    for (const line of lines) {
+      const match = line.match(receiverRegex);
+      if (match && match[1] && match[1].trim().length > 1) {
+        transferNote = `Chuyển khoản đến ${match[1].trim()}`;
+        break;
+      }
+    }
+  }
+
+  if (!transferNote) {
+    transferNote = 'Chuyển khoản ngân hàng';
+  } else {
+    transferNote = transferNote.charAt(0).toUpperCase() + transferNote.slice(1);
+  }
+
+  if (transferAmount <= 0) {
+    transferAmount = 50000; // Giá trị cơ sở nếu không tìm thấy
+  }
+
+  return [
+    {
+      id: 'item-transfer-' + Date.now(),
+      date: transferDate,
+      amount: transferAmount,
+      note: transferNote,
+      categoryId: predictCategory(transferNote),
+      rawLine: rawText.slice(0, 80),
+    },
+  ];
+}
+
+/**
+ * CHIẾN LƯỢC CHO LOẠI C: Giấy ghi nợ tự do / Ghi chép tay
+ * Quét từng dòng, cập nhật ngày khi thấy ngày, tách tiền & chữ còn lại
+ */
+export function extractFreeTextReceipt(rawText: string): ExtractedBatchItem[] {
+  const lines = (rawText || '').split('\n').map((l) => l.trim()).filter(Boolean);
   const today = new Date();
   const currentYear = today.getFullYear();
-  let currentDate = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  let currentDate = today.toISOString().slice(0, 10);
 
   const items: ExtractedBatchItem[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
 
-    // 1. Kiểm tra xem dòng có chứa Ngày tháng không
-    const dateExtraction = extractDateFromLine(line, currentYear);
-    if (dateExtraction) {
-      currentDate = dateExtraction.date;
-      line = dateExtraction.remainingLine; // Phần còn lại của dòng (nếu có tiền cùng dòng)
+    // 1. Kiểm tra ngày tháng trên dòng
+    const shortDateRegex = /(?:ngày\s+)?\b([0-2]?[0-9]|3[01])[\/\-\.](0?[1-9]|1[0-2])(?:[\/\-\.](20\d{2}|\d{2}))?\b/i;
+    const dateMatch = line.match(shortDateRegex);
+    if (dateMatch) {
+      const d = parseInt(dateMatch[1], 10);
+      const m = parseInt(dateMatch[2], 10);
+      let y = dateMatch[3] ? parseInt(dateMatch[3], 10) : currentYear;
+      if (y < 100) y += 2000;
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+        currentDate = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+      }
     }
 
-    // Nếu dòng chỉ chứa ngày tháng (không còn chữ gì nữa), chuyển sang dòng tiếp theo
-    if (!line || line.length < 2) {
-      continue;
-    }
+    // 2. Kiểm tra số tiền
+    const moneyMatches = Array.from(
+      line.matchAll(/\b(\d{1,3}(?:[\.,\s]\d{3})+(?:[\.,]\d{1,2})?|\d{4,9}|\d+(?:[\.,]\d+)?\s*(?:k|nghìn|ngàn|tr|triệu))\s*(?:vnđ|vnd|đ|d)?\b/gi)
+    );
 
-    // 2. Kiểm tra xem dòng có chứa Số tiền không
-    const amountExtraction = extractAmountAndCleanNote(line);
-    if (amountExtraction) {
-      const { amount, note } = amountExtraction;
-      // Dự đoán danh mục dựa trên nội dung dòng gốc
-      const predictedCatId = predictCategory(lines[i]);
+    if (moneyMatches.length > 0) {
+      const lastMatch = moneyMatches[moneyMatches.length - 1];
+      const amt = parseMoneyNumber(lastMatch[0]);
 
-      items.push({
-        id: 'batch-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substr(2, 3),
-        date: currentDate,
-        amount,
-        note,
-        categoryId: predictedCatId,
-        rawLine: lines[i],
-      });
+      if (amt && amt >= 1000) {
+        // Tách chữ còn lại làm Tên món / Ghi chú
+        let note = line.replace(lastMatch[0], '');
+        if (dateMatch) {
+          note = note.replace(dateMatch[0], '');
+        }
+        note = note.replace(/^[\s:\-–—+=,.]+/, '').replace(/[\s:\-–—+=,.]+$/, '').trim();
+
+        if (!note) {
+          note = `Khoản chi ${amt.toLocaleString('vi-VN')} đ`;
+        } else {
+          note = note.charAt(0).toUpperCase() + note.slice(1);
+        }
+
+        items.push({
+          id: 'item-free-' + Date.now() + '-' + i,
+          date: currentDate,
+          amount: amt,
+          note,
+          categoryId: predictCategory(note),
+          rawLine: line,
+        });
+      }
     }
   }
+
+  return items;
+}
+
+// =========================================================================
+// 3. HÀM CHÍNH ĐIỀU PHỐI (EXTRACT INVOICE DATA)
+// =========================================================================
+export function extractInvoiceData(rawText: string): BatchParsedResult {
+  const invoiceType = classifyInvoice(rawText);
+  let items: ExtractedBatchItem[] = [];
+
+  if (invoiceType === 'TYPE_B_TRANSFER') {
+    items = extractBankTransferReceipt(rawText);
+  } else if (invoiceType === 'TYPE_A_TABLE') {
+    items = extractThermalReceipt(rawText);
+    // Nếu bộ bóc tách bảng không lấy được mục nào, dùng fallback tự do
+    if (items.length === 0) {
+      items = extractFreeTextReceipt(rawText);
+    }
+  } else {
+    items = extractFreeTextReceipt(rawText);
+  }
+
+  const invoiceTypeNames: Record<InvoiceType, string> = {
+    TYPE_A_TABLE: 'Hóa đơn in / Bảng (Siêu thị, Cửa hàng)',
+    TYPE_B_TRANSFER: 'Biên lai Chuyển khoản Ngân hàng',
+    TYPE_C_FREE_TEXT: 'Giấy ghi chép tự do / Ghi tay',
+  };
 
   const totalAmount = items.reduce((acc, it) => acc + it.amount, 0);
 
   return {
-    rawText: text,
+    rawText,
+    invoiceType,
+    invoiceTypeName: invoiceTypeNames[invoiceType],
     items,
     totalAmount,
   };
 }
+
+// Giữ lại alias parseBatchVietnameseReceipt để tương thích
+export const parseBatchVietnameseReceipt = extractInvoiceData;

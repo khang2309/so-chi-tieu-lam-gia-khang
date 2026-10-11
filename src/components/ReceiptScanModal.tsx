@@ -16,8 +16,9 @@ import {
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { createWorker } from 'tesseract.js';
 import {
-  parseBatchVietnameseReceipt,
+  extractInvoiceData,
   ExtractedBatchItem,
+  InvoiceType,
 } from '../utils/ocrParser';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -31,9 +32,37 @@ interface SampleReceipt {
 
 const SAMPLE_BATCH_RECEIPTS: SampleReceipt[] = [
   {
-    id: 'sample-paper-note',
-    name: 'Sổ tay ghi chép nhiều ngày (Đúng mẫu)',
-    description: '12/10 Đổ xăng 50k, Cơm trưa 35k | 13/10 Cafe, Mua áo...',
+    id: 'sample-type-a',
+    name: 'Loại A: Hóa đơn in nhiệt / Siêu thị (Bảng)',
+    description: 'Hóa đơn bán lẻ có bảng mặt hàng, SL, thành tiền, tổng cộng',
+    ocrText: `HÓA ĐƠN BÁN LẺ
+Ngày: 11/10/2026
+Mặt hàng       SL   Đơn giá    Thành tiền
+1. Cơm sườn bì  1    40.000     40.000
+2. Trà đá       2     5.000     10.000
+3. Canh khổ qua 1    15.000     15.000
+4. Khăn lạnh    2     3.000      6.000
+-----------------------------------------
+Cộng tiền hàng:                 71.000 đ
+Tổng cộng:                      71.000 đ
+Cảm ơn quý khách!`,
+  },
+  {
+    id: 'sample-type-b',
+    name: 'Loại B: Biên lai Chuyển khoản (App Ngân hàng)',
+    description: 'Chuyển khoản thành công, tài khoản nhận, nội dung giao dịch',
+    ocrText: `GIAO DỊCH THÀNH CÔNG
+Ngày: 12/10/2026 19:30
+Số tiền: 250.000 VND
+Ngân hàng: MB Bank
+Tài khoản nhận: NGUYEN VAN A - 0987654321
+Nội dung giao dịch: Tien an lau toi thu 7
+Mã giao dịch: FT261012987654`,
+  },
+  {
+    id: 'sample-type-c',
+    name: 'Loại C: Giấy ghi chép tự do / Ghi tay',
+    description: 'Nhiều ngày, nhiều món: Đổ xăng 50k, Cafe 25k, Mua áo...',
     ocrText: `12/10
 Đổ xăng 50k
 Tiền cơm trưa 35k
@@ -41,27 +70,6 @@ Tiền cơm trưa 35k
 Cà phê sữa đá 25k
 Mua áo thun Shopee 120 nghìn
 Tiền mạng wifi trọ 80k`,
-  },
-  {
-    id: 'sample-daily-expenses',
-    name: 'Chi tiêu hằng ngày & Hóa đơn',
-    description: 'Bún bò 45k, Highlands 55k, Rửa xe Janus 25k, Điện...',
-    ocrText: `11/10/2026
-Bún bò huế 45.000 đ
-Trà đào Highlands 55k
-Rửa xe Yamaha Janus 25k
-Tiền điện phòng trọ 120.000 đ
-Mua chảo gia dụng 85k`,
-  },
-  {
-    id: 'sample-weekend',
-    name: 'Chi tiêu cuối tuần & Dịch vụ',
-    description: 'Cắt tóc 30Shine, Mua sạc điện thoại, Ăn tối...',
-    ocrText: `10/10/2026
-Cắt tóc gội đầu 30Shine 80k
-Mua sạc điện thoại Type-C 95.000
-Cơm tấm sườn bì chả 40k
-Trà sữa matcha 35k`,
   },
 ];
 
@@ -97,19 +105,23 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   // Danh sách các giao dịch được tách ra (Batch items)
   const [batchItems, setBatchItems] = useState<ExtractedBatchItem[]>([]);
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>('TYPE_C_FREE_TEXT');
+  const [invoiceTypeName, setInvoiceTypeName] = useState<string>('');
 
   if (!isOpen) return null;
 
   // Xử lý kết quả quét hàng loạt
   const handleProcessBatchResult = (rawText: string) => {
     setRawOcrText(rawText);
-    const parsed = parseBatchVietnameseReceipt(rawText);
+    const parsed = extractInvoiceData(rawText);
 
     if (parsed.items.length === 0) {
       alert('Không nhận diện được dòng nào chứa số tiền hợp lệ! Vui lòng thử lại với ảnh rõ hơn.');
       return;
     }
 
+    setInvoiceType(parsed.invoiceType);
+    setInvoiceTypeName(parsed.invoiceTypeName);
     setBatchItems(parsed.items);
 
     // Mặc định Sổ & Ví áp dụng cho toàn bộ đợt này
@@ -361,19 +373,37 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         ) : (
           /* BƯỚC 2: MÀN HÌNH XÁC NHẬN HÀNG LOẠT (BATCH CONFIRMATION UI) */
           <form onSubmit={handleSaveAll} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-            {/* Banner tổng kết */}
-            <div className="p-3.5 rounded-xl bg-[#2e7d32]/10 border border-[#2e7d32]/25 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />
-                <span className="text-xs text-[#2e7d32] font-semibold">
-                  Tách thành công {batchItems.length} giao dịch độc lập
-                </span>
+            {/* Banner tổng kết & Kiểu hóa đơn đã nhận diện */}
+            <div className="p-3.5 rounded-xl bg-[#2e7d32]/10 border border-[#2e7d32]/25 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />
+                  <span className="text-xs text-[#2e7d32] font-semibold">
+                    Tách thành công {batchItems.length} giao dịch độc lập
+                  </span>
+                </div>
+                <div className="text-xs text-[#3e332a] font-medium">
+                  Tổng cộng:{' '}
+                  <strong className="text-sm text-[#b94a3b] font-bold">
+                    {formatCurrency(totalCalculated)}
+                  </strong>
+                </div>
               </div>
-              <div className="text-xs text-[#3e332a] font-medium">
-                Tổng cộng:{' '}
-                <strong className="text-sm text-[#b94a3b] font-bold">
-                  {formatCurrency(totalCalculated)}
-                </strong>
+
+              {/* Kiểu hóa đơn tự động nhận diện */}
+              <div className="flex items-center gap-2 pt-1 border-t border-[#2e7d32]/15 text-xs">
+                <span className="text-[#7a6a58] font-medium text-[11px]">Kiểu nhận diện:</span>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                    invoiceType === 'TYPE_A_TABLE'
+                      ? 'bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd]'
+                      : invoiceType === 'TYPE_B_TRANSFER'
+                      ? 'bg-[#dcfce7] text-[#15803d] border border-[#bbf7d0]'
+                      : 'bg-[#fef3c7] text-[#b45309] border border-[#fde68a]'
+                  }`}
+                >
+                  {invoiceTypeName || 'Hóa đơn tự do'}
+                </span>
               </div>
             </div>
 
