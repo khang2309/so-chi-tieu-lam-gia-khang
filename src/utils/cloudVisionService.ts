@@ -115,17 +115,15 @@ export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
 
 // Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định
 export const GEMINI_FALLBACK_MODELS = [
-  'gemini-3.5-flash',
-  'gemini-3.8-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-exp',
   'gemini-flash-latest',
   'gemini-flash-lite-latest',
   'gemini-3.1-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-pro',
 ];
 
 /**
@@ -472,6 +470,7 @@ export async function callGeminiAudio(
   };
   if (responseSchema) {
     generationConfig.responseSchema = responseSchema;
+    generationConfig.response_schema = responseSchema;
   }
 
   const payload: any = {
@@ -479,8 +478,8 @@ export async function callGeminiAudio(
       {
         parts: [
           {
-            inline_data: {
-              mime_type: cleanMime,
+            inlineData: {
+              mimeType: cleanMime,
               data: base64Data,
             },
           },
@@ -494,9 +493,6 @@ export async function callGeminiAudio(
   const audioModels = [
     'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-pro',
   ];
 
   let lastError = '';
