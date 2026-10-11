@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { TransactionModal } from './components/TransactionModal';
+import { VoiceInputModal } from './components/VoiceInputModal';
 import { ReceiptScanModal } from './components/ReceiptScanModal';
 import { RoommateSplitModal } from './components/RoommateSplitModal';
 import { DuplicateTransactionModal } from './components/DuplicateTransactionModal';
@@ -16,12 +17,14 @@ import { AuthModal } from './components/AuthModal';
 import { WalletTab } from './components/WalletTab';
 import { exportTransactionsToExcel } from './utils/excelExporter';
 import { Transaction } from './types';
+import { ParsedVoiceResult } from './utils/voiceParser';
 import {
   Plus,
   Camera,
   Users,
   Wallet as WalletIcon,
   Receipt,
+  Mic,
 } from 'lucide-react';
 
 export function App() {
@@ -30,7 +33,9 @@ export function App() {
   // Modals visibility state
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [voiceInitialValues, setVoiceInitialValues] = useState<Partial<Omit<Transaction, 'id' | 'createdAt'>> | null>(null);
 
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [duplicatingTransaction, setDuplicatingTransaction] = useState<Transaction | null>(null);
 
@@ -46,6 +51,22 @@ export function App() {
 
   // Quick Open Handlers
   const handleOpenNewTransaction = () => {
+    setEditingTransaction(null);
+    setVoiceInitialValues(null);
+    setIsTransactionModalOpen(true);
+  };
+
+  const handleOpenVoiceInput = () => {
+    setIsVoiceModalOpen(true);
+  };
+
+  const handleVoiceParsedResult = (parsed: ParsedVoiceResult) => {
+    setVoiceInitialValues({
+      amount: parsed.amount,
+      note: parsed.note,
+      categoryId: parsed.categoryId,
+      type: parsed.type,
+    });
     setEditingTransaction(null);
     setIsTransactionModalOpen(true);
   };
@@ -135,6 +156,32 @@ export function App() {
           </button>
         </div>
 
+        {/* Banner Nhập Giọng Nói Tiện Lợi */}
+        {activeTab === 'dashboard' && (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-[#fff7ed] to-[#fbf5eb] border border-[#fed7aa] flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[#ea580c] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Mic className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
+                  <span>Nhập chi tiêu bằng giọng nói</span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#ea580c] text-white font-bold uppercase">Mới</span>
+                </div>
+                <div className="text-[11px] text-[#7a6a58] truncate">
+                  Đọc nhanh: <em>"Đổ xăng 50k"</em>, <em>"Cơm trưa 35 nghìn"</em>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenVoiceInput}
+              className="px-3 py-1.5 rounded-xl bg-[#ea580c] hover:bg-[#c2410c] active:scale-95 text-white text-xs font-bold shrink-0 shadow-xs transition flex items-center gap-1"
+            >
+              <span>Đọc lệnh</span>
+            </button>
+          </div>
+        )}
+
         {activeTab === 'dashboard' ? (
           <>
             {/* 1. ĐẨY NHẬT KÝ GIAO DỊCH LÊN ĐẦU: Đập vào mắt người dùng ngay lập tức */}
@@ -194,7 +241,7 @@ export function App() {
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-2 px-4 safe-bottom shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-2 px-3 safe-bottom shadow-lg">
         <div className="flex items-center justify-around max-w-md mx-auto">
           {/* Sổ cái / Dashboard */}
           <button
@@ -222,13 +269,23 @@ export function App() {
             <span className="text-[10px]">Ví tiền</span>
           </button>
 
-          {/* Floating Center Add Button */}
+          {/* Floating Center Voice Button (NÓI ĐỂ GHI) */}
+          <button
+            onClick={handleOpenVoiceInput}
+            className="-mt-5 w-12 h-12 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] text-white flex items-center justify-center shadow-lg active:scale-95 transition border-2 border-[#fffdfa] ring-2 ring-[#ea580c]/30 group"
+            title="Đọc hóa đơn bằng giọng nói"
+          >
+            <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition" />
+          </button>
+
+          {/* Quick Add Manual */}
           <button
             onClick={handleOpenNewTransaction}
-            className="-mt-5 w-12 h-12 rounded-full bg-[#a25832] text-white flex items-center justify-center shadow-lg active:scale-95 transition border-2 border-[#fffdfa]"
-            title="Thêm giao dịch"
+            className="flex flex-col items-center gap-0.5 text-[#7a6a58] hover:text-[#3e332a] transition"
+            title="Thêm thủ công"
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-5 h-5 text-[#a25832]" />
+            <span className="text-[10px] font-medium">Thêm tay</span>
           </button>
 
           {/* Quick Scan */}
@@ -252,7 +309,15 @@ export function App() {
       </nav>
 
       {/* Floating Action Button on Desktop */}
-      <div className="hidden sm:block fixed bottom-6 right-6 z-30">
+      <div className="hidden sm:flex fixed bottom-6 right-6 z-30 items-center gap-2.5">
+        <button
+          onClick={handleOpenVoiceInput}
+          className="px-4 py-3 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] hover:brightness-105 active:scale-95 text-white font-semibold text-sm shadow-paper-lg transition flex items-center gap-2"
+          title="Đọc hóa đơn bằng giọng nói"
+        >
+          <Mic className="w-5 h-5 animate-pulse" />
+          <span>Nói để ghi</span>
+        </button>
         <button
           onClick={handleOpenNewTransaction}
           className="px-5 py-3 rounded-full bg-[#a25832] hover:bg-[#8c4623] active:scale-95 text-white font-semibold text-sm shadow-paper-lg transition flex items-center gap-2"
@@ -265,15 +330,34 @@ export function App() {
       {/* Modals */}
       <TransactionModal
         isOpen={isTransactionModalOpen}
-        onClose={() => setIsTransactionModalOpen(false)}
-        onSave={handleSaveTransaction}
+        onClose={() => {
+          setIsTransactionModalOpen(false);
+          setVoiceInitialValues(null);
+        }}
+        onSave={(data, id) => {
+          handleSaveTransaction(data, id);
+          setVoiceInitialValues(null);
+        }}
         editingTransaction={editingTransaction}
+        initialValues={voiceInitialValues}
         ledgers={manager.ledgers}
         wallets={manager.wallets}
         categories={manager.categories}
         initialLedgerId={manager.activeLedgerId}
         initialWalletId={manager.activeWalletId}
         existingTransactions={manager.transactions}
+        onOpenVoiceModal={() => {
+          setIsTransactionModalOpen(false);
+          setIsVoiceModalOpen(true);
+        }}
+      />
+
+      {/* Voice Recognition Modal */}
+      <VoiceInputModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        categories={manager.categories}
+        onParsedResult={handleVoiceParsedResult}
       />
 
       <ReceiptScanModal

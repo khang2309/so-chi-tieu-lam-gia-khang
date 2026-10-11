@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, Mic } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 
@@ -8,12 +8,14 @@ interface TransactionModalProps {
   onClose: () => void;
   onSave: (data: Omit<Transaction, 'id' | 'createdAt'>, editingId?: string) => void;
   editingTransaction?: Transaction | null;
+  initialValues?: Partial<Omit<Transaction, 'id' | 'createdAt'>> | null;
   ledgers: Ledger[];
   wallets: Wallet[];
   categories: Category[];
   initialLedgerId?: string;
   initialWalletId?: string;
   existingTransactions?: Transaction[];
+  onOpenVoiceModal?: () => void;
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -21,12 +23,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   onClose,
   onSave,
   editingTransaction,
+  initialValues,
   ledgers,
   wallets,
   categories,
   initialLedgerId,
   initialWalletId,
   existingTransactions = [],
+  onOpenVoiceModal,
 }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState<string>('');
@@ -81,9 +85,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setWalletId(editingTransaction.walletId);
       setNote(editingTransaction.note || '');
     } else {
-      // Defaults for new transaction
-      setType('expense');
-      setAmount('');
+      // Defaults for new transaction (hỗ trợ điền từ giọng nói hoặc mẫu)
+      const defaultType = initialValues?.type || 'expense';
+      setType(defaultType);
+      setAmount(initialValues?.amount ? initialValues.amount.toString() : '');
       const now = new Date();
       const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
         .toISOString()
@@ -102,11 +107,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           : wallets[0]?.id || 'wallet-cash';
       setWalletId(defaultWallet);
 
-      const firstExpenseCat = categories.find((c) => c.type === 'expense') || categories[0];
-      setCategoryId(firstExpenseCat?.id || '');
-      setNote('');
+      if (initialValues?.categoryId) {
+        setCategoryId(initialValues.categoryId);
+      } else {
+        const firstCat = categories.find((c) =>
+          defaultType === 'expense'
+            ? c.type === 'expense' || c.type === 'both'
+            : c.type === 'income' || c.type === 'both'
+        ) || categories[0];
+        setCategoryId(firstCat?.id || '');
+      }
+
+      setNote(initialValues?.note || '');
     }
-  }, [editingTransaction, isOpen, initialLedgerId, initialWalletId, ledgers, wallets, categories]);
+  }, [editingTransaction, initialValues, isOpen, initialLedgerId, initialWalletId, ledgers, wallets, categories]);
 
   if (!isOpen) return null;
 
@@ -155,12 +169,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <h3 className="text-base font-bold text-[#3e332a]">
             {editingTransaction ? 'Chỉnh Sửa Giao Dịch' : 'Thêm Giao Dịch Mới'}
           </h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {onOpenVoiceModal && !editingTransaction && (
+              <button
+                type="button"
+                onClick={onOpenVoiceModal}
+                className="px-2.5 py-1 rounded-lg bg-[#ea580c]/10 text-[#ea580c] hover:bg-[#ea580c]/20 text-xs font-semibold flex items-center gap-1 transition"
+                title="Nói để tự động điền"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Nói</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Form Body */}
