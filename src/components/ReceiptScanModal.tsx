@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Camera as CameraIcon,
@@ -57,6 +57,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [rawOcrText, setRawOcrText] = useState<string>('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Cấu hình Cloud Vision API (Gemini / OpenAI)
   const [visionConfig, setVisionConfig] = useState<VisionConfig>(getSavedVisionConfig());
@@ -84,6 +85,14 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   const handleSaveVisionConfig = (e?: React.FormEvent) => {
@@ -97,9 +106,26 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     setShowConfig(false);
   };
 
+  // Hủy tiến trình quét AI Vision ngay lập tức
+  const handleCancelScan = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsProcessing(false);
+    setStatusMessage('');
+    const input = document.getElementById('batch-receipt-file-input') as HTMLInputElement;
+    if (input) input.value = '';
+  };
 
   // Phân tích hóa đơn bằng Cloud LLM Vision (Google Gemini Flash / OpenAI)
   const runCloudVisionOnImage = async (dataUrl: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsProcessing(true);
     setStatusMessage('Đang tiền xử lý ảnh (Làm nét & Tăng tương phản)...');
 
@@ -109,6 +135,8 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         contrast: 60,
         sharpen: true,
       });
+
+      if (controller.signal.aborted) return;
       setProcessedImageUrl(enhancedDataUrl);
 
       // 2. Kiểm tra API Key
@@ -125,7 +153,13 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       setStatusMessage(
         `Đang gửi ảnh lên ${cfg.provider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 1.5 Flash'}...`
       );
-      const parsedResult = await extractInvoiceDataWithCloudVision(enhancedDataUrl, cfg);
+      const parsedResult = await extractInvoiceDataWithCloudVision(
+        enhancedDataUrl,
+        cfg,
+        controller.signal
+      );
+
+      if (controller.signal.aborted) return;
 
       setIsProcessing(false);
       setRawOcrText(parsedResult.rawText);
@@ -140,9 +174,19 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
       setStep('verify');
     } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted') || controller.signal.aborted) {
+        console.log('Quá trình quét hóa đơn đã được hủy.');
+        setIsProcessing(false);
+        setStatusMessage('');
+        return;
+      }
       console.warn('Lỗi gọi Cloud Vision API:', err);
       setIsProcessing(false);
       alert(`Lỗi nhận diện Cloud AI: ${err?.message || err}. Vui lòng kiểm tra lại API Key hoặc kết nối mạng.`);
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -266,6 +310,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
           </div>
           <button
             onClick={() => {
+              handleCancelScan();
               onClose();
               setStep('scan');
             }}
@@ -391,6 +436,20 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               <p className="text-[11px] text-[#7a6a58] mt-0.5">
                 AI Vision tự động nhận diện chữ tiếng Việt, bóc tách mặt hàng, giá tiền và phân loại danh mục
               </p>
+
+              {/* Nút bấm màu đỏ "Hủy" (Cancel) ngay dưới thông báo đang gửi ảnh lên Gemini */}
+              {isProcessing && (
+                <div className="mt-3 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={handleCancelScan}
+                    className="px-4 py-1.5 rounded-xl bg-[#fee2e2] hover:bg-[#fecaca] text-[#b91c1c] text-xs font-bold border border-[#fca5a5] shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Hủy (Cancel)</span>
+                  </button>
+                </div>
+              )}
 
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button

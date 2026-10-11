@@ -471,6 +471,55 @@ export function extractFreeTextReceipt(rawText: string): ExtractedBatchItem[] {
  * 2. Dùng Regex / Vị trí để trích xuất phần JSON cốt lõi (tìm từ dấu { hoặc [ đầu tiên đến dấu } hoặc ] cuối cùng).
  * 3. Chỉ khi nào trích xuất được chuỗi sạch mới parse, bọc trong try...catch an toàn.
  */
+/**
+ * Tách các top-level JSON objects {} từ chuỗi (hỗ trợ nested brackets)
+ */
+function extractTopLevelObjects(str: string): string[] {
+  const objects: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let startIdx = -1;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === '{') {
+        if (depth === 0) {
+          startIdx = i;
+        }
+        depth++;
+      } else if (char === '}') {
+        depth--;
+        if (depth === 0 && startIdx !== -1) {
+          objects.push(str.substring(startIdx, i + 1));
+          startIdx = -1;
+        }
+      }
+    }
+  }
+  return objects;
+}
+
+/**
+ * Hàm dọn dẹp chuỗi trước khi Parse JSON (JSON Extraction & Fallback Parser):
+ * 1. Xóa bỏ các thẻ Markdown: text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+ * 2. Cứu vãn dữ liệu (Fallback Parser): Nếu chuỗi trả về là các object rời rạc (ví dụ: {...} {...} hoặc {...}, {...}),
+ *    dùng Regex tự động bọc chuỗi đó vào dấu [] và thêm dấu phẩy giữa các object trước khi gọi JSON.parse().
+ * 3. Đảm bảo an toàn không bị lỗi "Unexpected non-whitespace character after JSON".
+ */
 export function extractCleanJsonString(rawText: string): string {
   if (!rawText) return '';
   // Bước 1: Xóa bỏ các thẻ Markdown
@@ -493,8 +542,61 @@ export function extractCleanJsonString(rawText: string): string {
   if (startIdx !== -1 && endIdx > startIdx) {
     text = text.substring(startIdx, endIdx + 1);
   }
+  text = text.trim();
 
-  return text.trim();
+  // Thử parse trực tiếp xem đã hợp lệ chưa
+  try {
+    JSON.parse(text);
+    return text;
+  } catch {
+    // Không parse được trực tiếp, kích hoạt Fallback Parser
+  }
+
+  // Bước 3: Cứu vãn dữ liệu (Fallback Parser)
+  // Nếu là mảng [...] bị thiếu dấu phẩy giữa các object [{...} {...}]
+  if (text.startsWith('[') && text.endsWith(']')) {
+    const fixedCommaInArray = text.replace(/}\s*(\r?\n|\s)*\s*\{/g, '},\n{');
+    try {
+      JSON.parse(fixedCommaInArray);
+      return fixedCommaInArray;
+    } catch {
+      // Tiếp tục xuống dưới
+    }
+  }
+
+  // Tự động bọc và chèn dấu phẩy giữa các object rời rạc: {...} {...} hoặc {...}, {...}
+  let regexFixed = text
+    .replace(/}\s*,\s*\{/g, '},{')
+    .replace(/}\s*\{/g, '},{')
+    .trim();
+
+  // Xóa dấu phẩy thừa ở cuối nếu có
+  regexFixed = regexFixed.replace(/,\s*$/, '');
+
+  // Tự động bọc chuỗi đó vào dấu [ ]
+  if (!regexFixed.startsWith('[')) {
+    regexFixed = `[${regexFixed}]`;
+  }
+
+  try {
+    JSON.parse(regexFixed);
+    return regexFixed;
+  } catch {
+    // Nếu Regex chưa xử lý hết, sử dụng bộ đếm ngoặc (brace parser)
+  }
+
+  const topObjects = extractTopLevelObjects(text);
+  if (topObjects.length > 0) {
+    const arrayFromObjects = `[${topObjects.join(',')}]`;
+    try {
+      JSON.parse(arrayFromObjects);
+      return arrayFromObjects;
+    } catch {
+      // Bỏ qua
+    }
+  }
+
+  return regexFixed;
 }
 
 // =========================================================================
@@ -510,17 +612,27 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
   ) {
     try {
       const parsed = JSON.parse(cleanJson);
-      const invoiceType: InvoiceType = parsed.invoiceType || 'TYPE_A_TABLE';
+      const invoiceType: InvoiceType =
+        (typeof parsed === 'object' && !Array.isArray(parsed) && parsed.invoiceType) ||
+        'TYPE_A_TABLE';
+
       const invoiceTypeName =
-        parsed.invoiceTypeName ||
+        (typeof parsed === 'object' && !Array.isArray(parsed) && parsed.invoiceTypeName) ||
         (invoiceType === 'TYPE_A_TABLE'
           ? 'Hóa đơn in / Bảng (Siêu thị, Cửa hàng)'
           : invoiceType === 'TYPE_B_TRANSFER'
           ? 'Biên lai Chuyển khoản Ngân hàng'
           : 'Giấy ghi chép tự do');
 
-      const defaultDate = parsed.date || new Date().toISOString().slice(0, 10);
-      const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+      const defaultDate =
+        (typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.date : null) ||
+        new Date().toISOString().slice(0, 10);
+
+      const rawItems = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed.items)
+        ? parsed.items
+        : [];
 
       const items: ExtractedBatchItem[] = rawItems
         .filter((item: any) => item && (Number(item.amount) > 0 || Number(item.price) > 0))
@@ -541,7 +653,7 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
         });
 
       const totalAmount =
-        Number(parsed.totalAmount) ||
+        (typeof parsed === 'object' && !Array.isArray(parsed) && Number(parsed.totalAmount)) ||
         items.reduce((acc, it) => acc + it.amount, 0);
 
       return {
