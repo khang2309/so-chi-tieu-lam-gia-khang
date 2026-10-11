@@ -3,6 +3,7 @@ import {
   Search,
   Trash2,
   Edit3,
+  Copy,
   ArrowRightLeft,
   Users,
   Receipt,
@@ -23,6 +24,7 @@ interface TransactionListProps {
   typeFilter: 'all' | 'expense' | 'income';
   onTypeFilterChange: (type: 'all' | 'expense' | 'income') => void;
   onEditTransaction: (tx: Transaction) => void;
+  onDuplicateTransaction?: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
   onOpenNewTransaction: () => void;
   onOpenReceiptScan: () => void;
@@ -38,6 +40,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   typeFilter,
   onTypeFilterChange,
   onEditTransaction,
+  onDuplicateTransaction,
   onDeleteTransaction,
   onOpenNewTransaction,
   onOpenReceiptScan,
@@ -252,6 +255,13 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                   {/* Actions (visible on hover / touch) */}
                   <div className="mt-1 flex items-center justify-end gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      onClick={() => onDuplicateTransaction?.(tx)}
+                      title="Nhân bản giao dịch"
+                      className="p-1 rounded text-[#7a6a58] hover:text-[#a25832] hover:bg-[#f5ebe0] transition"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => onEditTransaction(tx)}
                       title="Chỉnh sửa"

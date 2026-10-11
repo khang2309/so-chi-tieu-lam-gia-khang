@@ -17,14 +17,18 @@ export function getSavedVisionConfig(): VisionConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!parsed.apiKey || parsed.apiKey.trim().length === 0) {
+        parsed.apiKey = DEFAULT_GEMINI_API_KEY;
+      }
+      return parsed;
     }
   } catch (err) {
     console.warn('Không đọc được vision config:', err);
   }
   return {
     provider: 'gemini',
-    apiKey: '',
+    apiKey: DEFAULT_GEMINI_API_KEY,
   };
 }
 
@@ -97,12 +101,29 @@ Quy tắc bắt buộc:
 4. Đối với Biên lai chuyển khoản ngân hàng (Type B): Chỉ xuất đúng 1 item có amount là số tiền chuyển, name là nội dung chuyển khoản / người nhận.
 5. Đối với Hóa đơn in nhiệt có bảng (Type A): Tách từng món trong danh sách hàng hóa và gán cùng ngày hóa đơn.`;
 
+export const DEFAULT_GEMINI_API_KEY = "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ";
+
+// Danh sách các model Gemini ưu tiên và fallback theo đúng chỉ định
+const GEMINI_MODELS = [
+  'gemini-1.5-flash',
+  'gemma-4-26b-a4b-it',
+  'gemma-4-31b-it',
+  'gemini-3.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-pro',
+];
+
 /**
- * 1. Gọi Google Gemini 1.5 Flash / 2.0 Flash Vision API
+ * 1. Gọi Google Gemini Vision API với cơ chế tự động Fallback qua danh sách models
  */
 async function callGeminiVision(base64Image: string, apiKey: string): Promise<string> {
   const { base64Data, mimeType } = cleanBase64(base64Image);
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const keyToUse = apiKey && apiKey.trim().length > 0 ? apiKey.trim() : DEFAULT_GEMINI_API_KEY;
 
   const payload = {
     contents: [
@@ -124,23 +145,35 @@ async function callGeminiVision(base64Image: string, apiKey: string): Promise<st
     },
   };
 
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let lastError = '';
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Google Gemini API lỗi (${res.status}): ${errorText}`);
+  for (const model of GEMINI_MODELS) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyToUse}`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawContent) {
+          return rawContent;
+        }
+      } else {
+        const errText = await res.text();
+        console.warn(`Model ${model} thất bại (HTTP ${res.status}):`, errText);
+        lastError = `Model ${model} (${res.status}): ${errText}`;
+      }
+    } catch (err: any) {
+      console.warn(`Lỗi khi gọi model ${model}:`, err);
+      lastError = err?.message || String(err);
+    }
   }
 
-  const json = await res.json();
-  const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!rawContent) {
-    throw new Error('Gemini API không trả về nội dung nhận diện!');
-  }
-  return rawContent;
+  throw new Error(`Tất cả các model Gemini đều không phản hồi: ${lastError}`);
 }
 
 /**
@@ -258,19 +291,17 @@ export async function extractInvoiceDataWithCloudVision(
   configOverride?: Partial<VisionConfig>
 ): Promise<BatchParsedResult> {
   const currentConfig = { ...getSavedVisionConfig(), ...configOverride };
-
-  if (!currentConfig.apiKey || currentConfig.apiKey.trim().length === 0) {
-    throw new Error(
-      'MISSING_API_KEY: Chưa thiết lập API Key! Vui lòng nhập Google Gemini API Key (hoàn toàn miễn phí từ Google AI Studio) để sử dụng tính năng quét hóa đơn thông minh.'
-    );
-  }
+  const effectiveKey = currentConfig.apiKey?.trim() || DEFAULT_GEMINI_API_KEY;
 
   let rawJsonText = '';
   if (currentConfig.provider === 'openai') {
-    rawJsonText = await callOpenAIVision(imageSource, currentConfig.apiKey);
+    if (!effectiveKey) {
+      throw new Error('Chưa thiết lập OpenAI API Key!');
+    }
+    rawJsonText = await callOpenAIVision(imageSource, effectiveKey);
   } else {
     // Mặc định: Google Gemini Vision
-    rawJsonText = await callGeminiVision(imageSource, currentConfig.apiKey);
+    rawJsonText = await callGeminiVision(imageSource, effectiveKey);
   }
 
   return parseVisionJsonResponse(rawJsonText);

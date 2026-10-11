@@ -6,6 +6,7 @@ import { TransactionList } from './components/TransactionList';
 import { TransactionModal } from './components/TransactionModal';
 import { ReceiptScanModal } from './components/ReceiptScanModal';
 import { RoommateSplitModal } from './components/RoommateSplitModal';
+import { DuplicateTransactionModal } from './components/DuplicateTransactionModal';
 import { LedgerManagerModal } from './components/LedgerManagerModal';
 import { WalletManagerModal } from './components/WalletManagerModal';
 import { WalletTransferModal } from './components/WalletTransferModal';
@@ -27,6 +28,9 @@ export function App() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicatingTransaction, setDuplicatingTransaction] = useState<Transaction | null>(null);
+
   const [isReceiptScanModalOpen, setIsReceiptScanModalOpen] = useState(false);
   const [isRoommateSplitModalOpen, setIsRoommateSplitModalOpen] = useState(false);
   const [isLedgerManagerModalOpen, setIsLedgerManagerModalOpen] = useState(false);
@@ -44,6 +48,11 @@ export function App() {
   const handleEditTransaction = (tx: Transaction) => {
     setEditingTransaction(tx);
     setIsTransactionModalOpen(true);
+  };
+
+  const handleDuplicateTransaction = (tx: Transaction) => {
+    setDuplicatingTransaction(tx);
+    setIsDuplicateModalOpen(true);
   };
 
   const handleSaveTransaction = (
@@ -123,6 +132,7 @@ export function App() {
           typeFilter={manager.typeFilter}
           onTypeFilterChange={manager.setTypeFilter}
           onEditTransaction={handleEditTransaction}
+          onDuplicateTransaction={handleDuplicateTransaction}
           onDeleteTransaction={manager.deleteTransaction}
           onOpenNewTransaction={handleOpenNewTransaction}
           onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
@@ -219,6 +229,17 @@ export function App() {
         ledgers={manager.ledgers}
         wallets={manager.wallets}
         onAddTransaction={(tx) => manager.addTransaction(tx)}
+        onAddBatchTransactions={(items) => manager.addBatchTransactions(items)}
+      />
+
+      <DuplicateTransactionModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => setIsDuplicateModalOpen(false)}
+        sourceTransaction={duplicatingTransaction}
+        ledgers={manager.ledgers}
+        wallets={manager.wallets}
+        categories={manager.categories}
+        onConfirm={(data) => manager.addTransaction(data)}
       />
 
       <LedgerManagerModal
