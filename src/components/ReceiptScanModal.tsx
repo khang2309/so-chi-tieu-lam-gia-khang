@@ -11,9 +11,6 @@ import {
   Calendar,
   Layers,
   Wand2,
-  Key,
-  ExternalLink,
-  Cpu,
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {
@@ -23,7 +20,6 @@ import {
 import {
   extractInvoiceDataWithCloudVision,
   getSavedVisionConfig,
-  saveVisionConfig,
   VisionConfig,
 } from '../utils/cloudVisionService';
 import { compressImageForOcr } from '../utils/imagePreprocessor';
@@ -61,8 +57,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   // Cấu hình Cloud Vision API (Google Gemini)
   const [visionConfig, setVisionConfig] = useState<VisionConfig>(getSavedVisionConfig());
-  const [showConfig, setShowConfig] = useState<boolean>(!getSavedVisionConfig().apiKey);
-  const [apiKeyInput, setApiKeyInput] = useState<string>(getSavedVisionConfig().apiKey);
   const [scanMode, setScanMode] = useState<'split' | 'merge'>('split');
 
   // Cấu hình chung cho toàn bộ đợt quét
@@ -78,10 +72,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   useEffect(() => {
     const cfg = getSavedVisionConfig();
     setVisionConfig(cfg);
-    setApiKeyInput(cfg.apiKey);
-    if (!cfg.apiKey) {
-      setShowConfig(true);
-    }
   }, [isOpen]);
 
   useEffect(() => {
@@ -93,17 +83,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
-
-  const handleSaveVisionConfig = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const newCfg: VisionConfig = {
-      provider: 'gemini',
-      apiKey: apiKeyInput.trim(),
-    };
-    saveVisionConfig(newCfg);
-    setVisionConfig(newCfg);
-    setShowConfig(false);
-  };
 
   // Hủy tiến trình quét AI Vision ngay lập tức
   const handleCancelScan = () => {
@@ -139,9 +118,8 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       const cfg = visionConfig.apiKey ? visionConfig : getSavedVisionConfig();
       if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
         setIsProcessing(false);
-        setShowConfig(true);
         alert(
-          'Chưa có API Key! Vui lòng dán Google Gemini API Key (miễn phí từ Google AI Studio) để AI phân tích hóa đơn.'
+          'Chưa có API Key! Vui lòng vào mục Cài đặt -> Cấu hình AI để lưu Google Gemini API Key (miễn phí từ Google AI Studio).'
         );
         return;
       }
@@ -164,7 +142,11 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       setRawOcrText(parsedResult.rawText);
       setInvoiceType(parsedResult.invoiceType);
       setInvoiceTypeName(parsedResult.invoiceTypeName);
-      setBatchItems(parsedResult.items);
+      const cleanedItems = (parsedResult.items || []).map((it) => ({
+        ...it,
+        note: (it.note || '').replace(/\\n/g, '\n'),
+      }));
+      setBatchItems(cleanedItems);
 
       const defaultLedger =
         activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
@@ -326,81 +308,6 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
         {/* BƯỚC 1: QUÉT ẢNH HOẶC CHỌN MẪU */}
         {step === 'scan' ? (
           <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-            {/* Hộp cấu hình Cloud AI Vision */}
-            <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] shadow-xs space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
-                    <Cpu className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
-                      <span>Động cơ: Google Gemini AI Vision</span>
-                      {visionConfig.apiKey ? (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
-                          Đã kích hoạt
-                        </span>
-                      ) : (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fee2e2] text-[#b91c1c] font-semibold border border-[#fecaca]">
-                          Chưa có API Key
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-[#7a6a58]">
-                      Nhận diện hóa đơn thông minh (Gemini 1.5 Flash / 2.0 Flash)
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowConfig(!showConfig)}
-                  className="text-xs font-semibold text-[#a25832] hover:underline flex items-center gap-1"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  <span>{showConfig ? 'Đóng' : 'Cấu hình Key'}</span>
-                </button>
-              </div>
-
-              {showConfig && (
-                <form onSubmit={handleSaveVisionConfig} className="pt-2 border-t border-[#f0e4d5] space-y-2.5">
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
-                      <span>Google Gemini API Key:</span>
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-[#a25832] hover:underline flex items-center gap-0.5 font-medium"
-                      >
-                        <span>Lấy key miễn phí (Google AI Studio)</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </label>
-                    <input
-                      type="password"
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      placeholder="Dán Gemini API Key (AIzaSy...)"
-                      className="w-full mt-0.5 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-mono text-[#3e332a] focus:bg-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 pt-1">
-                    <p className="text-[10px] text-[#7a6a58] italic">
-                      * Key được lưu bảo mật trong LocalStorage trình duyệt/thiết bị của bạn.
-                    </p>
-                    <button
-                      type="submit"
-                      className="px-3 py-1 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition shadow-xs"
-                    >
-                      Lưu Key
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-
             {/* Tùy chọn Tách/Gộp hóa đơn */}
             <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>

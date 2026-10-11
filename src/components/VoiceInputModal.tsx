@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle, Loader2 } from 'lucide-react';
+import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle, Loader2, Check } from 'lucide-react';
 import { Category } from '../types';
 import { speechService } from '../utils/speechService';
 import { parseVoiceInput, parseVoiceWithGemini, ParsedVoiceResult } from '../utils/voiceParser';
@@ -104,24 +104,28 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   };
 
   const handleStopAndParse = async () => {
-    const finalTxt = await speechService.stopListening();
     setIsListening(false);
-    const textToParse = transcript || finalTxt;
-    if (textToParse.trim()) {
+    const finalTxt = await speechService.stopListening();
+    const textToParse = (transcript || finalTxt).trim();
+    if (textToParse) {
       setIsAnalyzing(true);
       try {
         const parsed = await parseVoiceWithGemini(textToParse, categories);
         setPreviewResult(parsed);
-        handleConfirm(parsed);
+        setTimeout(() => {
+          handleConfirm(parsed);
+        }, 500);
       } catch {
         const fallback = parseVoiceInput(textToParse, categories);
         setPreviewResult(fallback);
-        handleConfirm(fallback);
+        setTimeout(() => {
+          handleConfirm(fallback);
+        }, 500);
       } finally {
         setIsAnalyzing(false);
       }
     } else {
-      setErrorMsg('Chưa nghe rõ nội dung. Vui lòng thử nói lại!');
+      setErrorMsg('Chưa nghe rõ nội dung. Vui lòng bấm vào Micro và nói lại!');
     }
   };
 
@@ -166,7 +170,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
         </h3>
 
         {/* Visualizer / Animated Microphone */}
-        <div className="relative flex items-center justify-center mb-6">
+        <div className="relative flex items-center justify-center mb-4">
           {(isListening || isAnalyzing) && (
             <>
               <div className="absolute w-28 h-28 rounded-full bg-[#ea580c]/15 animate-ping" />
@@ -202,6 +206,19 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
             )}
           </button>
         </div>
+
+        {/* Nút "Xong / Xử lý ngay" nổi bật ngay dưới Micro khi đang nghe */}
+        {isListening && (
+          <div className="w-full mb-4">
+            <button
+              onClick={handleStopAndParse}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs sm:text-sm font-bold shadow-md hover:brightness-105 active:scale-98 transition flex items-center justify-center gap-2"
+            >
+              <Check className="w-4 h-4" />
+              <span>Xong / Xử lý ngay</span>
+            </button>
+          </div>
+        )}
 
         {/* Hộp hiển thị văn bản nhận diện được */}
         <div className="w-full min-h-[72px] p-3.5 rounded-2xl bg-[#fbf5eb] border border-[#ebdcc9] flex flex-col justify-center items-center mb-4 transition">
@@ -278,7 +295,15 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           >
             Đóng
           </button>
-          {previewResult && previewResult.amount > 0 ? (
+          {isListening ? (
+            <button
+              onClick={handleStopAndParse}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold hover:brightness-105 shadow-md flex items-center justify-center gap-1.5 transition active:scale-95"
+            >
+              <Check className="w-4 h-4" />
+              <span>Xong / Xử lý ngay</span>
+            </button>
+          ) : previewResult && previewResult.amount > 0 ? (
             <button
               onClick={() => handleConfirm(previewResult)}
               className="flex-1 py-2.5 rounded-xl bg-[#ea580c] text-white text-xs font-semibold hover:bg-[#c2410c] shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95"
@@ -292,7 +317,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
               disabled={!transcript}
               className="flex-1 py-2.5 rounded-xl bg-[#3e332a] text-white text-xs font-semibold hover:bg-[#2c241d] disabled:opacity-40 shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95"
             >
-              <span>{isListening ? 'Hoàn tất nói' : 'Phân tích câu'}</span>
+              <span>Phân tích câu</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}

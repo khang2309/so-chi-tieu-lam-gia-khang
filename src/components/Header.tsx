@@ -6,13 +6,10 @@ import {
   ChevronDown,
   Sparkles,
   BookOpen,
-  Cloud,
-  WifiOff,
-  Users,
+  Home,
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
-import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   ledgers: Ledger[];
@@ -21,7 +18,6 @@ interface HeaderProps {
   onOpenLedgerManager: () => void;
   onOpenSettings: () => void;
   onOpenRoommateSplit?: () => void;
-  isAutoSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,9 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLedgerManager,
   onOpenSettings,
   onOpenRoommateSplit,
-  isAutoSyncing = false,
 }) => {
-  const { user, isOnline, isOfflineMode, openAuthModal } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const activeLedger = ledgers.find((l) => l.id === activeLedgerId);
@@ -61,53 +55,15 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Account / Cloud Sync / Offline Status Button */}
-            <button
-              onClick={openAuthModal}
-              title={
-                user
-                  ? `Tài khoản: ${user.email} (Đã đồng bộ Đám mây)`
-                  : !isOnline
-                  ? 'Thiết bị đang mất mạng (Chế độ Ngoại tuyến)'
-                  : 'Tài khoản & Đồng bộ Đám mây (Đang dùng Ngoại tuyến)'
-              }
-              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 shadow-xs ${
-                user
-                  ? 'bg-[#dcfce7] border-[#bbf7d0] text-[#15803d]'
-                  : !isOnline || isOfflineMode
-                  ? 'bg-[#fef3c7] border-[#fde68a] text-[#92400e]'
-                  : 'bg-[#fbf5eb] border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a]'
-              }`}
-            >
-              {user ? (
-                <>
-                  <Cloud className={`w-3.5 h-3.5 text-[#15803d] ${isAutoSyncing ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline max-w-[100px] truncate">
-                    {isAutoSyncing ? 'Đang đồng bộ...' : (user.displayName || user.email?.split('@')[0] || 'Đã đồng bộ')}
-                  </span>
-                </>
-              ) : !isOnline ? (
-                <>
-                  <WifiOff className="w-3.5 h-3.5 text-[#b45309]" />
-                  <span className="hidden sm:inline">Ngoại tuyến</span>
-                </>
-              ) : (
-                <>
-                  <Cloud className="w-3.5 h-3.5 text-[#a25832]" />
-                  <span className="hidden sm:inline">Tài khoản</span>
-                </>
-              )}
-            </button>
-
             {/* Chia tiền phòng / trọ */}
             {onOpenRoommateSplit && (
               <button
                 onClick={onOpenRoommateSplit}
-                title="Chia tiền phòng / trọ"
-                className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#3d7a5a] hover:text-[#2d5c43] hover:bg-[#eef8f2] transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+                title="Tính & Chia tiền phòng / trọ"
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#3d7a5a] hover:text-[#2d5c43] hover:bg-[#eef8f2] transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
               >
-                <Users className="w-3.5 h-3.5 text-[#3d7a5a]" />
-                <span className="hidden sm:inline">Chia trọ</span>
+                <Home className="w-3.5 h-3.5 text-[#3d7a5a]" />
+                <span className="inline">Chia trọ</span>
               </button>
             )}
 

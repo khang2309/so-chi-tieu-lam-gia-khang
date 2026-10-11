@@ -16,8 +16,13 @@ import {
   CloudUpload,
   AlertCircle,
   CheckCircle2,
+  Cpu,
+  Key,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getSavedVisionConfig, saveVisionConfig } from '../utils/cloudVisionService';
 
 interface DataBackupModalProps {
   isOpen: boolean;
@@ -56,6 +61,20 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   // Manual cloud sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  // Gemini AI Vision & Parser Config
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => getSavedVisionConfig().apiKey || '');
+  const [geminiSaved, setGeminiSaved] = useState<boolean>(false);
+
+  const handleSaveGeminiKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveVisionConfig({
+      provider: 'gemini',
+      apiKey: geminiApiKey.trim(),
+    });
+    setGeminiSaved(true);
+    setTimeout(() => setGeminiSaved(false), 3000);
+  };
 
   if (!isOpen) return null;
 
@@ -432,6 +451,74 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* SECTION: CẤU HÌNH AI (GOOGLE GEMINI) */}
+          <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] space-y-2.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#ea580c]/10 text-[#ea580c] flex items-center justify-center shrink-0">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
+                    <span>Cấu hình AI (Google Gemini)</span>
+                    {getSavedVisionConfig().apiKey ? (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
+                        Đã kích hoạt
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fef3c7] text-[#b45309] font-semibold border border-[#fde68a]">
+                        Chưa có Key
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-[#7a6a58]">
+                    Dùng cho Quét Hóa Đơn (OCR) và Phân tích câu nói giọng nói
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveGeminiKey} className="space-y-2 pt-1 border-t border-[#f0e4d5]">
+              <div>
+                <div className="flex items-center justify-between text-[11px] font-semibold text-[#5a4c3f] mb-1">
+                  <span className="flex items-center gap-1">
+                    <Key className="w-3 h-3 text-[#a25832]" />
+                    <span>Gemini API Key:</span>
+                  </span>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-[#a25832] hover:underline flex items-center gap-0.5 font-medium"
+                  >
+                    <span>Lấy key miễn phí (Google AI Studio)</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+                <input
+                  type="password"
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  placeholder="Dán Gemini API Key (AIzaSy...)"
+                  className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-[#ebdcc9] bg-[#fbf5eb] focus:bg-white focus:outline-none focus:border-[#a25832] text-[#3e332a]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-0.5">
+                <span className="text-[10px] text-[#7a6a58] italic">
+                  * Key lưu trực tiếp trong máy của bạn, không gửi đi đâu khác.
+                </span>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] active:scale-95 transition shadow-xs flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>{geminiSaved ? 'Đã lưu thành công!' : 'Lưu Key'}</span>
+                </button>
+              </div>
+            </form>
           </div>
 
           {/* SECTION 2: CATEGORY MANAGER */}

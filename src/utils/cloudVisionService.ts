@@ -646,7 +646,9 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
     const singleAmt = Number(parsed.totalAmount || parsed.total || parsed.amount || parsed.price || 0);
     const singleNote = String(
       parsed.note || parsed.name || parsed.storeName || parsed.merchant || parsed.title || 'Chi tiêu hóa đơn'
-    ).trim();
+    )
+      .trim()
+      .replace(/\\n/g, '\n');
     if (singleAmt > 0) {
       rawItems = [
         {
@@ -665,7 +667,9 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
     .filter((item: any) => item && (Number(item.totalAmount) > 0 || Number(item.amount) > 0 || Number(item.price) > 0))
     .map((item: any, idx: number) => {
       const amt = Number(item.totalAmount || item.amount || item.price || 0);
-      const noteText = String(item.note || item.name || item.title || `Món hàng ${idx + 1}`).trim();
+      const noteText = String(item.note || item.name || item.title || `Món hàng ${idx + 1}`)
+        .trim()
+        .replace(/\\n/g, '\n');
       const itemDate = item.date || defaultDate;
       const categoryId = item.categoryId || mapCategoryNameToId(item.categorySuggestion || item.category || noteText);
 
