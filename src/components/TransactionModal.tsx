@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Check, Mic } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
+import { formatCurrency } from '../utils/formatters';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -340,6 +341,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 </div>
                 {filteredSuggestions.map((item, idx) => {
                   const cat = categories.find((c) => c.id === item.sourceTransaction.categoryId);
+                  const formattedAmt =
+                    item.sourceTransaction.amount > 0
+                      ? formatCurrency(item.sourceTransaction.amount)
+                      : '0 ₫';
                   return (
                     <button
                       key={idx}
@@ -348,22 +353,35 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         e.preventDefault();
                         handleSelectSuggestion(item);
                       }}
-                      className="w-full text-left px-2.5 py-2 text-xs text-[#3e332a] hover:bg-[#f5ebe0] rounded-lg transition flex items-center justify-between group"
+                      className="w-full text-left px-3 py-2 text-xs text-[#3e332a] hover:bg-[#f5ebe0] rounded-xl transition flex items-center justify-between gap-2.5 group active:scale-[0.99]"
                     >
-                      <div className="flex flex-col truncate pr-2">
-                        <span className="font-semibold truncate">{item.note}</span>
-                        <div className="flex items-center gap-1.5 text-[10px] text-[#7a6a58]">
-                          {cat && (
-                            <span className="inline-flex items-center gap-1 text-[#a25832]">
-                              • {cat.name}
-                            </span>
-                          )}
-                          <span>• {item.sourceTransaction.amount.toLocaleString('vi-VN')} đ</span>
-                        </div>
+                      {/* Tên ghi chú & danh mục */}
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="font-bold text-[#3e332a] truncate text-xs">
+                          {item.note}
+                        </span>
+                        {cat && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.2 rounded font-medium shrink-0 truncate max-w-[85px]"
+                            style={{
+                              backgroundColor: `${cat.color}18`,
+                              color: cat.color,
+                            }}
+                          >
+                            {cat.name}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-[10px] text-[#a25832] font-semibold opacity-0 group-hover:opacity-100 transition shrink-0 bg-[#a25832]/10 px-1.5 py-0.5 rounded">
-                        Áp dụng
-                      </span>
+
+                      {/* Số tiền kế bên hiển thị to, rõ ràng */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs font-bold text-[#a25832] bg-[#fbf5eb] px-2 py-0.5 rounded-lg border border-[#ebdcc9] shadow-2xs group-hover:bg-[#fffdfa] group-hover:border-[#a25832] transition">
+                          {formattedAmt}
+                        </span>
+                        <span className="text-[10px] text-[#7a6a58] font-medium opacity-0 group-hover:opacity-100 transition hidden sm:inline">
+                          chọn
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
