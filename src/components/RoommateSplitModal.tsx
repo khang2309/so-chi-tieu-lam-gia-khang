@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Users,
@@ -64,10 +64,22 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   const [roommatesCount, setRoommatesCount] = useState<number>(3);
 
   // Target wallet & ledger
-  const roomLedger = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
+  const defaultRoomLedger = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
+  const [selectedLedgerId, setSelectedLedgerId] = useState<string>(
+    defaultRoomLedger?.id || ''
+  );
   const [selectedWalletId, setSelectedWalletId] = useState<string>(
     wallets[1]?.id || wallets[0]?.id || ''
   );
+
+  useEffect(() => {
+    if (isOpen) {
+      const roomL = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
+      setSelectedLedgerId(roomL?.id || '');
+    }
+  }, [isOpen, ledgers]);
+
+  const selectedLedger = ledgers.find((l) => l.id === selectedLedgerId) || defaultRoomLedger;
 
   const [copied, setCopied] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
@@ -110,7 +122,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
       type: 'expense',
       date: new Date().toISOString(),
       categoryId: 'cat-bills',
-      ledgerId: roomLedger?.id || 'ledger-room',
+      ledgerId: selectedLedgerId || defaultRoomLedger?.id || 'ledger-room',
       walletId: selectedWalletId,
       note: `Tiền trọ tháng: Điện ${electricKwh}kWh, Nước ${waterM3}m3, Wifi chia ${count} người`,
       splitInfo: {
@@ -353,6 +365,24 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             </div>
           </div>
 
+          {/* Select ledger to record */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-[#7a6a58]">
+              Lưu vào sổ:
+            </label>
+            <select
+              value={selectedLedgerId}
+              onChange={(e) => setSelectedLedgerId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+            >
+              {ledgers.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Select wallet to record */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-[#7a6a58]">
@@ -389,12 +419,12 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             {savedSuccess ? (
               <>
                 <Check className="w-4 h-4 text-white" />
-                <span>Đã ghi vào sổ Tiền trọ!</span>
+                <span>Đã ghi vào {selectedLedger?.name || 'sổ'}!</span>
               </>
             ) : (
               <>
                 <PlusCircle className="w-4 h-4" />
-                <span>Ghi {formatCurrency(perPersonAmount)} vào Sổ Trọ</span>
+                <span>Ghi {formatCurrency(perPersonAmount)} vào {selectedLedger?.name || 'Sổ Tiền Trọ'}</span>
               </>
             )}
           </button>
