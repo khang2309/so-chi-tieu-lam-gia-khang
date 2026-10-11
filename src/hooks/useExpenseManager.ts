@@ -5,7 +5,6 @@ import { isWithinTimeFilter } from '../utils/formatters';
 import { auth } from '../firebase';
 import {
   syncTransactionToFirestore,
-  removeTransactionFromFirestore,
   syncWalletToFirestore,
   removeWalletFromFirestore,
   syncLedgerToFirestore,
@@ -241,7 +240,7 @@ export function useExpenseManager() {
       balanceMap[wallet.id] = wallet.initialBalance;
     });
 
-    transactions.forEach((tx) => {
+    transactions.filter((tx) => !tx.isDeleted).forEach((tx) => {
       if (tx.type === 'expense') {
         if (balanceMap[tx.walletId] !== undefined) {
           balanceMap[tx.walletId] -= tx.amount;
@@ -270,6 +269,9 @@ export function useExpenseManager() {
   // 4. Filtered Transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
+      // Ẩn các giao dịch đã xóa mềm (Soft delete)
+      if (tx.isDeleted) return false;
+
       // Ledger filter
       if (activeLedgerId !== 'all' && tx.ledgerId !== activeLedgerId) {
         return false;
@@ -417,10 +419,18 @@ export function useExpenseManager() {
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((tx) => tx.id !== id));
-    if (auth?.currentUser?.uid) {
-      removeTransactionFromFirestore(auth.currentUser.uid, id);
-    }
+    const now = new Date().toISOString();
+    setTransactions((prev) => {
+      const updated = prev.map((tx) =>
+        tx.id === id ? sanitizeData({ ...tx, isDeleted: true, updatedAt: now }) : tx
+      );
+      const target = updated.find((tx) => tx.id === id);
+      if (target && auth?.currentUser?.uid) {
+        // Đồng bộ giao dịch đã đánh dấu xóa mềm lên Firestore
+        syncTransactionToFirestore(auth.currentUser.uid, target);
+      }
+      return updated;
+    });
   };
 
   const addLedger = (data: Omit<Ledger, 'id' | 'createdAt'>) => {
@@ -585,17 +595,36 @@ export function useExpenseManager() {
     }
   };
 
+  const clearUserData = () => {
+    localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
+    localStorage.removeItem(STORAGE_KEYS.WALLETS);
+    localStorage.removeItem(STORAGE_KEYS.LEDGERS);
+    localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_LEDGER);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_WALLET);
+    localStorage.removeItem(STORAGE_KEYS.INCLUDE_ALL_WALLETS);
+    localStorage.removeItem(STORAGE_KEYS.TIME_FILTER);
+
+    // Đưa state ứng dụng về trạng thái trống trơn hoàn toàn
+    setTransactions([]);
+    setWallets([]);
+    setLedgers([]);
+    setCategories([]);
+    setActiveLedgerId('all');
+    setActiveWalletId('all');
+  };
+
   const exportDataJson = async () => {
     const data = {
       ledgers,
       wallets,
       categories,
-      transactions,
+      transactions: transactions.filter((tx) => !tx.isDeleted),
       exportedAt: new Date().toISOString(),
-      version: '1.0.0',
+      version: 'Kyouma 2.0',
     };
     const jsonStr = JSON.stringify(data, null, 2);
-    const filename = `so-chi-tieu-lam-gia-khang-${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `so-chi-tieu-kyouma-2.0-${new Date().toISOString().slice(0, 10)}.json`;
     const base64Data = utf8ToBase64(jsonStr);
     await saveAndShareFile(filename, base64Data, 'application/json');
   };
@@ -682,6 +711,7 @@ export function useExpenseManager() {
     updateCategory,
     deleteCategory,
     resetToDefaults,
+    clearUserData,
     exportDataJson,
     importDataJson,
     syncToCloud,

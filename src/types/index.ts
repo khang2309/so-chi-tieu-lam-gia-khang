@@ -54,6 +54,7 @@ export interface Transaction {
   } | null;
   createdAt: string;
   updatedAt?: string;
+  isDeleted?: boolean;
 }
 
 export interface RoomSplitData {

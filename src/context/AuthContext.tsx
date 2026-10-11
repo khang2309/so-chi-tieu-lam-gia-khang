@@ -137,8 +137,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Bỏ qua nếu chưa đăng nhập qua GoogleAuth
     }
     setUser(null);
-    setIsOfflineMode(true);
-    localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
+    setIsOfflineMode(false);
+    // Xóa sạch toàn bộ dữ liệu người dùng ở LocalStorage
+    const keysToRemove = [
+      'sochitieu_transactions_v2',
+      'sochitieu_wallets_v2',
+      'sochitieu_ledgers_v2',
+      'sochitieu_categories_v2',
+      'sochitieu_active_ledger_v2',
+      'sochitieu_active_wallet_v2',
+      'sochitieu_include_all_wallets_v2',
+      'sochitieu_time_filter_v2',
+      STORAGE_OFFLINE_KEY,
+    ];
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    setIsAuthModalOpen(true);
   };
 
   const continueOffline = () => {

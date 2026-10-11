@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Check } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
@@ -13,6 +13,7 @@ interface TransactionModalProps {
   categories: Category[];
   initialLedgerId?: string;
   initialWalletId?: string;
+  existingTransactions?: Transaction[];
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -25,6 +26,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   categories,
   initialLedgerId,
   initialWalletId,
+  existingTransactions = [],
 }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState<string>('');
@@ -33,6 +35,37 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [ledgerId, setLedgerId] = useState<string>('');
   const [walletId, setWalletId] = useState<string>('');
   const [note, setNote] = useState<string>('');
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+
+  // Lấy các ghi chú từ lịch sử giao dịch (loại trừ đã xóa mềm) sắp xếp theo tần suất
+  const noteSuggestions = useMemo(() => {
+    if (!existingTransactions || existingTransactions.length === 0) return [];
+
+    const frequencyMap = new Map<string, number>();
+    for (const tx of existingTransactions) {
+      if (tx.isDeleted) continue;
+      const trimmed = tx.note?.trim();
+      if (trimmed) {
+        frequencyMap.set(trimmed, (frequencyMap.get(trimmed) || 0) + 1);
+      }
+    }
+
+    return Array.from(frequencyMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([noteText]) => noteText);
+  }, [existingTransactions]);
+
+  // Lọc gợi ý theo từ khóa đang gõ trong ô Ghi chú
+  const filteredSuggestions = useMemo(() => {
+    if (!noteSuggestions.length) return [];
+    const query = note.trim().toLowerCase();
+    if (!query) {
+      return noteSuggestions.slice(0, 8);
+    }
+    return noteSuggestions
+      .filter((s) => s.toLowerCase().includes(query) && s.toLowerCase() !== query)
+      .slice(0, 8);
+  }, [noteSuggestions, note]);
 
   useEffect(() => {
     if (editingTransaction) {
@@ -209,6 +242,66 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Note Input with Autocomplete (Đặt ngay bên dưới ô Số tiền) */}
+          <div className="space-y-1.5 relative">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[#7a6a58]">
+                Ghi chú chi tiết
+              </label>
+              {note && (
+                <button
+                  type="button"
+                  onClick={() => setNote('')}
+                  className="text-[10px] text-[#7a6a58] hover:text-[#b94a3b]"
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowSuggestions(false), 200);
+                }}
+                placeholder="VD: Cơm trưa, Xăng xe Janus, Tiền phòng..."
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition shadow-2xs"
+              />
+            </div>
+
+            {/* Dropdown Gợi ý thông minh */}
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-[#fffdfa] border border-[#d8c8b4] rounded-xl shadow-lg max-h-48 overflow-y-auto p-1.5 divide-y divide-[#f5ebe0]">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#a25832]">
+                  Gợi ý từ lịch sử ({filteredSuggestions.length})
+                </div>
+                {filteredSuggestions.map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setNote(suggestion);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-[#3e332a] hover:bg-[#f5ebe0] rounded-lg transition flex items-center justify-between group"
+                  >
+                    <span className="truncate">{suggestion}</span>
+                    <span className="text-[10px] text-[#7a6a58] opacity-0 group-hover:opacity-100 transition">
+                      chọn
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Category Selector Grid */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-[#7a6a58]">
@@ -288,20 +381,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-            />
-          </div>
-
-          {/* Note Input */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#7a6a58]">
-              Ghi chú chi tiết
-            </label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="VD: Cơm trưa, Xăng xe Janus, Tiền phòng..."
-              className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
             />
           </div>
 

@@ -96,12 +96,13 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const getWallet = (wId: string) => wallets.find((w) => w.id === wId);
   const getLedger = (lId: string) => ledgers.find((l) => l.id === lId);
 
-  // 1. Chỉ hiển thị giao dịch của Sổ đang chọn
+  // 1. Chỉ hiển thị giao dịch của Sổ đang chọn (lọc bỏ các giao dịch đã xóa mềm)
   const ledgerFilteredTransactions = useMemo(() => {
+    const nonDeleted = transactions.filter((t) => !t.isDeleted);
     if (activeLedgerId && activeLedgerId !== 'all') {
-      return transactions.filter((t) => t.ledgerId === activeLedgerId);
+      return nonDeleted.filter((t) => t.ledgerId === activeLedgerId);
     }
-    return transactions;
+    return nonDeleted;
   }, [transactions, activeLedgerId]);
 
   // Sinh danh sách các tabs cuộn ngang cho Tháng (Tự động sinh đủ 12 tháng từ 01/YYYY đến 12/YYYY)

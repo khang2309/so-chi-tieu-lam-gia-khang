@@ -26,6 +26,7 @@ interface DataBackupModalProps {
   onExportExcel?: () => void;
   onImport: (jsonString: string) => boolean;
   onReset: () => void;
+  onClearUserData?: () => void;
   onOpenCategoryManager: () => void;
   onSyncToCloud?: () => Promise<{ success: boolean; count?: number; message?: string }>;
 }
@@ -37,6 +38,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onExportExcel,
   onImport,
   onReset,
+  onClearUserData,
   onOpenCategoryManager,
   onSyncToCloud,
 }) => {
@@ -178,6 +180,14 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     }
   };
 
+  const handleLogout = async () => {
+    if (onClearUserData) {
+      onClearUserData();
+    }
+    await logout();
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="relative w-full max-w-md max-h-[90vh] rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
@@ -231,7 +241,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   </div>
 
                   <button
-                    onClick={logout}
+                    onClick={handleLogout}
                     className="px-2.5 py-1.5 rounded-lg border border-[#fca5a5] bg-[#fef2f2] text-xs font-semibold text-[#b91c1c] hover:bg-[#fee2e2] active:scale-95 transition flex items-center gap-1 shrink-0"
                     title="Đăng xuất tài khoản"
                   >
@@ -560,7 +570,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
           <div className="p-2.5 rounded-xl bg-[#f5ebe0] text-center text-[11px] text-[#7a6a58]">
             <p className="font-semibold text-[#3e332a] flex items-center justify-center gap-1">
               <Smartphone className="w-3.5 h-3.5 text-[#a25832]" />
-              Sổ Chi Tiêu v1.0.0
+              Sổ Chi Tiêu - Kyouma 2.0
             </p>
             <p className="mt-0.5">Dành cho Web, Android APK (Capacitor)</p>
           </div>

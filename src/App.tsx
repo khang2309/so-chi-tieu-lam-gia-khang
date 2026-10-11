@@ -139,8 +139,10 @@ export function App() {
           <>
             {/* 1. ĐẨY NHẬT KÝ GIAO DỊCH LÊN ĐẦU: Đập vào mắt người dùng ngay lập tức */}
             <TransactionList
-              transactions={manager.transactions.filter((tx) =>
-                manager.activeLedgerId === 'all' || tx.ledgerId === manager.activeLedgerId
+              transactions={manager.transactions.filter(
+                (tx) =>
+                  !tx.isDeleted &&
+                  (manager.activeLedgerId === 'all' || tx.ledgerId === manager.activeLedgerId)
               )}
               activeLedgerId={manager.activeLedgerId}
               activeLedgerName={
@@ -271,6 +273,7 @@ export function App() {
         categories={manager.categories}
         initialLedgerId={manager.activeLedgerId}
         initialWalletId={manager.activeWalletId}
+        existingTransactions={manager.transactions}
       />
 
       <ReceiptScanModal
@@ -347,7 +350,7 @@ export function App() {
         onExport={manager.exportDataJson}
         onExportExcel={() => {
           exportTransactionsToExcel(
-            manager.transactions,
+            manager.transactions.filter((tx) => !tx.isDeleted),
             manager.categories,
             manager.ledgers,
             manager.wallets,
@@ -356,6 +359,7 @@ export function App() {
         }}
         onImport={manager.importDataJson}
         onReset={manager.resetToDefaults}
+        onClearUserData={manager.clearUserData}
         onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
         onSyncToCloud={manager.syncToCloud}
       />
