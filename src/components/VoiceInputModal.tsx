@@ -221,10 +221,23 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
         {/* Xem trước bóc tách thông minh (Live Parser Preview) */}
         {previewResult && previewResult.amount > 0 && (
           <div className="w-full p-3 rounded-xl bg-[#fff7ed] border border-[#fed7aa] mb-4 text-left animate-in slide-in-from-bottom-2 duration-150">
-            <div className="text-[11px] font-bold text-[#c2410c] uppercase mb-1 flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              <span>Kết quả bóc tách thông minh:</span>
+            <div className="text-[11px] font-bold text-[#c2410c] uppercase mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                <span>Kết quả bóc tách thông minh:</span>
+              </span>
+              {previewResult.transcript && (
+                <span className="text-[10px] text-[#7a6a58] font-normal italic">
+                  Đã phiên mã
+                </span>
+              )}
             </div>
+            {previewResult.transcript && (
+              <div className="mb-2 p-1.5 rounded-lg bg-[#ffedd5]/50 border border-[#fed7aa]/60 text-xs text-[#3e332a]">
+                <span className="text-[#7a6a58] text-[11px]">AI nghe được: </span>
+                <strong className="italic text-[#ea580c]">"{previewResult.transcript}"</strong>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-[#7a6a58]">Số tiền: </span>

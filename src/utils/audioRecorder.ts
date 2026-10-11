@@ -30,8 +30,8 @@ class AudioRecorderService {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
           noiseSuppression: true,
+          echoCancellation: true,
           autoGainControl: true,
         },
       });
@@ -60,8 +60,19 @@ class AudioRecorderService {
         }
       }
 
-      const options: MediaRecorderOptions = selectedMime ? { mimeType: selectedMime } : {};
-      const recorder = new MediaRecorder(stream, options);
+      // Tăng bitrate ghi âm 128kbps để lọc sạch tạp âm và tăng độ chi tiết âm thanh
+      const options: MediaRecorderOptions = {
+        ...(selectedMime ? { mimeType: selectedMime } : {}),
+        audioBitsPerSecond: 128000,
+      };
+
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, options);
+      } catch (err) {
+        console.warn('Không thể áp dụng audioBitsPerSecond, sử dụng cấu hình mặc định:', err);
+        recorder = new MediaRecorder(stream);
+      }
       this.mediaRecorder = recorder;
 
       recorder.ondataavailable = (event: BlobEvent) => {

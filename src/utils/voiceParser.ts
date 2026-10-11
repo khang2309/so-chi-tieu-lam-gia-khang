@@ -13,6 +13,7 @@ export interface ParsedVoiceResult {
   type: TransactionType;
   categoryId: string;
   rawText: string;
+  transcript?: string;
 }
 
 // Chuyển đổi các từ chữ số tiếng Việt thông dụng sang số
@@ -483,17 +484,18 @@ export function parseVoiceInput(text: string, categories: Category[]): ParsedVoi
 }
 
 /**
- * Prompt ngắn gọn, súc tích theo chỉ định để trị dứt điểm lỗi ảo giác (hallucination)
- * Loại bỏ hoàn toàn ví dụ số tiền tĩnh gây suy đoán sai (như 25ca -> 825000)
+ * Prompt ép Gemini sử dụng kỹ thuật Chain-of-Thought:
+ * Bắt buộc nghe và chép chính tả (transcript) trước, sau đó mới bóc tách số tiền và dữ liệu dựa trên transcript đó.
  */
-export const VOICE_CONCISE_PROMPT =
-  'Phân tích câu nói tiếng Việt và điền dữ liệu vào JSON Schema. Lưu ý xử lý đúng các đơn vị tiền lóng (25ca = 25000) và phân biệt đúng Thu nhập / Chi tiêu.';
+export const VOICE_CHAIN_OF_THOUGHT_PROMPT =
+  "Đây là đoạn ghi âm tiếng Việt có lẫn từ lóng. Nhiệm vụ BẮT BUỘC: Đầu tiên phải nghe và chép chính tả lại toàn bộ câu nói vào trường 'transcript'. Sau đó mới phân tích các trường amount, note, category và transactionType dựa trên transcript đó.";
 
-export const VOICE_FEW_SHOT_SYSTEM_PROMPT = VOICE_CONCISE_PROMPT;
+export const VOICE_CONCISE_PROMPT = VOICE_CHAIN_OF_THOUGHT_PROMPT;
+export const VOICE_FEW_SHOT_SYSTEM_PROMPT = VOICE_CHAIN_OF_THOUGHT_PROMPT;
 
 /**
  * Nâng cấp bóc tách Giọng nói (Voice) bằng Google Gemini API:
- * Gửi câu nói lên Gemini để bóc tách: amount, note, category, transactionType
+ * Gửi câu nói lên Gemini để bóc tách: transcript, amount, note, category, transactionType
  * Tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số nguyên, loại bỏ số tiền khỏi note
  */
 export async function parseVoiceWithGemini(
@@ -517,7 +519,7 @@ export async function parseVoiceWithGemini(
   // Danh sách danh mục để AI gợi ý chuẩn xác nhất
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `${VOICE_CONCISE_PROMPT}
+  const prompt = `${VOICE_CHAIN_OF_THOUGHT_PROMPT}
 
 Danh sách các danh mục có sẵn: ${categoryNames}.
 Câu nói: "${cleanInput}"`;
@@ -529,7 +531,7 @@ Câu nói: "${cleanInput}"`;
       abortSignal,
       GEMINI_VOICE_SCHEMA,
       onModelSwitch,
-      VOICE_CONCISE_PROMPT
+      VOICE_CHAIN_OF_THOUGHT_PROMPT
     );
     let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
     const cleanJson = extractCleanJsonString(cleanText);
@@ -541,10 +543,11 @@ Câu nói: "${cleanInput}"`;
       parsed = JSON.parse(escapeNewlinesInJsonStrings(cleanJson));
     }
 
+    const transcript = String(parsed.transcript || cleanInput).trim();
     let amount = Math.abs(Math.round(Number(parsed.amount) || 0));
     // Fallback nếu LLM trả 0
     if (amount === 0) {
-      const fallbackExt = extractAmount(cleanInput);
+      const fallbackExt = extractAmount(transcript || cleanInput);
       if (fallbackExt) {
         amount = fallbackExt.amount;
       }
@@ -557,7 +560,7 @@ Câu nói: "${cleanInput}"`;
       .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
       .trim();
     if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
-      note = rawNote || cleanInput;
+      note = rawNote || transcript || cleanInput;
     }
 
     const rawType = String(parsed.transactionType || '').trim().toLowerCase();
@@ -568,7 +571,7 @@ Câu nói: "${cleanInput}"`;
       type = 'expense';
     } else {
       const isIncomeText = /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ|bán)\b/i.test(
-        cleanInput
+        transcript || cleanInput
       );
       type = isIncomeText ? 'income' : 'expense';
     }
@@ -610,7 +613,8 @@ Câu nói: "${cleanInput}"`;
       note,
       type,
       categoryId: finalCat?.id || '',
-      rawText: text,
+      rawText: transcript || text,
+      transcript: transcript || undefined,
     };
   } catch (err) {
     console.warn('Lỗi gọi Gemini NLP cho Voice, tự động fallback sang Regex parser cục bộ:', err);
@@ -621,6 +625,7 @@ Câu nói: "${cleanInput}"`;
 /**
  * Phân tích trực tiếp từ dữ liệu âm thanh ghi âm (Audio Base64) bằng Google Gemini
  * Tự động chuyển đổi các model dự phòng khi hết Quota
+ * Sử dụng kỹ thuật Chain-of-Thought ép Gemini chép chính tả (transcript) trước
  */
 export async function parseVoiceAudioWithGemini(
   audioBase64: string,
@@ -632,7 +637,7 @@ export async function parseVoiceAudioWithGemini(
 ): Promise<ParsedVoiceResult> {
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `${VOICE_CONCISE_PROMPT}
+  const prompt = `${VOICE_CHAIN_OF_THOUGHT_PROMPT}
 
 Danh sách các danh mục có sẵn: ${categoryNames}.`;
 
@@ -644,7 +649,7 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     abortSignal,
     GEMINI_VOICE_SCHEMA,
     onModelSwitch,
-    VOICE_CONCISE_PROMPT
+    VOICE_CHAIN_OF_THOUGHT_PROMPT
   );
 
   let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -662,6 +667,7 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     }
   }
 
+  const transcript = String(parsed.transcript || '').trim();
   let amount = Math.abs(Math.round(Number(parsed.amount) || 0));
 
   const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
@@ -671,12 +677,12 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
     .trim();
   if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
-    note = rawNote || 'Giao dịch giọng nói';
+    note = transcript || rawNote || 'Giao dịch giọng nói';
   }
 
-  // Nếu amount = 0, thử bóc tách từ rawNote
-  if (amount === 0 && rawNote) {
-    const fallbackExt = extractAmount(rawNote);
+  // Nếu amount = 0, thử bóc tách từ transcript hoặc rawNote
+  if (amount === 0) {
+    const fallbackExt = extractAmount(transcript || rawNote);
     if (fallbackExt) {
       amount = fallbackExt.amount;
     }
@@ -690,7 +696,7 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     type = 'expense';
   } else {
     const isIncomeText = /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ|bán)\b/i.test(
-      note
+      transcript || note
     );
     type = isIncomeText ? 'income' : 'expense';
   }
@@ -727,7 +733,8 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     note,
     type,
     categoryId: finalCat?.id || '',
-    rawText: note,
+    rawText: transcript || note,
+    transcript: transcript || undefined,
   };
 }
 

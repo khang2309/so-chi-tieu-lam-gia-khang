@@ -220,15 +220,20 @@ export const GEMINI_SPLIT_SCHEMA = {
 };
 
 /**
- * Schema Gemini cho Voice-to-Text NLP (Single Voice Parsed Object)
+ * Schema Gemini cho Voice-to-Text NLP & Audio Multimodal (Single Voice Parsed Object)
+ * Kỹ thuật Chain-of-Thought: Ép Gemini chép chính tả (transcript) trước rồi mới bóc tách số tiền & dữ liệu
  */
 export const GEMINI_VOICE_SCHEMA = {
   type: 'object',
   properties: {
+    transcript: {
+      type: 'string',
+      description: 'Bước 1: Chép chính tả (phiên mã) lại y hệt 100% câu nói tiếng Việt nghe được trong Audio.',
+    },
     amount: {
       type: 'integer',
       description:
-        "Số tiền giao dịch. Phải quy đổi các từ lóng: k, ca, ka, nghìn, ngàn = x 1.000 (VD: '25ca' = 25000, '50k' = 50000). củ, triệu = x 1.000.000. Tuyệt đối không sinh ra số ngẫu nhiên.",
+        "Bước 2: Dựa vào transcript, trích xuất số tiền. Quy đổi: k, ca, ka, nghìn, ngàn = x 1.000 (VD: '25ca' = 25000). củ, triệu = x 1.000.000.",
     },
     note: {
       type: 'string',
@@ -244,7 +249,7 @@ export const GEMINI_VOICE_SCHEMA = {
         "Nếu người dùng chi tiền (mua, ăn, trả, tiêu) -> 'expense'. Nếu người dùng nhận tiền (bán, được, lương, thu) -> 'income'.",
     },
   },
-  required: ['amount', 'note', 'category', 'transactionType'],
+  required: ['transcript', 'amount', 'note', 'category', 'transactionType'],
 };
 
 /**
