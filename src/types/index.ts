@@ -1,0 +1,67 @@
+export type TransactionType = 'expense' | 'income' | 'transfer';
+
+export type TimeFilter = 'week' | 'month' | 'year' | 'all';
+
+export interface Ledger {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  isDefault?: boolean;
+  createdAt: string;
+}
+
+export interface Wallet {
+  id: string;
+  name: string;
+  initialBalance: number;
+  icon: string;
+  color: string;
+  accountNumber?: string;
+  createdAt: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  type: 'expense' | 'income' | 'both';
+  icon: string;
+  color: string;
+  isDefault?: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  amount: number;
+  type: TransactionType;
+  date: string; // ISO string YYYY-MM-DD or YYYY-MM-DDTHH:mm
+  categoryId: string;
+  note: string;
+  ledgerId: string;
+  walletId: string;
+  toWalletId?: string; // for transfer type
+  receiptImage?: string;
+  splitInfo?: {
+    totalRoomExpense: number;
+    roommateCount: number;
+    perPersonAmount: number;
+    details: string;
+  };
+  createdAt: string;
+}
+
+export interface RoomSplitData {
+  roomRent: number;
+  electricOld: number;
+  electricNew: number;
+  electricUnitPrice: number;
+  waterOld: number;
+  waterNew: number;
+  waterUnitPrice: number;
+  internetFee: number;
+  garbageFee: number;
+  roommatesCount: number;
+  roommateNames: string[];
+  note: string;
+}

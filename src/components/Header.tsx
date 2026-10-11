@@ -1,0 +1,231 @@
+import React, { useState } from 'react';
+import {
+  BookMarked,
+  FolderPlus,
+  Camera,
+  Users,
+  Settings,
+  ChevronDown,
+  Sparkles,
+  BookOpen,
+} from 'lucide-react';
+import { Ledger } from '../types';
+import { DynamicIcon } from './DynamicIcon';
+
+interface HeaderProps {
+  ledgers: Ledger[];
+  activeLedgerId: string;
+  onSelectLedger: (id: string) => void;
+  onOpenLedgerManager: () => void;
+  onOpenReceiptScan: () => void;
+  onOpenRoommateSplit: () => void;
+  onOpenSettings: () => void;
+  onOpenNewTransaction: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  ledgers,
+  activeLedgerId,
+  onSelectLedger,
+  onOpenLedgerManager,
+  onOpenReceiptScan,
+  onOpenRoommateSplit,
+  onOpenSettings,
+  onOpenNewTransaction,
+}) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const activeLedger = ledgers.find((l) => l.id === activeLedgerId);
+
+  return (
+    <header className="sticky top-0 z-30 bg-[#fdf8f0]/95 backdrop-blur-md border-b border-[#ebdcc9] transition-all">
+      <div className="max-w-4xl mx-auto px-4 py-3">
+        {/* Top bar with Branding and Actions */}
+        <div className="flex items-center justify-between gap-3">
+          {/* Logo & App Title */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-[#ebdcc9] border border-[#d8c8b4] flex items-center justify-center text-[#a25832] shadow-sm">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-[#3e332a] tracking-tight leading-tight flex items-center gap-1.5">
+                Sổ Chi Tiêu của Lâm Gia Khang
+                <Sparkles className="w-3.5 h-3.5 text-[#c28b38] hidden sm:inline" />
+              </h1>
+              <p className="text-xs text-[#7a6a58] font-serif italic">
+                Sổ tay tài chính đương đại • Ghi chép mỗi ngày
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Quick scan receipt */}
+            <button
+              onClick={onOpenReceiptScan}
+              title="Quét hóa đơn thông minh"
+              className="p-2 sm:px-3 sm:py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:border-[#d8c8b4] hover:bg-[#f5ebe0] transition flex items-center gap-1.5 text-xs font-medium"
+            >
+              <Camera className="w-4 h-4 text-[#a25832]" />
+              <span className="hidden sm:inline">Quét HĐ</span>
+            </button>
+
+            {/* Roommate split calculator (Special spotlight for Tiền trọ) */}
+            <button
+              onClick={onOpenRoommateSplit}
+              title="Tính & chia tiền trọ 3 người"
+              className={`p-2 sm:px-3 sm:py-1.5 rounded-lg border transition flex items-center gap-1.5 text-xs font-medium ${
+                activeLedgerId === 'ledger-room'
+                  ? 'bg-[#3d7a5a]/10 border-[#3d7a5a]/30 text-[#3d7a5a] font-semibold'
+                  : 'bg-[#fbf5eb] border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0]'
+              }`}
+            >
+              <Users className="w-4 h-4 text-[#3d7a5a]" />
+              <span className="hidden sm:inline">Chia tiền trọ</span>
+            </button>
+
+            {/* Settings & Backup */}
+            <button
+              onClick={onOpenSettings}
+              title="Cài đặt & Sao lưu dữ liệu"
+              className="p-2 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+
+            {/* Main Add Button */}
+            <button
+              onClick={onOpenNewTransaction}
+              className="px-3 py-1.5 rounded-lg bg-[#a25832] text-white hover:bg-[#8c4623] active:scale-95 transition shadow-sm flex items-center gap-1 text-xs sm:text-sm font-medium"
+            >
+              <span className="text-base leading-none font-bold">+</span>
+              <span>Ghi chép</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Ledger Selector Bar */}
+        <div className="mt-2.5 pt-2 border-t border-[#f0e4d5] flex items-center justify-between gap-2">
+          {/* Active Ledger Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] hover:border-[#d8c8b4] transition text-xs sm:text-sm shadow-xs"
+            >
+              <BookMarked className="w-4 h-4 text-[#a25832]" />
+              <span className="text-[#7a6a58]">Sổ:</span>
+              <span className="font-semibold text-[#3e332a]">
+                {activeLedgerId === 'all'
+                  ? 'Tất cả các sổ'
+                  : activeLedger?.name || 'Chi tiêu cá nhân'}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-[#7a6a58]" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setDropdownOpen(false)}
+                />
+                <div className="absolute left-0 mt-1 w-64 rounded-xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-[#a89886] uppercase tracking-wider">
+                    Chọn Sổ ghi chép
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      onSelectLedger('all');
+                      setDropdownOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition ${
+                      activeLedgerId === 'all'
+                        ? 'bg-[#f5ebe0] font-semibold text-[#3e332a]'
+                        : 'text-[#3e332a] hover:bg-[#faf4ec]'
+                    }`}
+                  >
+                    <div className="w-6 h-6 rounded-md bg-[#e6d8c3] flex items-center justify-center text-[#7a6a58]">
+                      <BookOpen className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Tất cả các sổ</div>
+                      <div className="text-[10px] text-[#7a6a58]">Xem tổng hợp giao dịch</div>
+                    </div>
+                  </button>
+
+                  <div className="my-1 border-t border-[#f0e4d5]" />
+
+                  {ledgers.map((ledger) => (
+                    <button
+                      key={ledger.id}
+                      onClick={() => {
+                        onSelectLedger(ledger.id);
+                        setDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition ${
+                        activeLedgerId === ledger.id
+                          ? 'bg-[#f5ebe0] font-semibold text-[#3e332a]'
+                          : 'text-[#3e332a] hover:bg-[#faf4ec]'
+                      }`}
+                    >
+                      <div
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-white"
+                        style={{ backgroundColor: ledger.color }}
+                      >
+                        <DynamicIcon name={ledger.icon} className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 truncate">
+                        <div className="font-medium truncate">{ledger.name}</div>
+                        <div className="text-[10px] text-[#7a6a58] truncate">
+                          {ledger.description}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+
+                  <div className="my-1 border-t border-[#f0e4d5]" />
+
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      onOpenLedgerManager();
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-[#a25832] font-medium hover:bg-[#f5ebe0] flex items-center gap-2 transition"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>Quản lý & Thêm sổ mới...</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Quick pills for ledgers on tablet/desktop */}
+          <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto">
+            {ledgers.map((ledger) => {
+              const isSelected = activeLedgerId === ledger.id;
+              return (
+                <button
+                  key={ledger.id}
+                  onClick={() => onSelectLedger(ledger.id)}
+                  className={`px-2.5 py-1 rounded-full text-xs transition flex items-center gap-1.5 border ${
+                    isSelected
+                      ? 'bg-[#3e332a] text-[#fdf8f0] border-[#3e332a]'
+                      : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:border-[#d8c8b4]'
+                  }`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: ledger.color }}
+                  />
+                  <span>{ledger.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};

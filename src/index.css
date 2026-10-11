@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #fdf8f0;
+    color: #3e332a;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Notebook paper lined pattern for balance card & notes */
+.paper-lined-bg {
+  background-color: #fffdfa;
+  background-image: linear-gradient(#ebdcc9 1px, transparent 1px);
+  background-size: 100% 28px;
+  line-height: 28px;
+}
+
+.paper-card {
+  background-color: #fffdfa;
+  border: 1px solid #e8ded1;
+  box-shadow: 0 2px 6px -1px rgba(62, 51, 42, 0.06), 0 1px 3px -1px rgba(62, 51, 42, 0.04);
+}
+
+.paper-sheet {
+  background-color: #fbf5eb;
+  border: 1px solid #ebdcc9;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #fdf8f0;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8c8b4;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #bfa992;
+}
+
+/* Safe area insets for iOS / Android notch */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
