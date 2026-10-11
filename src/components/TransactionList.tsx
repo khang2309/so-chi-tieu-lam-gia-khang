@@ -916,7 +916,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           </div>
 
                           {/* Note / Description */}
-                          <p className="text-xs text-[#524438] mt-0.5 break-words line-clamp-2">
+                          <p className="text-xs text-[#524438] mt-0.5 break-words line-clamp-3 whitespace-pre-line">
                             {tx.note || (isTransfer ? 'Chuyển khoản' : 'Không có ghi chú')}
                           </p>
 

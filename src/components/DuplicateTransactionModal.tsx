@@ -172,12 +172,12 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
               <FileText className="w-3.5 h-3.5 text-[#7a6a58]" />
               <span>Ghi chú / Nội dung:</span>
             </label>
-            <input
-              type="text"
+            <textarea
+              rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Nhập ghi chú giao dịch..."
-              className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none resize-y min-h-[72px]"
             />
           </div>
 

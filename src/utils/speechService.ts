@@ -29,9 +29,40 @@ class SpeechService {
           console.warn('SpeechRecognition.available returned false, continuing attempt...');
         }
 
-        // BẮT BUỘC gọi SpeechRecognition.requestPermissions() TRƯỚC KHI gọi SpeechRecognition.start()
-        const reqStatus = await SpeechRecognition.requestPermissions();
-        if (reqStatus.speechRecognition !== 'granted') {
+        // Bước 1: Dùng SpeechRecognition.checkPermissions() để kiểm tra trạng thái thực tế
+        let isGranted = false;
+        try {
+          const permStatus = await SpeechRecognition.checkPermissions();
+          if (permStatus.speechRecognition === 'granted') {
+            isGranted = true;
+          }
+        } catch (checkErr) {
+          console.warn('SpeechRecognition.checkPermissions error:', checkErr);
+        }
+
+        // Bước 2: Nếu chưa được cấp quyền (prompt / denied), mới gọi SpeechRecognition.requestPermissions()
+        if (!isGranted) {
+          try {
+            const reqStatus = await SpeechRecognition.requestPermissions();
+            if (reqStatus.speechRecognition === 'granted') {
+              isGranted = true;
+            }
+          } catch (reqErr) {
+            console.warn('SpeechRecognition.requestPermissions error:', reqErr);
+          }
+        }
+
+        // Bước 3: Nếu Native plugin vẫn báo denied hoặc chưa có quyền
+        // Tự động chuyển hướng (fallback) sang Web Speech API của HTML5 mặc định trên Android WebView
+        if (!isGranted) {
+          console.warn(
+            'Native SpeechRecognition báo chưa có quyền. Tự động chuyển hướng (fallback) sang Web Speech API của Android WebView...'
+          );
+          const webFallbackStarted = this.startWebSpeechFallback(callbacks);
+          if (webFallbackStarted) {
+            return true;
+          }
+
           alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
           callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
           this.isListeningActive = false;
@@ -86,12 +117,29 @@ class SpeechService {
 
         return true;
       } catch (err: any) {
-        console.warn('Lỗi native speech recognition, thử fallback Web API:', err);
-        return this.startWebSpeechFallback(callbacks);
+        console.warn('Lỗi native speech recognition, tự động fallback sang Web Speech API:', err);
+        const webFallbackStarted = this.startWebSpeechFallback(callbacks);
+        if (webFallbackStarted) {
+          return true;
+        }
+        alert('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+        callbacks.onError('Vui lòng vào Cài đặt điện thoại -> Ứng dụng -> Sổ Chi Tiêu -> Cấp quyền Micro để sử dụng tính năng này.');
+        this.isListeningActive = false;
+        callbacks.onListeningStateChange?.(false);
+        return false;
       }
     } else {
       // Môi trường Web / Browser
-      return this.startWebSpeechFallback(callbacks);
+      const webFallbackStarted = this.startWebSpeechFallback(callbacks);
+      if (!webFallbackStarted) {
+        callbacks.onError(
+          'Trình duyệt hoặc thiết bị chưa hỗ trợ nhận diện giọng nói (Web Speech API). Vui lòng chạy trên Chrome hoặc Android.'
+        );
+        this.isListeningActive = false;
+        callbacks.onListeningStateChange?.(false);
+        return false;
+      }
+      return true;
     }
   }
 
@@ -100,15 +148,18 @@ class SpeechService {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognitionAPI) {
-      callbacks.onError(
-        'Trình duyệt hoặc thiết bị chưa hỗ trợ nhận diện giọng nói (Web Speech API). Vui lòng chạy trên ứng dụng Android hoặc Chrome.'
-      );
-      this.isListeningActive = false;
-      callbacks.onListeningStateChange?.(false);
+      console.warn('Web Speech API không khả dụng trên môi trường này.');
       return false;
     }
 
     try {
+      if (this.webRecognition) {
+        try {
+          this.webRecognition.abort();
+        } catch {}
+        this.webRecognition = null;
+      }
+
       this.webRecognition = new SpeechRecognitionAPI();
       this.webRecognition.lang = 'vi-VN';
       this.webRecognition.interimResults = true;

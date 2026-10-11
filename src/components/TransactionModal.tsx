@@ -316,8 +316,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               )}
             </div>
             <div className="relative">
-              <input
-                type="text"
+              <textarea
+                rows={3}
                 value={note}
                 onChange={(e) => {
                   setNote(e.target.value);
@@ -328,7 +328,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   setTimeout(() => setShowSuggestions(false), 200);
                 }}
                 placeholder="VD: Cơm trưa, Xăng xe Janus, Tiền phòng..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition shadow-2xs"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition shadow-2xs resize-y min-h-[72px]"
               />
             </div>
 
