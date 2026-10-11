@@ -1,5 +1,5 @@
 import { Category, TransactionType } from '../types';
-import { callGeminiText, GEMINI_VOICE_SCHEMA } from './cloudVisionService';
+import { callGeminiText, callGeminiAudio, GEMINI_VOICE_SCHEMA } from './cloudVisionService';
 
 export interface ParsedVoiceResult {
   amount: number;
@@ -554,5 +554,69 @@ export async function parseVoiceWithGemini(
     console.warn('Lỗi gọi Gemini NLP cho Voice, tự động fallback sang Regex parser cục bộ:', err);
     return parseVoiceInput(text, categories);
   }
+}
+
+/**
+ * Phân tích trực tiếp từ dữ liệu âm thanh ghi âm (Audio Base64) bằng Google Gemini 1.5 Flash
+ */
+export async function parseVoiceAudioWithGemini(
+  audioBase64: string,
+  mimeType: string,
+  categories: Category[],
+  apiKeyOverride?: string,
+  abortSignal?: AbortSignal
+): Promise<ParsedVoiceResult> {
+  const categoryNames = categories.map((c) => c.name).join(', ');
+
+  const prompt = `Nghe đoạn âm thanh tiếng Việt này và trích xuất thông tin giao dịch. Trả về duy nhất định dạng JSON (không có markdown): { "amount": <số tiền nguyên dương>, "note": "<mô tả nội dung chi tiêu hoặc thu nhập>", "category": "<danh mục phù hợp nhất trong danh sách: ${categoryNames}>" }`;
+
+  const rawResponse = await callGeminiAudio(
+    audioBase64,
+    mimeType,
+    prompt,
+    apiKeyOverride,
+    abortSignal,
+    GEMINI_VOICE_SCHEMA
+  );
+
+  let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const firstBrace = cleanText.indexOf('{');
+  const lastBrace = cleanText.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+  }
+
+  const parsed = JSON.parse(cleanText);
+
+  const amount = Math.abs(Math.round(Number(parsed.amount) || 0));
+  const rawNote = String(parsed.note || '').trim();
+  const note = rawNote || 'Giao dịch giọng nói';
+  const categoryName = String(parsed.category || '').trim().toLowerCase();
+
+  // Tìm danh mục khớp nhất
+  let matchedCat = categories.find(
+    (c) => c.name.toLowerCase() === categoryName || categoryName.includes(c.name.toLowerCase())
+  );
+
+  if (!matchedCat && categoryName) {
+    matchedCat = categories.find((c) =>
+      c.name.toLowerCase().split(/\s+/).some((w) => w.length > 1 && categoryName.includes(w))
+    );
+  }
+
+  const defaultExpenseCat = categories.find((c) => c.type === 'expense') || categories[0];
+  const finalCat = matchedCat || defaultExpenseCat;
+
+  const isIncome =
+    finalCat?.type === 'income' ||
+    /\b(lương|thưởng|thu nhập|tiền về|được tặng|nhận được|chuyển khoản cho tôi|trả nợ)\b/i.test(note);
+
+  return {
+    amount,
+    note,
+    type: isIncome ? 'income' : 'expense',
+    categoryId: finalCat?.id || '',
+    rawText: note,
+  };
 }
 

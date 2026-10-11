@@ -436,6 +436,140 @@ export async function callGeminiText(
 }
 
 /**
+ * Gọi Google Gemini 1.5 Flash với Audio input (base64) và text prompt
+ */
+export async function callGeminiAudio(
+  audioBase64: string,
+  rawMimeType: string,
+  promptText: string,
+  apiKeyOverride?: string,
+  abortSignal?: AbortSignal,
+  responseSchema?: any
+): Promise<string> {
+  const savedCfg = getSavedVisionConfig();
+  const keyToUse =
+    apiKeyOverride && apiKeyOverride.trim().length > 0
+      ? apiKeyOverride.trim()
+      : savedCfg.apiKey && savedCfg.apiKey.trim().length > 0
+      ? savedCfg.apiKey.trim()
+      : DEFAULT_GEMINI_API_KEY;
+
+  // Làm sạch mimeType: audio/webm;codecs=opus -> audio/webm
+  let cleanMime = (rawMimeType || 'audio/webm').split(';')[0].trim();
+  if (!cleanMime.startsWith('audio/')) {
+    cleanMime = 'audio/webm';
+  }
+
+  let base64Data = audioBase64;
+  if (base64Data.includes(',')) {
+    base64Data = base64Data.split(',')[1];
+  }
+
+  const generationConfig: Record<string, any> = {
+    temperature: 0.1,
+    response_mime_type: 'application/json',
+    responseMimeType: 'application/json',
+  };
+  if (responseSchema) {
+    generationConfig.responseSchema = responseSchema;
+  }
+
+  const payload: any = {
+    contents: [
+      {
+        parts: [
+          {
+            inline_data: {
+              mime_type: cleanMime,
+              data: base64Data,
+            },
+          },
+          { text: promptText },
+        ],
+      },
+    ],
+    generationConfig,
+  };
+
+  const audioModels = [
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-pro',
+  ];
+
+  let lastError = '';
+
+  for (const model of audioModels) {
+    if (abortSignal?.aborted) {
+      throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
+    }
+
+    const apiVersions = ['v1beta', 'v1'];
+    for (const apiVer of apiVersions) {
+      if (abortSignal?.aborted) {
+        throw new DOMException('Quá trình bị hủy bởi người dùng', 'AbortError');
+      }
+
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${keyToUse}`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: abortSignal,
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const rawContent = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawContent) {
+            return rawContent;
+          }
+        } else {
+          if (res.status === 400 && payload.generationConfig?.responseSchema) {
+            try {
+              const fallbackPayload = {
+                ...payload,
+                generationConfig: {
+                  temperature: 0.1,
+                  response_mime_type: 'application/json',
+                  responseMimeType: 'application/json',
+                },
+              };
+              const retryRes = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fallbackPayload),
+                signal: abortSignal,
+              });
+              if (retryRes.ok) {
+                const retryJson = await retryRes.json();
+                const retryContent = retryJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (retryContent) return retryContent;
+              }
+            } catch {
+              // Ignore
+            }
+          }
+
+          const errText = await res.text();
+          lastError = `Model ${model} (${apiVer} - ${res.status}): ${errText}`;
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || abortSignal?.aborted) {
+          throw err;
+        }
+        lastError = err?.message || String(err);
+      }
+    }
+  }
+
+  throw new Error(`Không thể phân tích âm thanh bằng Gemini: ${lastError}`);
+}
+
+/**
  * Tự động chuyển đổi các ký tự xuống dòng thực tế (literal unescaped newlines)
  * nằm bên trong chuỗi nháy kép JSON thành ký tự escape \n
  * Tránh lỗi SyntaxError: Bad control character / Unexpected token khi parse JSON

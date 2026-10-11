@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle, Loader2, Check } from 'lucide-react';
 import { Category } from '../types';
-import { speechService } from '../utils/speechService';
-import { parseVoiceInput, parseVoiceWithGemini, ParsedVoiceResult } from '../utils/voiceParser';
+import { audioRecorder } from '../utils/audioRecorder';
+import { parseVoiceAudioWithGemini, ParsedVoiceResult } from '../utils/voiceParser';
+import { getSavedVisionConfig } from '../utils/cloudVisionService';
 import { formatCurrency } from '../utils/formatters';
 
 interface VoiceInputModalProps {
@@ -18,119 +19,98 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   categories,
   onParsedResult,
 }) => {
-  const [isListening, setIsListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewResult, setPreviewResult] = useState<ParsedVoiceResult | null>(null);
-  const hasFinishedRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) {
-      speechService.stopListening();
-      setIsListening(false);
+      audioRecorder.cancelRecording();
+      setIsRecording(false);
       setIsAnalyzing(false);
-      setTranscript('');
+      setRecordingDuration(0);
       setErrorMsg(null);
       setPreviewResult(null);
-      hasFinishedRef.current = false;
       return;
     }
 
     startRecording();
 
     return () => {
-      speechService.stopListening();
+      audioRecorder.cancelRecording();
     };
   }, [isOpen]);
 
+  // Bộ đếm thời gian ghi âm
+  useEffect(() => {
+    let interval: any;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setRecordingDuration(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
   const startRecording = async () => {
     setErrorMsg(null);
-    setTranscript('');
     setPreviewResult(null);
     setIsAnalyzing(false);
-    hasFinishedRef.current = false;
+    setRecordingDuration(0);
 
-    const success = await speechService.startListening({
-      onPartialResult: (text) => {
-        setTranscript(text);
-        // Tự động phân tích realtime để xem trước
-        if (text.trim().length > 2) {
-          const parsed = parseVoiceInput(text, categories);
-          setPreviewResult(parsed);
-        }
-      },
-      onFinalResult: async (text) => {
-        setTranscript(text);
-        if (!hasFinishedRef.current && text.trim().length > 1) {
-          hasFinishedRef.current = true;
-          setIsAnalyzing(true);
-          try {
-            const parsed = await parseVoiceWithGemini(text, categories);
-            setPreviewResult(parsed);
-            setTimeout(() => {
-              handleConfirm(parsed);
-            }, 600);
-          } catch {
-            const fallback = parseVoiceInput(text, categories);
-            setPreviewResult(fallback);
-            setTimeout(() => {
-              handleConfirm(fallback);
-            }, 600);
-          } finally {
-            setIsAnalyzing(false);
-          }
-        }
-      },
-      onError: (err) => {
-        const lower = String(err || '').toLowerCase();
-        // Nếu có lỗi aborted hoặc no-speech, tuyệt đối KHÔNG hiển thị dòng chữ đỏ, chỉ reset lại trạng thái
-        if (lower.includes('aborted') || lower.includes('abort') || lower.includes('no-speech')) {
-          setErrorMsg(null);
-        } else {
-          setErrorMsg(err);
-        }
-        setIsListening(false);
-        setIsAnalyzing(false);
-      },
-      onListeningStateChange: (listening) => {
-        setIsListening(listening);
-      },
-    });
+    const cfg = getSavedVisionConfig();
+    if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
+      setErrorMsg('Chưa có Gemini API Key. Vui lòng vào Cài đặt -> Cấu hình AI để lưu API Key.');
+      setIsRecording(false);
+      return;
+    }
 
-    if (success) {
-      setIsListening(true);
+    try {
+      await audioRecorder.startRecording();
+      setIsRecording(true);
+    } catch (err: any) {
+      setIsRecording(false);
+      setErrorMsg(err?.message || 'Không thể mở Microphone để ghi âm.');
     }
   };
 
   const handleStopAndParse = async () => {
-    setIsListening(false);
-    const finalTxt = await speechService.stopListening();
-    const textToParse = (transcript || finalTxt).trim();
-    if (textToParse) {
-      setIsAnalyzing(true);
-      try {
-        const parsed = await parseVoiceWithGemini(textToParse, categories);
-        setPreviewResult(parsed);
-        setTimeout(() => {
-          handleConfirm(parsed);
-        }, 500);
-      } catch {
-        const fallback = parseVoiceInput(textToParse, categories);
-        setPreviewResult(fallback);
-        setTimeout(() => {
-          handleConfirm(fallback);
-        }, 500);
-      } finally {
-        setIsAnalyzing(false);
+    if (isAnalyzing) return;
+    setIsRecording(false);
+    setIsAnalyzing(true);
+    setErrorMsg(null);
+
+    try {
+      const audioResult = await audioRecorder.stopRecording();
+      if (!audioResult || !audioResult.base64Data) {
+        throw new Error('Chưa ghi nhận được âm thanh. Vui lòng bấm vào Micro và nói lại!');
       }
-    } else {
-      setErrorMsg('Chưa nghe rõ nội dung. Vui lòng bấm vào Micro và nói lại!');
+
+      const parsed = await parseVoiceAudioWithGemini(
+        audioResult.base64Data,
+        audioResult.mimeType,
+        categories
+      );
+
+      setPreviewResult(parsed);
+      // Hiển thị preview 600ms rồi tự động xác nhận điền vào form
+      setTimeout(() => {
+        handleConfirm(parsed);
+      }, 600);
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      setErrorMsg(err?.message || 'Không thể xử lý âm thanh với Gemini. Vui lòng thử lại!');
     }
   };
 
   const handleConfirm = (res: ParsedVoiceResult) => {
-    speechService.stopListening();
+    audioRecorder.cancelRecording();
     onParsedResult(res);
     onClose();
   };
@@ -146,7 +126,10 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
       <div className="relative w-full max-w-md bg-[#fffdfa] rounded-t-3xl sm:rounded-3xl border border-[#ebdcc9] shadow-2xl p-6 overflow-hidden flex flex-col items-center text-center">
         {/* Nút đóng */}
         <button
-          onClick={onClose}
+          onClick={() => {
+            audioRecorder.cancelRecording();
+            onClose();
+          }}
           className="absolute top-4 right-4 p-2 text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] rounded-full transition"
           title="Đóng"
         >
@@ -163,15 +146,15 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
         <h3 className="text-lg font-bold text-[#3e332a] mb-6">
           {isAnalyzing
-            ? 'Google Gemini AI đang bóc tách...'
-            : isListening
-            ? 'Đang lắng nghe bạn nói...'
+            ? 'Google Gemini AI đang nghe & phân tích...'
+            : isRecording
+            ? `Đang ghi âm... (${recordingDuration}s)`
             : 'Đã dừng ghi âm'}
         </h3>
 
         {/* Visualizer / Animated Microphone */}
-        <div className="relative flex items-center justify-center mb-4">
-          {(isListening || isAnalyzing) && (
+        <div className="relative flex items-center justify-center mb-5">
+          {(isRecording || isAnalyzing) && (
             <>
               <div className="absolute w-28 h-28 rounded-full bg-[#ea580c]/15 animate-ping" />
               <div className="absolute w-24 h-24 rounded-full bg-[#ea580c]/25 animate-pulse" />
@@ -181,7 +164,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           <button
             onClick={() => {
               if (isAnalyzing) return;
-              if (isListening) {
+              if (isRecording) {
                 handleStopAndParse();
               } else {
                 startRecording();
@@ -191,15 +174,15 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
             className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center text-white shadow-xl transition-transform active:scale-95 ${
               isAnalyzing
                 ? 'bg-[#ea580c] ring-4 ring-[#ea580c]/30 cursor-wait'
-                : isListening
+                : isRecording
                 ? 'bg-gradient-to-tr from-[#ea580c] to-[#f97316] ring-4 ring-[#ea580c]/30'
                 : 'bg-[#7a6a58] hover:bg-[#5c4f42]'
             }`}
-            title={isAnalyzing ? 'Đang phân tích...' : isListening ? 'Bấm để hoàn tất' : 'Bấm để nói lại'}
+            title={isAnalyzing ? 'Đang phân tích...' : isRecording ? 'Bấm để hoàn tất và phân tích' : 'Bấm để ghi âm lại'}
           >
             {isAnalyzing ? (
               <Loader2 className="w-9 h-9 animate-spin" />
-            ) : isListening ? (
+            ) : isRecording ? (
               <Mic className="w-9 h-9 animate-bounce" />
             ) : (
               <MicOff className="w-9 h-9" />
@@ -207,44 +190,23 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           </button>
         </div>
 
-        {/* Nút "Xong / Xử lý ngay" nổi bật ngay dưới Micro khi đang nghe */}
-        {isListening && (
-          <div className="w-full mb-4">
-            <button
-              onClick={handleStopAndParse}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs sm:text-sm font-bold shadow-md hover:brightness-105 active:scale-98 transition flex items-center justify-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              <span>Xong / Xử lý ngay</span>
-            </button>
-          </div>
-        )}
-
-        {/* Hộp hiển thị văn bản nhận diện được */}
-        <div className="w-full min-h-[72px] p-3.5 rounded-2xl bg-[#fbf5eb] border border-[#ebdcc9] flex flex-col justify-center items-center mb-4 transition">
+        {/* Hộp trạng thái ghi âm */}
+        <div className="w-full min-h-[64px] p-3.5 rounded-2xl bg-[#fbf5eb] border border-[#ebdcc9] flex flex-col justify-center items-center mb-4 transition">
           {isAnalyzing ? (
             <div className="flex flex-col items-center gap-1.5 py-1">
               <div className="flex items-center gap-2 text-xs font-bold text-[#ea580c] animate-pulse">
                 <Sparkles className="w-4 h-4 animate-spin text-[#ea580c]" />
-                <span>Google Gemini AI đang phân tích câu nói...</span>
+                <span>Gemini 1.5 Flash đang xử lý đoạn âm thanh...</span>
               </div>
-              {transcript && (
-                <p className="text-xs text-[#7a6a58] italic break-words line-clamp-1">
-                  "{transcript}"
-                </p>
-              )}
+              <p className="text-[11px] text-[#7a6a58] italic">Đang bóc tách số tiền, ghi chú và danh mục</p>
             </div>
-          ) : transcript ? (
-            <p className="text-sm font-semibold text-[#3e332a] italic break-words">
-              "{transcript}"
-            </p>
-          ) : isListening ? (
+          ) : isRecording ? (
             <p className="text-xs text-[#7a6a58] flex items-center gap-1.5 animate-pulse">
               <Volume2 className="w-3.5 h-3.5 text-[#ea580c]" />
-              <span>Hãy nói số tiền và mục đích (VD: "Đổ xăng 50 nghìn")...</span>
+              <span>Hãy đọc số tiền và mục đích (VD: "Đổ xăng 50 nghìn", "Ăn phở 40k")...</span>
             </p>
           ) : (
-            <p className="text-xs text-[#7a6a58]">Bấm vào biểu tượng Micro để nói</p>
+            <p className="text-xs text-[#7a6a58]">Bấm vào biểu tượng Micro để ghi âm câu nói</p>
           )}
         </div>
 
@@ -287,38 +249,48 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           </div>
         )}
 
-        {/* Action button */}
+        {/* Action button - DUY NHẤT 1 HÀNG Ở DƯỚI CÙNG, KHÔNG BỊ TRÙNG LẶP */}
         <div className="w-full mt-2 flex gap-2">
           <button
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition"
+            onClick={() => {
+              audioRecorder.cancelRecording();
+              onClose();
+            }}
+            className="flex-1 py-3 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition"
           >
             Đóng
           </button>
-          {isListening ? (
+          {isRecording ? (
             <button
               onClick={handleStopAndParse}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold hover:brightness-105 shadow-md flex items-center justify-center gap-1.5 transition active:scale-95"
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold hover:brightness-105 shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 animate-pulse"
             >
               <Check className="w-4 h-4" />
               <span>Xong / Xử lý ngay</span>
             </button>
+          ) : isAnalyzing ? (
+            <button
+              disabled
+              className="flex-1 py-3 rounded-xl bg-[#ea580c]/60 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-wait"
+            >
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Đang phân tích...</span>
+            </button>
           ) : previewResult && previewResult.amount > 0 ? (
             <button
               onClick={() => handleConfirm(previewResult)}
-              className="flex-1 py-2.5 rounded-xl bg-[#ea580c] text-white text-xs font-semibold hover:bg-[#c2410c] shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95"
+              className="flex-1 py-3 rounded-xl bg-[#ea580c] text-white text-xs font-semibold hover:bg-[#c2410c] shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95"
             >
               <span>Điền vào hóa đơn</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
-              onClick={handleStopAndParse}
-              disabled={!transcript}
-              className="flex-1 py-2.5 rounded-xl bg-[#3e332a] text-white text-xs font-semibold hover:bg-[#2c241d] disabled:opacity-40 shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95"
+              onClick={startRecording}
+              className="flex-1 py-3 rounded-xl bg-[#3e332a] text-white text-xs font-semibold hover:bg-[#2c241d] shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95"
             >
-              <span>Phân tích câu</span>
-              <ArrowRight className="w-4 h-4" />
+              <Mic className="w-4 h-4" />
+              <span>Ghi âm lại</span>
             </button>
           )}
         </div>
