@@ -11,6 +11,7 @@ import {
   syncLedgerToFirestore,
   removeLedgerFromFirestore,
   subscribeToUserFirestoreData,
+  uploadAllLocalDataToFirestore,
 } from '../utils/firestoreSync';
 
 const STORAGE_KEYS = {
@@ -119,9 +120,16 @@ export function useExpenseManager() {
   // Đồng bộ thời gian thực từ Firestore khi người dùng đăng nhập
   useEffect(() => {
     if (!auth) return;
+    let unsubData: (() => void) | null = null;
+
     const unsubAuth = auth.onAuthStateChanged((currentUser: any) => {
+      if (unsubData) {
+        unsubData();
+        unsubData = null;
+      }
+
       if (currentUser?.uid) {
-        const unsubData = subscribeToUserFirestoreData(currentUser.uid, {
+        unsubData = subscribeToUserFirestoreData(currentUser.uid, {
           onTransactions: (fireTxs) => {
             if (fireTxs && fireTxs.length > 0) {
               setTransactions(fireTxs);
@@ -138,11 +146,13 @@ export function useExpenseManager() {
             }
           },
         });
-        return () => unsubData();
       }
     });
 
-    return () => unsubAuth();
+    return () => {
+      if (unsubData) unsubData();
+      unsubAuth();
+    };
   }, []);
 
   // 3. Computed Wallet Balances
@@ -489,6 +499,17 @@ export function useExpenseManager() {
     }
   };
 
+  const syncToCloud = async () => {
+    if (!auth?.currentUser?.uid) {
+      return { success: false, count: 0, message: 'Chưa đăng nhập tài khoản' };
+    }
+    return await uploadAllLocalDataToFirestore(auth.currentUser.uid, {
+      transactions,
+      wallets,
+      ledgers,
+    });
+  };
+
   return {
     ledgers,
     wallets,
@@ -528,5 +549,6 @@ export function useExpenseManager() {
     resetToDefaults,
     exportDataJson,
     importDataJson,
+    syncToCloud,
   };
 }

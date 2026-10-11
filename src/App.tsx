@@ -359,6 +359,7 @@ export function App() {
         onImport={manager.importDataJson}
         onReset={manager.resetToDefaults}
         onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
+        onSyncToCloud={manager.syncToCloud}
       />
 
       {/* Firebase Auth & Offline First Modal */}

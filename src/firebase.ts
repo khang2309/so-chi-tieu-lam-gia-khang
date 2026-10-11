@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -54,4 +54,3 @@ if (isFirebaseConfigured) {
 }
 
 export { app, auth, db };
-export const googleProvider = new GoogleAuthProvider();

@@ -4,6 +4,7 @@ import {
   setDoc,
   deleteDoc,
   onSnapshot,
+  getDocs,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Transaction, Wallet, Ledger, Category } from '../types';
@@ -164,3 +165,69 @@ export function subscribeToUserFirestoreData(
     unsubs.forEach((unsub) => unsub());
   };
 }
+
+/**
+ * Tải trực tiếp dữ liệu từ Firestore xuống (dùng khi vừa đăng nhập xong)
+ */
+export async function pullUserDataFromFirestore(uid: string): Promise<{
+  transactions: Transaction[];
+  wallets: Wallet[];
+  ledgers: Ledger[];
+} | null> {
+  if (!db || !uid) return null;
+  try {
+    const txSnap = await getDocs(collection(db, 'users', uid, 'transactions'));
+    const walletSnap = await getDocs(collection(db, 'users', uid, 'wallets'));
+    const ledgerSnap = await getDocs(collection(db, 'users', uid, 'ledgers'));
+
+    const transactions: Transaction[] = [];
+    txSnap.forEach((d) => transactions.push(d.data() as Transaction));
+    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const wallets: Wallet[] = [];
+    walletSnap.forEach((d) => wallets.push(d.data() as Wallet));
+
+    const ledgers: Ledger[] = [];
+    ledgerSnap.forEach((d) => ledgers.push(d.data() as Ledger));
+
+    return { transactions, wallets, ledgers };
+  } catch (err) {
+    console.warn('Lỗi tải dữ liệu Firestore:', err);
+    return null;
+  }
+}
+
+/**
+ * Đẩy toàn bộ dữ liệu cục bộ lên Firestore (Đồng bộ thủ công)
+ */
+export async function uploadAllLocalDataToFirestore(
+  uid: string,
+  data: {
+    transactions: Transaction[];
+    wallets: Wallet[];
+    ledgers: Ledger[];
+  }
+): Promise<{ success: boolean; count: number }> {
+  if (!db || !uid) return { success: false, count: 0 };
+  try {
+    let count = 0;
+    for (const tx of data.transactions) {
+      const docRef = doc(db, 'users', uid, 'transactions', tx.id);
+      await setDoc(docRef, tx, { merge: true });
+      count++;
+    }
+    for (const w of data.wallets) {
+      const docRef = doc(db, 'users', uid, 'wallets', w.id);
+      await setDoc(docRef, w, { merge: true });
+    }
+    for (const l of data.ledgers) {
+      const docRef = doc(db, 'users', uid, 'ledgers', l.id);
+      await setDoc(docRef, l, { merge: true });
+    }
+    return { success: true, count };
+  } catch (err) {
+    console.error('Lỗi đẩy dữ liệu lên Firestore:', err);
+    return { success: false, count: 0 };
+  }
+}
+

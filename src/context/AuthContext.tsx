@@ -1,13 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   User,
-  signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { auth, googleProvider, isFirebaseConfigured } from '../firebase';
+import { auth, isFirebaseConfigured } from '../firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -15,7 +14,6 @@ interface AuthContextType {
   isOfflineMode: boolean;
   isOnline: boolean;
   isFirebaseAvailable: boolean;
-  loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -40,11 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => {
-    if (!isFirebaseConfigured) return false;
-    const hasChosenOffline = localStorage.getItem(STORAGE_OFFLINE_KEY) === 'true';
-    return !hasChosenOffline;
-  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   // Lắng nghe trạng thái online/offline của thiết bị
   useEffect(() => {
@@ -78,14 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => unsubscribe();
   }, []);
-
-  const loginWithGoogle = async () => {
-    if (!auth) {
-      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
-    }
-    await signInWithPopup(auth, googleProvider);
-    setIsAuthModalOpen(false);
-  };
 
   const loginWithEmail = async (email: string, pass: string) => {
     if (!auth) {
@@ -130,7 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isOfflineMode,
         isOnline,
         isFirebaseAvailable: isFirebaseConfigured,
-        loginWithGoogle,
         loginWithEmail,
         registerWithEmail,
         logout,
