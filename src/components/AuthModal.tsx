@@ -38,6 +38,7 @@ export const AuthModal: React.FC = () => {
       await loginWithGoogleNative();
     } catch (err: any) {
       console.warn('Lỗi đăng nhập Google Native:', err);
+      alert('Lỗi Firebase: ' + (err?.message || JSON.stringify(err)));
       const detail =
         typeof err === 'object'
           ? (err.message ? `${err.message} (${JSON.stringify(err)})` : JSON.stringify(err))
@@ -72,6 +73,7 @@ export const AuthModal: React.FC = () => {
       }
     } catch (err: any) {
       console.warn('Lỗi xác thực:', err);
+      alert('Lỗi Firebase: ' + (err?.message || String(err)));
       let msg = err?.message || 'Đăng nhập không thành công.';
       if (
         msg.includes('user-not-found') ||

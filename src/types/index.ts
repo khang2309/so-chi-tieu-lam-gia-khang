@@ -10,6 +10,7 @@ export interface Ledger {
   color: string;
   isDefault?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Wallet {
@@ -20,6 +21,7 @@ export interface Wallet {
   color: string;
   accountNumber?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Category {
@@ -29,6 +31,8 @@ export interface Category {
   icon: string;
   color: string;
   isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Transaction {
@@ -49,6 +53,7 @@ export interface Transaction {
     details: string;
   };
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface RoomSplitData {

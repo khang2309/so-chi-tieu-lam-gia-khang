@@ -92,6 +92,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
       await loginWithGoogleNative();
     } catch (err: any) {
       console.warn('Lỗi đăng nhập Google Native:', err);
+      alert('Lỗi Firebase: ' + (err?.message || JSON.stringify(err)));
       const detail =
         typeof err === 'object'
           ? (err.message ? `${err.message} (${JSON.stringify(err)})` : JSON.stringify(err))
@@ -132,6 +133,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
       setAuthError(null);
     } catch (err: any) {
       console.warn('Lỗi xác thực:', err);
+      alert('Lỗi Firebase: ' + (err?.message || String(err)));
       let msg = err?.message || 'Thao tác không thành công.';
       if (
         msg.includes('user-not-found') ||
@@ -161,12 +163,16 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     try {
       const res = await onSyncToCloud();
       if (res.success) {
-        setSyncFeedback(`Đã tải lên và sao lưu ${res.count ?? 0} bản ghi lên Cloud!`);
+        setSyncFeedback(`Đồng bộ thành công! Đã gộp và sao lưu ${res.count ?? 0} bản ghi.`);
       } else {
-        setSyncFeedback(res.message || 'Đồng bộ thất bại, vui lòng thử lại.');
+        const errorMsg = res.message || 'Lỗi không xác định khi đồng bộ';
+        setSyncFeedback(errorMsg);
+        alert('Lỗi Firebase: ' + errorMsg);
       }
-    } catch {
-      setSyncFeedback('Lỗi kết nối khi đồng bộ lên Cloud.');
+    } catch (err: any) {
+      const errorMsg = err?.message || String(err);
+      setSyncFeedback('Lỗi: ' + errorMsg);
+      alert('Lỗi Firebase: ' + errorMsg);
     } finally {
       setIsSyncing(false);
     }

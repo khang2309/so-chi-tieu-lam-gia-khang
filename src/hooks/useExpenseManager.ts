@@ -13,7 +13,8 @@ import {
   syncCategoryToFirestore,
   removeCategoryFromFirestore,
   subscribeToUserFirestoreData,
-  uploadAllLocalDataToFirestore,
+  mergeEntitiesById,
+  performTwoWaySync,
 } from '../utils/firestoreSync';
 import { saveAndShareFile, utf8ToBase64 } from '../utils/fileExporter';
 
@@ -143,7 +144,11 @@ export function useExpenseManager() {
                 return prev;
               });
             } else {
-              setTransactions(fireTxs);
+              setTransactions((prev) => {
+                const merged = mergeEntitiesById(prev, fireTxs);
+                merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                return merged;
+              });
             }
           },
           onWallets: (fireWallets, isEmpty) => {
@@ -155,7 +160,7 @@ export function useExpenseManager() {
                 return prev;
               });
             } else {
-              setWallets(fireWallets);
+              setWallets((prev) => mergeEntitiesById(prev, fireWallets));
             }
           },
           onLedgers: (fireLedgers, isEmpty) => {
@@ -167,7 +172,7 @@ export function useExpenseManager() {
                 return prev;
               });
             } else {
-              setLedgers(fireLedgers);
+              setLedgers((prev) => mergeEntitiesById(prev, fireLedgers));
             }
           },
           onCategories: (fireCategories, isEmpty) => {
@@ -179,7 +184,7 @@ export function useExpenseManager() {
                 return prev;
               });
             } else {
-              setCategories(fireCategories);
+              setCategories((prev) => mergeEntitiesById(prev, fireCategories));
             }
           },
         });
@@ -321,10 +326,12 @@ export function useExpenseManager() {
 
   // 6. Action Handlers
   const addTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
+    const now = new Date().toISOString();
     const newTx: Transaction = {
       ...data,
       id: 'tx-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
     setTransactions((prev) => [newTx, ...prev]);
     if (auth?.currentUser?.uid) {
@@ -334,10 +341,12 @@ export function useExpenseManager() {
   };
 
   const addBatchTransactions = (items: Array<Omit<Transaction, 'id' | 'createdAt'>>) => {
+    const now = new Date().toISOString();
     const newTxs: Transaction[] = items.map((data, idx) => ({
       ...data,
       id: 'tx-' + (Date.now() + idx) + '-' + Math.random().toString(36).substr(2, 4),
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     }));
     setTransactions((prev) => [...newTxs, ...prev]);
     if (auth?.currentUser?.uid) {
@@ -347,8 +356,9 @@ export function useExpenseManager() {
   };
 
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
+    const now = new Date().toISOString();
     setTransactions((prev) => {
-      const updated = prev.map((tx) => (tx.id === id ? { ...tx, ...data } : tx));
+      const updated = prev.map((tx) => (tx.id === id ? { ...tx, ...data, updatedAt: now } : tx));
       const target = updated.find((tx) => tx.id === id);
       if (target && auth?.currentUser?.uid) {
         syncTransactionToFirestore(auth.currentUser.uid, target);
@@ -365,10 +375,12 @@ export function useExpenseManager() {
   };
 
   const addLedger = (data: Omit<Ledger, 'id' | 'createdAt'>) => {
+    const now = new Date().toISOString();
     const newLedger: Ledger = {
       ...data,
       id: 'ledger-' + Date.now(),
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
     setLedgers((prev) => [...prev, newLedger]);
     if (auth?.currentUser?.uid) {
@@ -378,8 +390,9 @@ export function useExpenseManager() {
   };
 
   const updateLedger = (id: string, data: Partial<Ledger>) => {
+    const now = new Date().toISOString();
     setLedgers((prev) => {
-      const updated = prev.map((l) => (l.id === id ? { ...l, ...data } : l));
+      const updated = prev.map((l) => (l.id === id ? { ...l, ...data, updatedAt: now } : l));
       const target = updated.find((l) => l.id === id);
       if (target && auth?.currentUser?.uid) {
         syncLedgerToFirestore(auth.currentUser.uid, target);
@@ -404,10 +417,12 @@ export function useExpenseManager() {
   };
 
   const addWallet = (data: Omit<Wallet, 'id' | 'createdAt'>) => {
+    const now = new Date().toISOString();
     const newWallet: Wallet = {
       ...data,
       id: 'wallet-' + Date.now(),
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
     setWallets((prev) => [...prev, newWallet]);
     if (auth?.currentUser?.uid) {
@@ -417,8 +432,9 @@ export function useExpenseManager() {
   };
 
   const updateWallet = (id: string, data: Partial<Wallet>) => {
+    const now = new Date().toISOString();
     setWallets((prev) => {
-      const updated = prev.map((w) => (w.id === id ? { ...w, ...data } : w));
+      const updated = prev.map((w) => (w.id === id ? { ...w, ...data, updatedAt: now } : w));
       const target = updated.find((w) => w.id === id);
       if (target && auth?.currentUser?.uid) {
         syncWalletToFirestore(auth.currentUser.uid, target);
@@ -451,6 +467,7 @@ export function useExpenseManager() {
     const fromW = wallets.find((w) => w.id === fromWalletId);
     const toW = wallets.find((w) => w.id === toWalletId);
     const defaultNote = `Chuyển tiền: ${fromW?.name || ''} ➜ ${toW?.name || ''}${note ? ' (' + note + ')' : ''}`;
+    const now = new Date().toISOString();
 
     const newTx: Transaction = {
       id: 'tx-transfer-' + Date.now(),
@@ -462,7 +479,8 @@ export function useExpenseManager() {
       ledgerId: activeLedgerId === 'all' ? (ledgers[0]?.id || 'ledger-personal') : activeLedgerId,
       walletId: fromWalletId,
       toWalletId,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     setTransactions((prev) => [newTx, ...prev]);
@@ -472,9 +490,12 @@ export function useExpenseManager() {
   };
 
   const addCategory = (data: Omit<Category, 'id'>) => {
+    const now = new Date().toISOString();
     const newCat: Category = {
       ...data,
       id: 'cat-' + Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
     setCategories((prev) => [...prev, newCat]);
     if (auth?.currentUser?.uid) {
@@ -484,8 +505,9 @@ export function useExpenseManager() {
   };
 
   const updateCategory = (id: string, data: Partial<Category>) => {
+    const now = new Date().toISOString();
     setCategories((prev) => {
-      const updated = prev.map((c) => (c.id === id ? { ...c, ...data } : c));
+      const updated = prev.map((c) => (c.id === id ? { ...c, ...data, updatedAt: now } : c));
       const target = updated.find((c) => c.id === id);
       if (target && auth?.currentUser?.uid) {
         syncCategoryToFirestore(auth.currentUser.uid, target);
@@ -548,13 +570,30 @@ export function useExpenseManager() {
 
   const syncToCloud = async () => {
     if (!auth?.currentUser?.uid) {
-      return { success: false, count: 0, message: 'Chưa đăng nhập tài khoản' };
+      const msg = 'Chưa đăng nhập tài khoản Firebase';
+      alert('Lỗi Firebase: ' + msg);
+      return { success: false, count: 0, message: msg };
     }
-    return await uploadAllLocalDataToFirestore(auth.currentUser.uid, {
+    const res = await performTwoWaySync(auth.currentUser.uid, {
       transactions,
       wallets,
       ledgers,
+      categories,
     });
+
+    if (res.success && res.mergedData) {
+      // Bước 3: Ghi đè mảng đã được gộp (Merge) chuẩn xác xuống LocalStorage & State
+      setTransactions(res.mergedData.transactions);
+      setWallets(res.mergedData.wallets);
+      setLedgers(res.mergedData.ledgers);
+      setCategories(res.mergedData.categories);
+
+      localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(res.mergedData.transactions));
+      localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(res.mergedData.wallets));
+      localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(res.mergedData.ledgers));
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(res.mergedData.categories));
+    }
+    return res;
   };
 
   return {
