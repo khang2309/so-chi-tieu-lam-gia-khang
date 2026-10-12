@@ -55,6 +55,8 @@ export function App() {
   // Search & Filter & Speed Dial states
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  const [isCategoryFilterSheetOpen, setIsCategoryFilterSheetOpen] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
 
   // Popup Đăng nhập lần đầu & Toast thông báo
@@ -157,6 +159,9 @@ export function App() {
         onToggleSearch={() => setIsSearchOpen((prev) => !prev)}
         searchQuery={manager.searchQuery}
         onSearchChange={manager.setSearchQuery}
+        activeTab={activeTab}
+        onOpenCategoryFilter={() => setIsCategoryFilterSheetOpen(true)}
+        isCategoryFiltered={selectedCategoryId !== 'all'}
       />
 
       {/* Main Content Container */}
@@ -210,6 +215,10 @@ export function App() {
             onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
             isFilterSheetOpen={isFilterSheetOpen}
             setIsFilterSheetOpen={setIsFilterSheetOpen}
+            selectedCategoryId={selectedCategoryId}
+            onSelectCategory={setSelectedCategoryId}
+            isCategoryFilterSheetOpen={isCategoryFilterSheetOpen}
+            setIsCategoryFilterSheetOpen={setIsCategoryFilterSheetOpen}
           />
         )}
 
@@ -217,6 +226,8 @@ export function App() {
           <ReportScreen
             transactions={manager.transactions}
             categories={manager.categories}
+            wallets={manager.wallets}
+            ledgers={manager.ledgers}
             activeLedgerId={manager.activeLedgerId}
             activeLedgerName={
               manager.activeLedgerId === 'all'

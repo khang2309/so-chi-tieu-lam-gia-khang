@@ -19,12 +19,13 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowUpDown,
-  Filter,
   Sparkles,
   Award,
+  X,
+  Users,
 } from 'lucide-react';
-import { Transaction, Category } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { Transaction, Category, Wallet, Ledger } from '../types';
+import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
 
 // Register Chart.js components
@@ -38,9 +39,21 @@ ChartJS.register(
   Title
 );
 
+export interface CategoryBreakdownItem {
+  categoryId: string;
+  name: string;
+  color: string;
+  icon: string;
+  amount: number;
+  count: number;
+  percentage: number;
+}
+
 interface ReportScreenProps {
   transactions: Transaction[];
   categories: Category[];
+  wallets?: Wallet[];
+  ledgers?: Ledger[];
   activeLedgerId?: string;
   activeLedgerName?: string;
 }
@@ -81,6 +94,8 @@ const getWeekRange = (baseDate: Date, offsetWeeks: number = 0) => {
 export const ReportScreen: React.FC<ReportScreenProps> = ({
   transactions,
   categories,
+  wallets = [],
+  ledgers = [],
   activeLedgerId = 'all',
   activeLedgerName = 'Tất cả các sổ',
 }) => {
@@ -100,8 +115,13 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   });
   const [compareWithPrevious, setCompareWithPrevious] = useState<boolean>(true);
   const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income'>('all');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [isYearPickerOpen, setIsYearPickerOpen] = useState<boolean>(false);
+
+  // Trạng thái xem chi tiết giao dịch của 1 danh mục (Bottom Sheet / Popup TẠI BÁO CÁO)
+  const [selectedDetailCategory, setSelectedDetailCategory] = useState<CategoryBreakdownItem | null>(null);
+
+  const getWallet = (wId: string) => wallets.find((w) => w.id === wId);
+  const getLedger = (lId: string) => ledgers.find((l) => l.id === lId);
 
   // LOGIC ĐỘNG HOÀN TOÀN (TUYỆT ĐỐI KHÔNG HARDCODE)
   // 1. Tự động sinh danh sách NĂM xoay quanh selectedYear (Dynamic Shift 2 chiều)
@@ -301,11 +321,6 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
         if (txDate?.getFullYear?.() !== selectedYear) return false;
       }
 
-      // Filter by category if selected
-      if (selectedCategoryId !== 'all' && tx.categoryId !== selectedCategoryId) {
-        return false;
-      }
-
       // Filter by type if selected
       if (selectedType !== 'all' && tx.type !== selectedType) {
         return false;
@@ -321,7 +336,6 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     selectedYear,
     selectedMonth,
     selectedQuarter,
-    selectedCategoryId,
     selectedType,
   ]);
 
@@ -361,9 +375,6 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
         if (txDate?.getFullYear?.() !== selectedYear - 1) return false;
       }
 
-      if (selectedCategoryId !== 'all' && tx.categoryId !== selectedCategoryId) {
-        return false;
-      }
       if (selectedType !== 'all' && tx.type !== selectedType) {
         return false;
       }
@@ -379,9 +390,23 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     selectedYear,
     selectedMonth,
     selectedQuarter,
-    selectedCategoryId,
     selectedType,
   ]);
+
+  // Danh sách giao dịch chi tiết cho danh mục đang xem popup (TẠI BÁO CÁO)
+  const categoryDetailTransactions = useMemo(() => {
+    if (!selectedDetailCategory) return [];
+    const isIncomeView = selectedType === 'income';
+    const targetType = isIncomeView ? 'income' : 'expense';
+
+    return currentPeriodTransactions
+      .filter(
+        (tx) =>
+          tx.categoryId === selectedDetailCategory.categoryId &&
+          tx.type === targetType
+      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [selectedDetailCategory, currentPeriodTransactions, selectedType]);
 
   // 5. Current Summary Numbers
   const currentSummary = useMemo(() => {
@@ -1107,57 +1132,6 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Lọc đích danh Danh mục (Scrollable Chips) */}
-        <div className="pt-2 border-t border-[#f0e4d5] space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-bold text-[#7a6a58]">
-            <span className="flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5 text-[#a25832]" />
-              Lọc theo danh mục:
-            </span>
-            {selectedCategoryId !== 'all' && (
-              <button
-                onClick={() => setSelectedCategoryId('all')}
-                className="text-[#a25832] hover:underline cursor-pointer"
-              >
-                Xem tất cả
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              onClick={() => setSelectedCategoryId('all')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer shrink-0 ${
-                selectedCategoryId === 'all'
-                  ? 'bg-[#3e332a] text-white shadow-xs'
-                  : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
-              }`}
-            >
-              Tất cả ({categories.length})
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() =>
-                  setSelectedCategoryId(
-                    selectedCategoryId === cat.id ? 'all' : cat.id
-                  )
-                }
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                  selectedCategoryId === cat.id
-                    ? 'bg-[#a25832] text-white shadow-xs'
-                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
-                }`}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: cat.color }}
-                />
-                <span>{cat.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* 2. CHỈ SỐ TÀI CHÍNH TỔNG QUAN (KPI CARDS) */}
@@ -1306,33 +1280,41 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
               </div>
             </div>
 
-            {/* Danh sách phân bổ chi tiết có thanh Progress Bar */}
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+            {/* Danh sách phân bổ chi tiết có thanh Progress Bar - BẤM VÀO ĐỂ XEM CHI TIẾT GIAO DỊCH */}
+            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
               {categoryBreakdown.map((item) => (
-                <div key={item.categoryId} className="space-y-1">
+                <div
+                  key={item.categoryId}
+                  onClick={() => setSelectedDetailCategory(item)}
+                  className="p-2 -mx-2 rounded-xl hover:bg-[#fbf5eb] active:scale-[0.99] transition cursor-pointer space-y-1 group border border-transparent hover:border-[#ebdcc9]"
+                  title={`Bấm để xem chi tiết ${item.count} giao dịch ${item.name}`}
+                >
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0">
                       <div
-                        className="w-5 h-5 rounded-md flex items-center justify-center text-white shrink-0"
+                        className="w-6 h-6 rounded-lg flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition shadow-xs"
                         style={{ backgroundColor: item.color }}
                       >
-                        <DynamicIcon name={item.icon} className="w-3 h-3" />
+                        <DynamicIcon name={item.icon} className="w-3.5 h-3.5" />
                       </div>
-                      <span className="font-semibold text-[#3e332a] truncate">
+                      <span className="font-bold text-[#3e332a] truncate group-hover:text-[#a25832] transition">
                         {item.name}
                       </span>
-                      <span className="text-[10px] text-[#a89886]">
-                        ({item.count} món)
+                      <span className="text-[10px] text-[#a89886] bg-[#f5ebe0] px-1.5 py-0.2 rounded-md">
+                        {item.count} món
                       </span>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <span className="font-bold text-[#3e332a]">
-                        {formatCurrency(item.amount)}
-                      </span>
-                      <span className="ml-1 text-[11px] font-semibold text-[#7a6a58]">
-                        ({item.percentage.toFixed(1)}%)
-                      </span>
+                    <div className="text-right shrink-0 flex items-center gap-1.5">
+                      <div>
+                        <span className="font-bold text-[#3e332a]">
+                          {formatCurrency(item.amount)}
+                        </span>
+                        <span className="ml-1 text-[11px] font-semibold text-[#7a6a58]">
+                          ({item.percentage.toFixed(1)}%)
+                        </span>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-[#a89886] group-hover:text-[#a25832] group-hover:translate-x-0.5 transition" />
                     </div>
                   </div>
 
@@ -1402,6 +1384,162 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
             })}
           </div>
         </section>
+      )}
+
+      {/* 6. BOTTOM SHEET / POPUP XEM CHI TIẾT GIAO DỊCH THEO DANH MỤC */}
+      {selectedDetailCategory && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#fffdfa] rounded-t-3xl sm:rounded-3xl border border-[#ebdcc9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200">
+            {/* Header Popup */}
+            <div className="p-4 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
+                  style={{ backgroundColor: selectedDetailCategory.color }}
+                >
+                  <DynamicIcon name={selectedDetailCategory.icon} className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-[#3e332a] truncate">
+                    {selectedDetailCategory.name}
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs text-[#7a6a58]">
+                    <span>{categoryDetailTransactions.length} giao dịch</span>
+                    <span>•</span>
+                    <span className="font-bold text-[#a25832]">
+                      {formatCurrency(selectedDetailCategory.amount)}
+                    </span>
+                    <span>({selectedDetailCategory.percentage.toFixed(1)}%)</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDetailCategory(null)}
+                className="p-1.5 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f0e4d5] transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Danh sách giao dịch chi tiết - Tái sử dụng chuẩn thiết kế Card của Sổ cái */}
+            <div className="p-4 overflow-y-auto space-y-2.5 flex-1 max-h-[60vh]">
+              {categoryDetailTransactions.length === 0 ? (
+                <div className="py-8 text-center text-xs text-[#7a6a58]">
+                  Không có giao dịch nào trong danh mục này ở kỳ đã chọn.
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-[#f0ece5] shadow-xs overflow-hidden divide-y divide-[#f0f0f0]">
+                  {categoryDetailTransactions.map((tx) => {
+                    const wallet = getWallet(tx.walletId);
+                    const toWallet = tx.toWalletId ? getWallet(tx.toWalletId) : null;
+                    const ledger = getLedger(tx.ledgerId);
+                    const isIncome = tx.type === 'income';
+                    const isTransfer = tx.type === 'transfer';
+
+                    return (
+                      <div
+                        key={tx.id}
+                        className="p-3.5 hover:bg-[#faf7f2]/50 transition flex items-start justify-between gap-3"
+                      >
+                        {/* Cột trái: Icon & Nội dung */}
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5"
+                            style={{
+                              backgroundColor: isTransfer
+                                ? '#3b6e8c'
+                                : selectedDetailCategory.color,
+                            }}
+                          >
+                            <DynamicIcon
+                              name={selectedDetailCategory.icon || 'Tag'}
+                              className="w-4 h-4"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-xs sm:text-sm text-[#3e332a]">
+                                {selectedDetailCategory.name}
+                              </span>
+
+                              {ledger && (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.2 rounded-md font-medium"
+                                  style={{
+                                    backgroundColor: `${ledger.color}15`,
+                                    color: ledger.color,
+                                  }}
+                                >
+                                  {ledger.name}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Ghi chú */}
+                            <p className="text-xs text-[#524438] mt-0.5 break-words line-clamp-2 whitespace-pre-line">
+                              {tx.note || 'Không có ghi chú'}
+                            </p>
+
+                            {/* Split info */}
+                            {tx.splitInfo && (
+                              <div className="mt-1 flex items-center gap-1 text-[10px] text-[#3d7a5a] bg-[#3d7a5a]/10 px-2 py-0.5 rounded-md self-start">
+                                <Users className="w-3 h-3" />
+                                <span>{tx.splitInfo.details}</span>
+                              </div>
+                            )}
+
+                            {/* Thông tin Ví & Giờ */}
+                            <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-[#8c7b69] mt-0.5">
+                              {isTransfer ? (
+                                <span>
+                                  {wallet?.name || 'Ví nguồn'} →{' '}
+                                  {toWallet?.name || 'Ví đích'}
+                                </span>
+                              ) : (
+                                <span>Ví: {wallet?.name || 'Tiền mặt'}</span>
+                              )}
+                              <span>•</span>
+                              <span>{formatDateTimeDisplay(tx.date)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cột phải: Số tiền */}
+                        <div className="text-right flex flex-col items-end shrink-0">
+                          <div
+                            className={`text-xs sm:text-sm font-bold ${
+                              isIncome ? 'text-[#2e7d32]' : 'text-[#b94a3b]'
+                            }`}
+                          >
+                            {isIncome ? '+' : '-'}
+                            {formatCurrency(tx.amount)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Popup */}
+            <div className="p-3.5 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between gap-3">
+              <div className="text-xs text-[#7a6a58]">
+                Tổng cộng:{' '}
+                <strong className="text-[#3e332a]">
+                  {formatCurrency(selectedDetailCategory.amount)}
+                </strong>
+              </div>
+              <button
+                onClick={() => setSelectedDetailCategory(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#a25832] hover:bg-[#8c4623] text-white transition shadow-xs cursor-pointer active:scale-95"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

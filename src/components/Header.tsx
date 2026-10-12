@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Search,
   BookOpen,
+  Filter,
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
@@ -20,6 +21,10 @@ interface HeaderProps {
   onToggleSearch?: () => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
+  // Icon Phễu lọc danh mục (CHỈ HIỂN THỊ KHI Ở SỔ CÁI)
+  activeTab?: string;
+  onOpenCategoryFilter?: () => void;
+  isCategoryFiltered?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,6 +37,9 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSearch,
   searchQuery = '',
   onSearchChange,
+  activeTab,
+  onOpenCategoryFilter,
+  isCategoryFiltered = false,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -149,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* 2. BÊN PHẢI: Cụm 3 icon [Kính Lúp], [Phễu], [Bánh Răng] */}
+          {/* 2. BÊN PHẢI: Cụm 3 icon [Kính Lúp], [Phễu - chỉ ở Sổ Cái], [Bánh Răng] */}
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Icon 1: Kính Lúp (Tìm kiếm) */}
             {onToggleSearch && (
@@ -166,7 +174,25 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Icon 2: Bánh Răng (Cài đặt & Sao lưu) */}
+            {/* Icon 2: Phễu (Lọc danh mục - CHỈ HIỂN THỊ KHI Ở SỔ CÁI) */}
+            {activeTab === 'dashboard' && onOpenCategoryFilter && (
+              <button
+                onClick={onOpenCategoryFilter}
+                className={`p-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
+                  isCategoryFiltered
+                    ? 'bg-[#a25832] text-white shadow-xs'
+                    : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
+                }`}
+                title="Lọc theo danh mục"
+              >
+                <Filter className="w-4 h-4" />
+                {isCategoryFiltered && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white" />
+                )}
+              </button>
+            )}
+
+            {/* Icon 3: Bánh Răng (Cài đặt & Sao lưu) */}
             <button
               onClick={onOpenSettings}
               className="p-2 rounded-xl bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9] transition cursor-pointer active:scale-95"
