@@ -1,4 +1,5 @@
-import { Category, TransactionType } from '../types';
+import { Category, TransactionType, Wallet } from '../types';
+import { DEFAULT_WALLETS } from '../data/initialData';
 import {
   callGeminiText,
   callGeminiAudio,
@@ -14,6 +15,8 @@ export interface ParsedVoiceResult {
   categoryId: string;
   rawText: string;
   transcript?: string;
+  walletId?: string;
+  walletName?: string;
 }
 
 // Chuyển đổi các từ chữ số tiếng Việt thông dụng sang số
@@ -118,8 +121,8 @@ export function extractAmount(text: string): { amount: number; matchedString: st
     return { amount: val, matchedString: nganRuoiMatch[0] };
   }
 
-  // 3c. "50k", "50 nghìn", "50 ngàn", "50 ng", "50.5k"
-  const nganRegex = /(\d+(?:[.,]\d+)?)\s*(?:nghìn|ngàn|k|ng)(?![a-zA-Z0-9à-ỹÀ-Ỹ])/i;
+  // 3c. "50k", "50 nghìn", "50 ngàn", "25ca", "25 ca", "30 cành", "50.5k"
+  const nganRegex = /(\d+(?:[.,]\d+)?)\s*(?:nghìn|ngàn|k|ca|ka|cành|c|ng)(?![a-zA-Z0-9à-ỹÀ-Ỹ])/i;
   const nganMatch = clean.match(nganRegex);
   if (nganMatch) {
     const val = parseFloat(nganMatch[1].replace(',', '.'));
@@ -484,28 +487,40 @@ export function parseVoiceInput(text: string, categories: Category[]): ParsedVoi
 }
 
 /**
- * Prompt ép Gemini sử dụng kỹ thuật Chain-of-Thought:
- * Bắt buộc nghe và chép chính tả (transcript) trước, sau đó mới bóc tách số tiền và dữ liệu dựa trên transcript đó.
+ * Prompt chuẩn theo yêu cầu:
+ * Bóc tách giao dịch tiếng Việt kèm từ lóng tiền tệ và đối chiếu danh sách ví hợp lệ
  */
-export const VOICE_CHAIN_OF_THOUGHT_PROMPT =
-  "Đây là đoạn ghi âm tiếng Việt có lẫn từ lóng. Nhiệm vụ BẮT BUỘC: Đầu tiên phải nghe và chép chính tả lại toàn bộ câu nói vào trường 'transcript'. Sau đó mới phân tích các trường amount, note, category và transactionType dựa trên transcript đó.";
+export function buildVoiceSystemPrompt(walletNames: string): string {
+  return `Bạn là trợ lý tài chính tiếng Việt. Hãy bóc tách câu của người dùng ra chuẩn JSON.
 
+CHÚ Ý TỪ LÓNG TIỀN TỆ: Nếu người dùng nói số đi kèm 'k', 'ca', 'cành' (VD: '25ca', '30 cành', '50k'), BẮT BUỘC chuyển thành số nguyên nhân với 1000 (VD: 25ca = 25000). Nếu dùng 'lít' (x100,000), 'củ' (x1,000,000).
+
+VÍ TIỀN: Dưới đây là danh sách ví hợp lệ của người dùng: ${walletNames}. Chỉ được phép dò tìm và trả về tên ví khớp với danh sách này. Nếu không nhắc đến, mặc định là 'Tiền mặt'.
+
+VÍ DỤ CHUẨN: Nếu người dùng nói: 'ăn cơm thịt kho mắm ruốc 25ca thanh toán bằng momo' -> Trả về JSON: { "note": "ăn cơm thịt kho mắm ruốc", "amount": 25000, "wallet": "MoMo" }.`;
+}
+
+export const VOICE_CHAIN_OF_THOUGHT_PROMPT = buildVoiceSystemPrompt('Tiền mặt, MoMo, MB Bank, Timo, BIDV, Sacombank');
 export const VOICE_CONCISE_PROMPT = VOICE_CHAIN_OF_THOUGHT_PROMPT;
 export const VOICE_FEW_SHOT_SYSTEM_PROMPT = VOICE_CHAIN_OF_THOUGHT_PROMPT;
 
 /**
  * Nâng cấp bóc tách Giọng nói (Voice) bằng Google Gemini API:
- * Gửi câu nói lên Gemini để bóc tách: transcript, amount, note, category, transactionType
- * Tự động quy đổi các từ k/ngàn/nghìn/triệu/củ thành số nguyên, loại bỏ số tiền khỏi note
+ * Gửi câu nói lên Gemini để bóc tách: transcript, amount, note, wallet, category, transactionType
+ * Tự động quy đổi các từ k/ca/cành/ngàn/nghìn/triệu/củ/lít thành số nguyên, nhận diện ví chính xác
  */
 export async function parseVoiceWithGemini(
   text: string,
   categories: Category[],
+  wallets: Wallet[] = DEFAULT_WALLETS,
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
   onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<ParsedVoiceResult> {
   const cleanInput = text.trim();
+  const walletList = wallets && wallets.length > 0 ? wallets : DEFAULT_WALLETS;
+  const walletNames = walletList.map((w) => w.name).join(', ') || 'Tiền mặt';
+
   if (!cleanInput) {
     return {
       amount: 0,
@@ -513,16 +528,19 @@ export async function parseVoiceWithGemini(
       type: 'expense',
       categoryId: categories[0]?.id || '',
       rawText: text,
+      walletId: walletList[0]?.id || 'wallet-cash',
+      walletName: walletList[0]?.name || 'Tiền mặt',
     };
   }
 
   // Danh sách danh mục để AI gợi ý chuẩn xác nhất
   const categoryNames = categories.map((c) => c.name).join(', ');
+  const systemPrompt = buildVoiceSystemPrompt(walletNames);
 
-  const prompt = `${VOICE_CHAIN_OF_THOUGHT_PROMPT}
+  const prompt = `${systemPrompt}
 
-Danh sách các danh mục có sẵn: ${categoryNames}.
-Câu nói: "${cleanInput}"`;
+Danh sách danh mục có sẵn: ${categoryNames}.
+Câu nói của người dùng: "${cleanInput}"`;
 
   try {
     const rawResponse = await callGeminiText(
@@ -531,7 +549,7 @@ Câu nói: "${cleanInput}"`;
       abortSignal,
       GEMINI_VOICE_SCHEMA,
       onModelSwitch,
-      VOICE_CHAIN_OF_THOUGHT_PROMPT
+      systemPrompt
     );
     let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
     const cleanJson = extractCleanJsonString(cleanText);
@@ -554,13 +572,28 @@ Câu nói: "${cleanInput}"`;
     }
 
     const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
-    // Dọn dẹp an toàn: nếu model vẫn vô tình để lại số tiền hoặc từ lóng trong note
     let note = rawNote
-      .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
+      .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
       .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
+      .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|ví)\s+[a-zA-Z0-9à-ỹÀ-Ỹ\s]+$/gi, '')
       .trim();
     if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
       note = rawNote || transcript || cleanInput;
+    }
+
+    // Nhận diện Ví tiền
+    const parsedWalletStr = String(parsed.wallet || '').trim().toLowerCase();
+    let matchedWallet = walletList.find((w) => w.name.toLowerCase() === parsedWalletStr);
+    if (!matchedWallet && parsedWalletStr) {
+      matchedWallet = walletList.find((w) =>
+        w.name.toLowerCase().includes(parsedWalletStr) ||
+        parsedWalletStr.includes(w.name.toLowerCase())
+      );
+    }
+    if (!matchedWallet) {
+      matchedWallet =
+        walletList.find((w) => w.id === 'wallet-cash' || w.name.toLowerCase().includes('tiền mặt')) ||
+        walletList[0];
     }
 
     const rawType = String(parsed.transactionType || '').trim().toLowerCase();
@@ -615,10 +648,17 @@ Câu nói: "${cleanInput}"`;
       categoryId: finalCat?.id || '',
       rawText: transcript || text,
       transcript: transcript || undefined,
+      walletId: matchedWallet?.id || 'wallet-cash',
+      walletName: matchedWallet?.name || 'Tiền mặt',
     };
   } catch (err) {
     console.warn('Lỗi gọi Gemini NLP cho Voice, tự động fallback sang Regex parser cục bộ:', err);
-    return parseVoiceInput(text, categories);
+    const local = parseVoiceInput(text, categories);
+    return {
+      ...local,
+      walletId: walletList[0]?.id || 'wallet-cash',
+      walletName: walletList[0]?.name || 'Tiền mặt',
+    };
   }
 }
 
@@ -631,15 +671,20 @@ export async function parseVoiceAudioWithGemini(
   audioBase64: string,
   mimeType: string,
   categories: Category[],
+  wallets: Wallet[] = DEFAULT_WALLETS,
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
   onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<ParsedVoiceResult> {
+  const walletList = wallets && wallets.length > 0 ? wallets : DEFAULT_WALLETS;
+  const walletNames = walletList.map((w) => w.name).join(', ') || 'Tiền mặt';
   const categoryNames = categories.map((c) => c.name).join(', ');
 
-  const prompt = `${VOICE_CHAIN_OF_THOUGHT_PROMPT}
+  const systemPrompt = buildVoiceSystemPrompt(walletNames);
+  const prompt = `${systemPrompt}
 
-Danh sách các danh mục có sẵn: ${categoryNames}.`;
+Nhiệm vụ: Nghe kỹ Audio. Đầu tiên chép chính tả 100% câu tiếng Việt vào 'transcript'. Sau đó bóc tách amount, note, wallet, category, transactionType.
+Danh sách danh mục có sẵn: ${categoryNames}.`;
 
   const rawResponse = await callGeminiAudio(
     audioBase64,
@@ -649,7 +694,7 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     abortSignal,
     GEMINI_VOICE_SCHEMA,
     onModelSwitch,
-    VOICE_CHAIN_OF_THOUGHT_PROMPT
+    systemPrompt
   );
 
   let cleanText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -671,10 +716,10 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
   let amount = Math.abs(Math.round(Number(parsed.amount) || 0));
 
   const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
-  // Dọn dẹp an toàn: nếu model vẫn vô tình để lại số tiền hoặc từ lóng trong note
   let note = rawNote
-    .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
+    .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
     .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
+    .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|ví)\s+[a-zA-Z0-9à-ỹÀ-Ỹ\s]+$/gi, '')
     .trim();
   if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
     note = transcript || rawNote || 'Giao dịch giọng nói';
@@ -686,6 +731,21 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     if (fallbackExt) {
       amount = fallbackExt.amount;
     }
+  }
+
+  // Nhận diện Ví tiền
+  const parsedWalletStr = String(parsed.wallet || '').trim().toLowerCase();
+  let matchedWallet = walletList.find((w) => w.name.toLowerCase() === parsedWalletStr);
+  if (!matchedWallet && parsedWalletStr) {
+    matchedWallet = walletList.find((w) =>
+      w.name.toLowerCase().includes(parsedWalletStr) ||
+      parsedWalletStr.includes(w.name.toLowerCase())
+    );
+  }
+  if (!matchedWallet) {
+    matchedWallet =
+      walletList.find((w) => w.id === 'wallet-cash' || w.name.toLowerCase().includes('tiền mặt')) ||
+      walletList[0];
   }
 
   const rawType = String(parsed.transactionType || '').trim().toLowerCase();
@@ -735,6 +795,8 @@ Danh sách các danh mục có sẵn: ${categoryNames}.`;
     categoryId: finalCat?.id || '',
     rawText: transcript || note,
     transcript: transcript || undefined,
+    walletId: matchedWallet?.id || 'wallet-cash',
+    walletName: matchedWallet?.name || 'Tiền mặt',
   };
 }
 

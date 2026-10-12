@@ -661,14 +661,10 @@ export function useExpenseManager() {
   };
 
   const clearUserData = () => {
-    localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
-    localStorage.removeItem(STORAGE_KEYS.WALLETS);
-    localStorage.removeItem(STORAGE_KEYS.LEDGERS);
-    localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_LEDGER);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_WALLET);
-    localStorage.removeItem(STORAGE_KEYS.INCLUDE_ALL_WALLETS);
-    localStorage.removeItem(STORAGE_KEYS.TIME_FILTER);
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (_) {}
 
     // Đưa state ứng dụng về trạng thái trống trơn hoàn toàn
     setTransactions([]);

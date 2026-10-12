@@ -233,11 +233,15 @@ export const GEMINI_VOICE_SCHEMA = {
     amount: {
       type: 'integer',
       description:
-        "Bước 2: Dựa vào transcript, trích xuất số tiền. Quy đổi: k, ca, ka, nghìn, ngàn = x 1.000 (VD: '25ca' = 25000). củ, triệu = x 1.000.000.",
+        "Số tiền sau khi quy đổi: k, ca, cành = x 1.000 (VD: '25ca' = 25000, '30 cành' = 30000). lít = x 100.000. củ, triệu = x 1.000.000.",
     },
     note: {
       type: 'string',
-      description: "Mô tả nội dung giao dịch, loại bỏ phần số tiền. (VD: 'ăn cơm tấm'). Nếu không rõ, để là 'Chưa rõ'.",
+      description: "Mô tả nội dung giao dịch, loại bỏ phần số tiền và từ chỉ ví (VD: 'ăn cơm thịt kho mắm ruốc'). Nếu không rõ, để là 'Chưa rõ'.",
+    },
+    wallet: {
+      type: 'string',
+      description: "Tên ví tiền hợp lệ của người dùng (VD: 'MoMo', 'MB Bank', 'Tiền mặt'...). Nếu không nhắc đến, mặc định là 'Tiền mặt'.",
     },
     category: {
       type: 'string',
@@ -249,7 +253,7 @@ export const GEMINI_VOICE_SCHEMA = {
         "Nếu người dùng chi tiền (mua, ăn, trả, tiêu) -> 'expense'. Nếu người dùng nhận tiền (bán, được, lương, thu) -> 'income'.",
     },
   },
-  required: ['transcript', 'amount', 'note', 'category', 'transactionType'],
+  required: ['amount', 'note', 'wallet'],
 };
 
 /**

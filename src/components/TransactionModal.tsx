@@ -131,9 +131,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setLedgerId(defaultLedger);
 
       const defaultWallet =
-        initialWalletId && initialWalletId !== 'all'
+        initialValues?.walletId ||
+        (initialWalletId && initialWalletId !== 'all'
           ? initialWalletId
-          : wallets[0]?.id || 'wallet-cash';
+          : wallets[0]?.id || 'wallet-cash');
       setWalletId(defaultWallet);
 
       if (initialValues?.categoryId) {

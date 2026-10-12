@@ -116,6 +116,7 @@ export function App() {
       note: parsed.note,
       categoryId: parsed.categoryId,
       type: parsed.type,
+      walletId: parsed.walletId,
     });
     setEditingTransaction(null);
     setIsTransactionModalOpen(true);
@@ -404,6 +405,7 @@ export function App() {
         isOpen={isVoiceModalOpen}
         onClose={() => setIsVoiceModalOpen(false)}
         categories={manager.categories}
+        wallets={manager.wallets}
         onParsedResult={handleVoiceParsedResult}
       />
 

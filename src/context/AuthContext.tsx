@@ -129,7 +129,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     if (auth) {
-      await signOut(auth);
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.warn('Lỗi signOut:', e);
+      }
     }
     try {
       await GoogleAuth.signOut();
@@ -138,19 +142,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setIsOfflineMode(false);
-    // Xóa sạch toàn bộ dữ liệu người dùng ở LocalStorage
-    const keysToRemove = [
-      'sochitieu_transactions_v2',
-      'sochitieu_wallets_v2',
-      'sochitieu_ledgers_v2',
-      'sochitieu_categories_v2',
-      'sochitieu_active_ledger_v2',
-      'sochitieu_active_wallet_v2',
-      'sochitieu_include_all_wallets_v2',
-      'sochitieu_time_filter_v2',
-      STORAGE_OFFLINE_KEY,
-    ];
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    // Xóa sạch 100% bộ nhớ cứng để không bị dính dữ liệu khi xóa đa nhiệm
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn('Lỗi clear storage:', e);
+    }
     setIsAuthModalOpen(true);
   };
 
