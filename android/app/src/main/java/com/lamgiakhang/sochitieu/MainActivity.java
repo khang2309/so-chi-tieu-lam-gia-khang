@@ -18,4 +18,12 @@ public class MainActivity extends BridgeActivity {
                     1001);
         }
     }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            this.bridge.getWebView().clearCache(true);
+        }
+    }
 }
