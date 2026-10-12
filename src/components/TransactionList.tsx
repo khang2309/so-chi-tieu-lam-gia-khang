@@ -9,16 +9,12 @@ import {
   Receipt,
   FileQuestion,
   Plus,
-  FileSpreadsheet,
   Filter,
-  ChevronDown,
   X,
-  PieChart,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
-import { exportTransactionsToExcel } from '../utils/excelExporter';
 
 export type FilterMode = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
 
@@ -38,15 +34,6 @@ interface TransactionListProps {
   onOpenReceiptScan: () => void;
   activeLedgerId?: string;
   activeLedgerName?: string;
-  onOpenCategoryReport?: () => void;
-  categoryBreakdown?: Array<{
-    categoryId: string;
-    name: string;
-    color: string;
-    icon: string;
-    amount: number;
-    percentage: number;
-  }>;
 }
 
 interface DayGroup {
@@ -77,8 +64,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onOpenReceiptScan,
   activeLedgerId,
   activeLedgerName,
-  onOpenCategoryReport,
-  categoryBreakdown = [],
 }) => {
   // 1. Quản lý trạng thái Tìm kiếm (Kính lúp thu gọn)
   const [isSearchOpen, setIsSearchOpen] = useState(() => searchQuery.trim().length > 0);
@@ -472,20 +457,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     typeFilter,
   ]);
 
-  // Xuất danh sách giao dịch đang hiển thị ra file Excel (.xlsx)
-  const handleExportExcel = () => {
-    if (filteredList.length === 0) {
-      alert('Không có giao dịch nào trong khoảng thời gian đang chọn để xuất Excel!');
-      return;
-    }
-    const cleanLedger = (activeLedgerName || 'Tat_Ca').replace(/\s+/g, '_');
-    const filename = `Chi_Tieu_${cleanLedger}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    exportTransactionsToExcel(filteredList, categories, ledgers, wallets, filename);
-  };
-
   return (
     <section className="rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper overflow-hidden">
-      {/* 1. TOP HEADER TINH GỌN (CHỈ CÒN TIÊU ĐỀ + KÍNH LÚP + CHIP BỘ LỌC + NÚT EXCEL) */}
+      {/* 1. TOP HEADER TINH GỌN (CHỈ CÒN TIÊU ĐỀ + KÍNH LÚP + ICON PHỄU BỘ LỌC) */}
       <div className="p-3.5 sm:p-4 border-b border-[#f0e4d5] space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           {/* Tiêu đề & Thông tin sổ */}
@@ -504,7 +478,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             </span>
           </div>
 
-          {/* Cụm công cụ bên phải: Kính lúp, Chip Bộ lọc, Xuất Excel */}
+          {/* Cụm công cụ bên phải: Kính lúp (Search) & Icon Phễu (Filter) */}
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Nút 1: Kính lúp Tìm kiếm (Thu gọn search bar) */}
             <button
@@ -524,26 +498,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               <Search className="w-4 h-4" />
             </button>
 
-            {/* Nút 2: Chip Bộ Lọc mở Bottom Sheet */}
+            {/* Nút 2: Icon Phễu mở Bottom Sheet Bộ lọc */}
             <button
               onClick={() => setIsFilterSheetOpen(true)}
-              className="px-2.5 py-1.5 rounded-xl bg-[#fbf5eb] hover:bg-[#f5ebe0] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer"
-              title="Mở bộ lọc thời gian & thu chi"
+              className={`p-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
+                filterMode !== 'month' || typeFilter !== 'all'
+                  ? 'bg-[#a25832] text-white shadow-xs'
+                  : 'bg-[#fbf5eb] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
+              }`}
+              title={`Bộ lọc: ${filterBadgeLabel}`}
             >
-              <Filter className="w-3.5 h-3.5 text-[#a25832]" />
-              <span className="max-w-[100px] sm:max-w-[130px] truncate">
-                {filterBadgeLabel}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-[#7a6a58]" />
-            </button>
-
-            {/* Nút 3: Xuất Excel (.xlsx) */}
-            <button
-              onClick={handleExportExcel}
-              className="p-2 rounded-xl bg-[#107c41]/10 text-[#107c41] hover:bg-[#107c41] hover:text-white border border-[#107c41]/30 transition shadow-xs cursor-pointer active:scale-95"
-              title="Xuất Excel (.xlsx)"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
+              <Filter className="w-4 h-4" />
+              {(filterMode !== 'month' || typeFilter !== 'all') && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#ea580c] rounded-full border-2 border-[#fffdfa]" />
+              )}
             </button>
           </div>
         </div>
@@ -842,36 +810,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         )}
       </div>
 
-      {/* 3. DỜI KHỐI "PHÂN BỔ CHI TIÊU" XUỐNG DƯỚI CÙNG DANH SÁCH GIAO DỊCH */}
-      <div className="p-3.5 sm:p-4 border-t border-[#f0e4d5] bg-[#fdfaf5] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center shrink-0">
-            <PieChart className="w-4 h-4" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-[#3e332a]">
-              Phân Bổ Chi Tiêu Theo Danh Mục
-            </h4>
-            <p className="text-[11px] text-[#7a6a58]">
-              {categoryBreakdown.length > 0
-                ? `Đã phân loại ${categoryBreakdown.length} danh mục chi tiêu`
-                : 'Thống kê tỷ lệ phần trăm theo danh mục'}
-            </p>
-          </div>
-        </div>
-
-        {onOpenCategoryReport && (
-          <button
-            onClick={onOpenCategoryReport}
-            className="px-3.5 py-2 rounded-xl bg-[#a25832] hover:bg-[#8c4623] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1.5 self-start sm:self-auto cursor-pointer active:scale-95"
-          >
-            <PieChart className="w-3.5 h-3.5" />
-            <span>Xem báo cáo</span>
-          </button>
-        )}
-      </div>
-
-      {/* 4. BOTTOM SHEET BỘ LỌC (SLIDE UP TỪ DƯỚI LÊN) */}
+      {/* 3. BOTTOM SHEET BỘ LỌC (SLIDE UP TỪ DƯỚI LÊN) */}
       {isFilterSheetOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="w-full max-w-lg bg-[#fffdfa] rounded-t-3xl sm:rounded-3xl border border-[#ebdcc9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200">

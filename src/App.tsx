@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useExpenseManager } from './hooks/useExpenseManager';
 import { Header } from './components/Header';
-import { Dashboard } from './components/Dashboard';
+import { ReportScreen } from './components/ReportScreen';
 import { TransactionList } from './components/TransactionList';
 import { TransactionModal } from './components/TransactionModal';
 import { VoiceInputModal } from './components/VoiceInputModal';
@@ -24,6 +24,7 @@ import {
   Wallet as WalletIcon,
   Receipt,
   Mic,
+  BarChart3,
 } from 'lucide-react';
 
 export function App() {
@@ -44,10 +45,9 @@ export function App() {
   const [isWalletManagerModalOpen, setIsWalletManagerModalOpen] = useState(false);
   const [isWalletTransferModalOpen, setIsWalletTransferModalOpen] = useState(false);
   const [isCategoryManagerModalOpen, setIsCategoryManagerModalOpen] = useState(false);
-  const [isCategoryReportModalOpen, setIsCategoryReportModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'wallets'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'reports' | 'wallets'>('dashboard');
 
   // Quick Open Handlers
   const handleOpenNewTransaction = () => {
@@ -129,11 +129,11 @@ export function App() {
           </button>
         </div>
 
-        {/* View Mode Tabs: [Sổ Chi Tiêu] / [Quản Lý Ví] */}
-        <div className="flex items-center gap-2 border-b border-[#ebdcc9] pb-2">
+        {/* View Mode Tabs: [Sổ Chi Tiêu] / [Báo Cáo & Biểu Đồ] / [Quản Lý Ví] */}
+        <div className="flex items-center gap-2 border-b border-[#ebdcc9] pb-2 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
               activeTab === 'dashboard'
                 ? 'bg-[#a25832] text-white shadow-xs'
                 : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
@@ -144,8 +144,20 @@ export function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('reports')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
+              activeTab === 'reports'
+                ? 'bg-[#a25832] text-white shadow-xs'
+                : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Báo Cáo & Biểu Đồ</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('wallets')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 ${
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
               activeTab === 'wallets'
                 ? 'bg-[#a25832] text-white shadow-xs'
                 : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
@@ -156,38 +168,48 @@ export function App() {
           </button>
         </div>
 
-        {activeTab === 'dashboard' ? (
-          <>
-            {/* 1. ĐẨY NHẬT KÝ GIAO DỊCH LÊN ĐẦU: Đập vào mắt người dùng ngay lập tức */}
-            <TransactionList
-              transactions={manager.transactions.filter(
-                (tx) =>
-                  !tx.isDeleted &&
-                  (manager.activeLedgerId === 'all' || tx.ledgerId === manager.activeLedgerId)
-              )}
-              activeLedgerId={manager.activeLedgerId}
-              activeLedgerName={
-                manager.activeLedgerId === 'all'
-                  ? 'Tất cả các sổ'
-                  : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name
-              }
-              ledgers={manager.ledgers}
-              wallets={manager.wallets}
-              categories={manager.categories}
-              searchQuery={manager.searchQuery}
-              onSearchChange={manager.setSearchQuery}
-              typeFilter={manager.typeFilter}
-              onTypeFilterChange={manager.setTypeFilter}
-              onEditTransaction={handleEditTransaction}
-              onDuplicateTransaction={handleDuplicateTransaction}
-              onDeleteTransaction={manager.deleteTransaction}
-              onOpenNewTransaction={handleOpenNewTransaction}
-              onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
-              onOpenCategoryReport={() => setIsCategoryReportModalOpen(true)}
-              categoryBreakdown={manager.categoryBreakdown}
-            />
-          </>
-        ) : (
+        {activeTab === 'dashboard' && (
+          <TransactionList
+            transactions={manager.transactions.filter(
+              (tx) =>
+                !tx.isDeleted &&
+                (manager.activeLedgerId === 'all' || tx.ledgerId === manager.activeLedgerId)
+            )}
+            activeLedgerId={manager.activeLedgerId}
+            activeLedgerName={
+              manager.activeLedgerId === 'all'
+                ? 'Tất cả các sổ'
+                : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name
+            }
+            ledgers={manager.ledgers}
+            wallets={manager.wallets}
+            categories={manager.categories}
+            searchQuery={manager.searchQuery}
+            onSearchChange={manager.setSearchQuery}
+            typeFilter={manager.typeFilter}
+            onTypeFilterChange={manager.setTypeFilter}
+            onEditTransaction={handleEditTransaction}
+            onDuplicateTransaction={handleDuplicateTransaction}
+            onDeleteTransaction={manager.deleteTransaction}
+            onOpenNewTransaction={handleOpenNewTransaction}
+            onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'reports' && (
+          <ReportScreen
+            transactions={manager.transactions}
+            categories={manager.categories}
+            activeLedgerId={manager.activeLedgerId}
+            activeLedgerName={
+              manager.activeLedgerId === 'all'
+                ? 'Tất cả các sổ'
+                : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name
+            }
+          />
+        )}
+
+        {activeTab === 'wallets' && (
           <WalletTab
             wallets={manager.wallets}
             walletBalances={manager.walletBalances}
@@ -206,7 +228,7 @@ export function App() {
           {/* Nút 1 (Bên trái 1): Sổ cái / Dashboard */}
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 transition ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 transition cursor-pointer ${
               activeTab === 'dashboard'
                 ? 'text-[#a25832] font-bold'
                 : 'text-[#7a6a58] hover:text-[#3e332a]'
@@ -216,10 +238,35 @@ export function App() {
             <span className="text-[11px] leading-tight font-medium">Sổ cái</span>
           </button>
 
-          {/* Nút 2 (Bên trái 2): Ví tiền */}
+          {/* Nút 2 (Bên trái 2): Báo Cáo & Thống Kê */}
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`flex flex-col items-center justify-center gap-1 py-1 transition cursor-pointer ${
+              activeTab === 'reports'
+                ? 'text-[#a25832] font-bold'
+                : 'text-[#7a6a58] hover:text-[#3e332a]'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="text-[11px] leading-tight font-medium">Báo cáo</span>
+          </button>
+
+          {/* Nút 3 (CĂN GIỮA TUYỆT ĐỐI): Micro Floating Action Button (Màu cam nổi bật) */}
+          <div className="flex flex-col items-center justify-center relative">
+            <button
+              onClick={handleOpenVoiceInput}
+              className="-mt-7 w-14 h-14 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all border-4 border-[#fffdfa] ring-2 ring-[#ea580c]/30 group cursor-pointer"
+              title="Đọc hóa đơn bằng giọng nói"
+            >
+              <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition" />
+            </button>
+            <span className="text-[10px] font-bold text-[#ea580c] mt-0.5 leading-tight">Giọng nói</span>
+          </div>
+
+          {/* Nút 4 (Bên phải 1): Ví tiền */}
           <button
             onClick={() => setActiveTab('wallets')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 transition ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 transition cursor-pointer ${
               activeTab === 'wallets'
                 ? 'text-[#a25832] font-bold'
                 : 'text-[#7a6a58] hover:text-[#3e332a]'
@@ -229,36 +276,14 @@ export function App() {
             <span className="text-[11px] leading-tight font-medium">Ví tiền</span>
           </button>
 
-          {/* Nút 3 (CĂN GIỮA TUYỆT ĐỐI): Micro Floating Action Button (Màu cam nổi bật) */}
-          <div className="flex flex-col items-center justify-center relative">
-            <button
-              onClick={handleOpenVoiceInput}
-              className="-mt-7 w-14 h-14 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all border-4 border-[#fffdfa] ring-2 ring-[#ea580c]/30 group"
-              title="Đọc hóa đơn bằng giọng nói"
-            >
-              <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition" />
-            </button>
-            <span className="text-[10px] font-bold text-[#ea580c] mt-0.5 leading-tight">Giọng nói</span>
-          </div>
-
-          {/* Nút 4 (Bên phải 1): Quét Hóa Đơn */}
+          {/* Nút 5 (Bên phải 2): Quét Hóa Đơn */}
           <button
             onClick={() => setIsReceiptScanModalOpen(true)}
-            className="flex flex-col items-center justify-center gap-1 py-1 text-[#7a6a58] hover:text-[#3e332a] transition"
+            className="flex flex-col items-center justify-center gap-1 py-1 text-[#7a6a58] hover:text-[#3e332a] transition cursor-pointer"
             title="Quét hóa đơn AI"
           >
             <Camera className="w-5 h-5 text-[#a25832]" />
             <span className="text-[11px] font-medium leading-tight">Quét HĐ</span>
-          </button>
-
-          {/* Nút 5 (Bên phải 2): Thêm giao dịch thủ công */}
-          <button
-            onClick={handleOpenNewTransaction}
-            className="flex flex-col items-center justify-center gap-1 py-1 text-[#7a6a58] hover:text-[#3e332a] transition"
-            title="Thêm thủ công"
-          >
-            <Plus className="w-5 h-5 text-[#a25832]" />
-            <span className="text-[11px] font-medium leading-tight">Thêm tay</span>
           </button>
         </div>
       </nav>
@@ -389,25 +414,6 @@ export function App() {
         onClearUserData={manager.clearUserData}
         onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
         onSyncToCloud={manager.syncToCloud}
-      />
-
-      {/* Modal / Bottom Sheet Phân bổ chi tiêu theo danh mục */}
-      <Dashboard
-        isModal={true}
-        isOpen={isCategoryReportModalOpen}
-        onClose={() => setIsCategoryReportModalOpen(false)}
-        stats={manager.stats}
-        timeFilter={manager.timeFilter}
-        onChangeTimeFilter={manager.setTimeFilter}
-        wallets={manager.wallets}
-        walletBalances={manager.walletBalances}
-        activeWalletId={manager.activeWalletId}
-        onSelectWallet={manager.setActiveWalletId}
-        includeAllWallets={manager.includeAllWallets}
-        onToggleIncludeAllWallets={manager.setIncludeAllWallets}
-        categoryBreakdown={manager.categoryBreakdown}
-        onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
-        onOpenWalletManager={() => setIsWalletManagerModalOpen(true)}
       />
 
       {/* Firebase Auth & Offline First Modal */}
