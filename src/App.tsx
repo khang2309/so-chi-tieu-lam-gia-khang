@@ -44,6 +44,7 @@ export function App() {
   const [isWalletManagerModalOpen, setIsWalletManagerModalOpen] = useState(false);
   const [isWalletTransferModalOpen, setIsWalletTransferModalOpen] = useState(false);
   const [isCategoryManagerModalOpen, setIsCategoryManagerModalOpen] = useState(false);
+  const [isCategoryReportModalOpen, setIsCategoryReportModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'wallets'>('dashboard');
@@ -182,22 +183,8 @@ export function App() {
               onDeleteTransaction={manager.deleteTransaction}
               onOpenNewTransaction={handleOpenNewTransaction}
               onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
-            />
-
-            {/* 2. Phân bổ chi tiêu theo danh mục (đặt phía dưới nhật ký) */}
-            <Dashboard
-              stats={manager.stats}
-              timeFilter={manager.timeFilter}
-              onChangeTimeFilter={manager.setTimeFilter}
-              wallets={manager.wallets}
-              walletBalances={manager.walletBalances}
-              activeWalletId={manager.activeWalletId}
-              onSelectWallet={manager.setActiveWalletId}
-              includeAllWallets={manager.includeAllWallets}
-              onToggleIncludeAllWallets={manager.setIncludeAllWallets}
+              onOpenCategoryReport={() => setIsCategoryReportModalOpen(true)}
               categoryBreakdown={manager.categoryBreakdown}
-              onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
-              onOpenWalletManager={() => setIsWalletManagerModalOpen(true)}
             />
           </>
         ) : (
@@ -402,6 +389,25 @@ export function App() {
         onClearUserData={manager.clearUserData}
         onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
         onSyncToCloud={manager.syncToCloud}
+      />
+
+      {/* Modal / Bottom Sheet Phân bổ chi tiêu theo danh mục */}
+      <Dashboard
+        isModal={true}
+        isOpen={isCategoryReportModalOpen}
+        onClose={() => setIsCategoryReportModalOpen(false)}
+        stats={manager.stats}
+        timeFilter={manager.timeFilter}
+        onChangeTimeFilter={manager.setTimeFilter}
+        wallets={manager.wallets}
+        walletBalances={manager.walletBalances}
+        activeWalletId={manager.activeWalletId}
+        onSelectWallet={manager.setActiveWalletId}
+        includeAllWallets={manager.includeAllWallets}
+        onToggleIncludeAllWallets={manager.setIncludeAllWallets}
+        categoryBreakdown={manager.categoryBreakdown}
+        onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
+        onOpenWalletManager={() => setIsWalletManagerModalOpen(true)}
       />
 
       {/* Firebase Auth & Offline First Modal */}
