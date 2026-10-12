@@ -28,6 +28,7 @@ import {
   Mic,
   BarChart3,
   Settings,
+  Users,
 } from 'lucide-react';
 
 export function App() {
@@ -50,6 +51,11 @@ export function App() {
   const [isWalletTransferModalOpen, setIsWalletTransferModalOpen] = useState(false);
   const [isCategoryManagerModalOpen, setIsCategoryManagerModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Search & Filter & Speed Dial states
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
 
   // Popup Đăng nhập lần đầu & Toast thông báo
   const [isFirstTimeLoginModalOpen, setIsFirstTimeLoginModalOpen] = useState(false);
@@ -135,7 +141,12 @@ export function App() {
         onSelectLedger={manager.setActiveLedgerId}
         onOpenLedgerManager={() => setIsLedgerManagerModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenRoommateSplit={() => setIsRoommateSplitModalOpen(true)}
+        isSearchOpen={isSearchOpen}
+        onToggleSearch={() => setIsSearchOpen((prev) => !prev)}
+        searchQuery={manager.searchQuery}
+        onSearchChange={manager.setSearchQuery}
+        onOpenFilter={() => setIsFilterSheetOpen(true)}
+        isFilterActive={manager.typeFilter !== 'all' || !!manager.searchQuery}
       />
 
       {/* Main Content Container */}
@@ -159,45 +170,6 @@ export function App() {
             className="text-xs text-[#a25832] font-semibold hover:underline"
           >
             Đổi hoặc tạo sổ mới →
-          </button>
-        </div>
-
-        {/* View Mode Tabs: [Sổ Chi Tiêu] / [Báo Cáo & Biểu Đồ] / [Quản Lý Ví] */}
-        <div className="flex items-center gap-2 border-b border-[#ebdcc9] pb-2 overflow-x-auto scrollbar-none">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
-              activeTab === 'dashboard'
-                ? 'bg-[#a25832] text-white shadow-xs'
-                : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
-            }`}
-          >
-            <Receipt className="w-4 h-4" />
-            <span>Sổ Chi Tiêu & Nhật Ký</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
-              activeTab === 'reports'
-                ? 'bg-[#a25832] text-white shadow-xs'
-                : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>Báo Cáo & Biểu Đồ</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('wallets')}
-            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
-              activeTab === 'wallets'
-                ? 'bg-[#a25832] text-white shadow-xs'
-                : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
-            }`}
-          >
-            <WalletIcon className="w-4 h-4" />
-            <span>Quản Lý Ví ({manager.wallets.length})</span>
           </button>
         </div>
 
@@ -226,6 +198,8 @@ export function App() {
             onDeleteTransaction={manager.deleteTransaction}
             onOpenNewTransaction={handleOpenNewTransaction}
             onOpenReceiptScan={() => setIsReceiptScanModalOpen(true)}
+            isFilterSheetOpen={isFilterSheetOpen}
+            setIsFilterSheetOpen={setIsFilterSheetOpen}
           />
         )}
 
@@ -255,10 +229,71 @@ export function App() {
         )}
       </main>
 
-      {/* Bottom Navigation Bar */}
+      {/* Speed Dial Backdrop */}
+      {isSpeedDialOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 transition-opacity"
+          onClick={() => setIsSpeedDialOpen(false)}
+        />
+      )}
+
+      {/* Speed Dial Popup */}
+      {isSpeedDialOpen && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-64 p-2.5 bg-[#fffdfa] rounded-2xl shadow-2xl border border-[#ebdcc9] animate-in slide-in-from-bottom-3 duration-200">
+          <button
+            onClick={() => {
+              setIsSpeedDialOpen(false);
+              handleOpenNewTransaction();
+            }}
+            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[#f6eee3] text-left transition cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-[#a25832] flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <Plus className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-bold text-[#3e332a]">Thêm Tay</div>
+              <div className="text-[11px] text-[#7a6a58]">Nhập chi tiết thủ công</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsSpeedDialOpen(false);
+              handleOpenVoiceInput();
+            }}
+            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[#fff2ea] text-left transition cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <Mic className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-bold text-orange-700">Giọng Nói</div>
+              <div className="text-[11px] text-[#7a6a58]">Nói tiếng Việt thông minh</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsSpeedDialOpen(false);
+              setIsReceiptScanModalOpen(true);
+            }}
+            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-sky-50 text-left transition cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <Camera className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-bold text-sky-800">Quét Hoá Đơn</div>
+              <div className="text-[11px] text-[#7a6a58]">Chụp & AI trích xuất</div>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Bottom Navigation Bar (5 Nút với FAB Trung tâm) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#ebdcc9] py-1.5 px-2 safe-bottom shadow-lg">
         <div className="grid grid-cols-5 items-center max-w-md mx-auto relative">
-          {/* Nút 1 (Bên trái 1): Sổ cái / Dashboard */}
+          {/* Tab 1: Sổ cái (Trang chủ) */}
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`flex flex-col items-center justify-center gap-1 py-1 transition cursor-pointer ${
@@ -271,7 +306,7 @@ export function App() {
             <span className="text-[11px] leading-tight font-medium">Sổ cái</span>
           </button>
 
-          {/* Nút 2 (Bên trái 2): Báo Cáo & Thống Kê */}
+          {/* Tab 2: Báo cáo */}
           <button
             onClick={() => setActiveTab('reports')}
             className={`flex flex-col items-center justify-center gap-1 py-1 transition cursor-pointer ${
@@ -284,19 +319,21 @@ export function App() {
             <span className="text-[11px] leading-tight font-medium">Báo cáo</span>
           </button>
 
-          {/* Nút 3 (CĂN GIỮA TUYỆT ĐỐI): Micro Floating Action Button (Màu cam nổi bật) */}
+          {/* Nút FAB Trung tâm (+): Nút hình tròn to, nổi bật */}
           <div className="flex flex-col items-center justify-center relative">
             <button
-              onClick={handleOpenVoiceInput}
-              className="-mt-7 w-14 h-14 rounded-full bg-gradient-to-tr from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all border-4 border-[#fffdfa] ring-2 ring-[#ea580c]/30 group cursor-pointer"
-              title="Đọc hóa đơn bằng giọng nói"
+              onClick={() => setIsSpeedDialOpen((prev) => !prev)}
+              className={`-mt-7 w-14 h-14 rounded-full bg-gradient-to-tr from-[#a25832] to-[#c76a3e] hover:from-[#8c4623] hover:to-[#a25832] text-white flex items-center justify-center shadow-lg active:scale-95 transition-all duration-300 border-4 border-[#fffdfa] ring-2 ring-[#a25832]/30 cursor-pointer ${
+                isSpeedDialOpen ? 'rotate-45 !bg-[#3e332a]' : ''
+              }`}
+              title="Thao tác nhanh"
             >
-              <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition" />
+              <Plus className="w-7 h-7" />
             </button>
-            <span className="text-[10px] font-bold text-[#ea580c] mt-0.5 leading-tight">Giọng nói</span>
+            <span className="text-[10px] font-bold text-[#a25832] mt-0.5 leading-tight">Thêm mới</span>
           </div>
 
-          {/* Nút 4 (Bên phải 1): Ví tiền */}
+          {/* Tab 3: Ví tiền */}
           <button
             onClick={() => setActiveTab('wallets')}
             className={`flex flex-col items-center justify-center gap-1 py-1 transition cursor-pointer ${
@@ -309,14 +346,14 @@ export function App() {
             <span className="text-[11px] leading-tight font-medium">Ví tiền</span>
           </button>
 
-          {/* Nút 5 (Bên phải 2): Quét Hóa Đơn */}
+          {/* Tab 4: Chia trọ */}
           <button
-            onClick={() => setIsReceiptScanModalOpen(true)}
+            onClick={() => setIsRoommateSplitModalOpen(true)}
             className="flex flex-col items-center justify-center gap-1 py-1 text-[#7a6a58] hover:text-[#3e332a] transition cursor-pointer"
-            title="Quét hóa đơn AI"
+            title="Chia tiền phòng trọ"
           >
-            <Camera className="w-5 h-5 text-[#a25832]" />
-            <span className="text-[11px] font-medium leading-tight">Quét HĐ</span>
+            <Users className="w-5 h-5 text-[#a25832]" />
+            <span className="text-[11px] font-medium leading-tight">Chia trọ</span>
           </button>
         </div>
       </nav>

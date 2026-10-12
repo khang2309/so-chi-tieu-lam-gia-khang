@@ -1,12 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Search,
   Trash2,
   Edit3,
   Copy,
   ArrowRightLeft,
   Users,
-  Receipt,
   FileQuestion,
   Plus,
   Filter,
@@ -16,7 +14,7 @@ import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
 
-export type FilterMode = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
+export type FilterMode = 'month' | 'day' | 'week' | 'quarter' | 'year' | 'custom';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -34,18 +32,9 @@ interface TransactionListProps {
   onOpenReceiptScan: () => void;
   activeLedgerId?: string;
   activeLedgerName?: string;
-}
-
-interface DayGroup {
-  dateKey: string;
-  dayNumber: string;
-  dayLabel: string;
-  monthYearString: string;
-  isToday: boolean;
-  isYesterday: boolean;
-  totalIncome: number;
-  totalExpense: number;
-  transactions: Transaction[];
+  // Quản lý Filter Sheet từ Header hoặc nội bộ
+  isFilterSheetOpen?: boolean;
+  setIsFilterSheetOpen?: (open: boolean) => void;
 }
 
 export const TransactionList: React.FC<TransactionListProps> = ({
@@ -54,7 +43,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   wallets,
   categories,
   searchQuery,
-  onSearchChange,
   typeFilter,
   onTypeFilterChange,
   onEditTransaction,
@@ -64,12 +52,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onOpenReceiptScan,
   activeLedgerId,
   activeLedgerName,
+  isFilterSheetOpen: externalIsFilterSheetOpen,
+  setIsFilterSheetOpen: externalSetIsFilterSheetOpen,
 }) => {
-  // 1. Quản lý trạng thái Tìm kiếm (Kính lúp thu gọn)
-  const [isSearchOpen, setIsSearchOpen] = useState(() => searchQuery.trim().length > 0);
-
-  // 2. Quản lý trạng thái Bottom Sheet Bộ lọc
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  // Trạng thái mở Bottom Sheet Bộ lọc (hỗ trợ cả internal lẫn external từ Header)
+  const [internalFilterSheetOpen, setInternalFilterSheetOpen] = useState(false);
+  const isFilterSheetOpen =
+    externalIsFilterSheetOpen !== undefined
+      ? externalIsFilterSheetOpen
+      : internalFilterSheetOpen;
+  const setIsFilterSheetOpen =
+    externalSetIsFilterSheetOpen || setInternalFilterSheetOpen;
 
   // Chế độ bộ lọc thời gian: Mặc định là 'month' (Tháng)
   const [filterMode, setFilterMode] = useState<FilterMode>('month');
@@ -79,13 +72,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+
   const [selectedDayKey, setSelectedDayKey] = useState<string>(() => {
     return new Date().toISOString().slice(0, 10);
   });
+
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>('week_0');
+
   const [selectedQuarterKey, setSelectedQuarterKey] = useState<string>(() => {
-    return 'q' + (Math.floor(new Date().getMonth() / 3) + 1);
+    const now = new Date();
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    return `q${q}`;
   });
+
   const [selectedYearKey, setSelectedYearKey] = useState<string>(() => {
     return String(new Date().getFullYear());
   });
@@ -110,11 +109,51 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     return nonDeleted;
   }, [transactions, activeLedgerId]);
 
-  // Sinh danh sách các tabs cho Tháng (12 tháng trong năm + Tất cả)
+  // =========================================================================
+  // LOGIC THỜI GIAN ĐỘNG (DYNAMIC TIME FILTERS) - TỰ ĐỘNG SINH DỰA TRÊN DỮ LIỆU
+  // TUYỆT ĐỐI KHÔNG HARDCODE MẢNG THỜI GIAN
+  // =========================================================================
+
+  // 1. Tự động sinh danh sách NĂM từ dữ liệu giao dịch thực tế + năm hiện tại
+  // CHỈ CÓ BỘ LỌC NĂM MỚI CÓ TÙY CHỌN "TẤT CẢ" ĐỂ XEM TOÀN BỘ LỊCH SỬ
+  const yearTabs = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const yearSet = new Set<number>();
+    yearSet.add(currentYear);
+
+    // Quét toàn bộ năm từ giao dịch
+    transactions.forEach((tx) => {
+      if (tx.date) {
+        const y = new Date(tx.date).getFullYear();
+        if (!isNaN(y) && y >= 2000 && y <= 2100) {
+          yearSet.add(y);
+        }
+      }
+    });
+
+    const sortedYears = Array.from(yearSet).sort((a, b) => b - a);
+    const tabs: Array<{ key: string; label: string }> = sortedYears.map((y) => ({
+      key: String(y),
+      label: `Năm ${y}`,
+    }));
+
+    // CHỈ DUY NHẤT BỘ LỌC NĂM CÓ TÙY CHỌN "TẤT CẢ" (để xem toàn bộ lịch sử)
+    tabs.push({ key: 'all_years', label: 'Tất cả các năm (Toàn bộ)' });
+    return tabs;
+  }, [transactions]);
+
+  // 2. Tự động sinh danh sách THÁNG động dựa trên năm đang chọn hoặc năm hiện tại
+  // (XÓA BỎ "TẤT CẢ THÁNG" theo yêu cầu)
   const monthTabs = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+
+    // Xác định năm mục tiêu (nếu selectedYearKey hợp lệ thì lấy, không thì lấy currentYear)
+    const targetYear =
+      selectedYearKey && selectedYearKey !== 'all_years'
+        ? parseInt(selectedYearKey, 10)
+        : currentYear;
 
     const tabs: Array<{
       key: string;
@@ -124,29 +163,71 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       isCurrent?: boolean;
     }> = [];
 
+    // Sinh 12 tháng của năm mục tiêu
     for (let m = 1; m <= 12; m++) {
       const mStr = String(m).padStart(2, '0');
-      const isCur = m === currentMonth;
+      const isCur = targetYear === currentYear && m === currentMonth;
       tabs.push({
-        key: `${currentYear}-${mStr}`,
-        label: isCur ? `Tháng ${mStr} (Hiện tại)` : `Tháng ${mStr}/${currentYear}`,
-        year: currentYear,
+        key: `${targetYear}-${mStr}`,
+        label: isCur ? `Tháng ${mStr} (Hiện tại)` : `Tháng ${mStr}/${targetYear}`,
+        year: targetYear,
         month: m,
         isCurrent: isCur,
       });
     }
 
-    tabs.push({
-      key: 'all_months',
-      label: 'TẤT CẢ THÁNG',
-      year: currentYear,
-      month: currentMonth,
-    });
+    // TUYỆT ĐỐI KHÔNG CÓ "all_months"
+    return tabs;
+  }, [selectedYearKey]);
 
+  // 3. Tự động sinh danh sách QUÝ động dựa trên năm mục tiêu
+  // (XÓA BỎ "TẤT CẢ QUÝ" theo yêu cầu)
+  const quarterTabs = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const targetYear =
+      selectedYearKey && selectedYearKey !== 'all_years'
+        ? parseInt(selectedYearKey, 10)
+        : currentYear;
+
+    return [
+      { key: 'q1', label: `Quý 1/${targetYear} (T1 - T3)` },
+      { key: 'q2', label: `Quý 2/${targetYear} (T4 - T6)` },
+      { key: 'q3', label: `Quý 3/${targetYear} (T7 - T9)` },
+      { key: 'q4', label: `Quý 4/${targetYear} (T10 - T12)` },
+    ];
+    // TUYỆT ĐỐI KHÔNG CÓ "all_quarters"
+  }, [selectedYearKey]);
+
+  // 4. Tự động sinh danh sách TUẦN động (các tuần gần đây)
+  // (XÓA BỎ "TẤT CẢ TUẦN" theo yêu cầu)
+  const weekTabs = useMemo(() => {
+    const now = new Date();
+    const tabs: Array<{ key: string; label: string; rangeText: string }> = [];
+
+    for (let w = 0; w < 6; w++) {
+      const start = new Date(now);
+      start.setDate(now.getDate() - now.getDay() - w * 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+
+      const startStr = `${start.getDate()}/${start.getMonth() + 1}`;
+      const endStr = `${end.getDate()}/${end.getMonth() + 1}`;
+
+      let label = w === 0 ? 'Tuần này' : w === 1 ? 'Tuần trước' : `${w} tuần trước`;
+
+      tabs.push({
+        key: `week_${w}`,
+        label,
+        rangeText: `(${startStr} - ${endStr})`,
+      });
+    }
+
+    // TUYỆT ĐỐI KHÔNG CÓ "all_weeks"
     return tabs;
   }, []);
 
-  // Sinh danh sách các tabs cho Ngày (14 ngày gần nhất)
+  // 5. Tự động sinh danh sách NGÀY động (14 ngày gần nhất từ mốc hiện tại)
+  // (XÓA BỎ "TẤT CẢ NGÀY" theo yêu cầu)
   const dayTabs = useMemo(() => {
     const now = new Date();
     const tabs: Array<{ key: string; label: string; dateStr: string }> = [];
@@ -155,7 +236,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const isoDate = d.toISOString().slice(0, 10);
-      let label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+
+      let label = `${dayNum}/${monthNum}`;
       if (i === 0) label = `Hôm nay (${label})`;
       else if (i === 1) label = `Hôm qua (${label})`;
 
@@ -168,58 +252,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
     tabs.push({
       key: 'picker',
-      label: 'Chọn ngày khác...',
+      label: 'Chọn ngày bất kỳ...',
       dateStr: specificDate,
     });
 
+    // TUYỆT ĐỐI KHÔNG CÓ "all_days"
     return tabs;
   }, [specificDate]);
 
-  // Sinh danh sách các tabs cho Tuần (4 tuần gần đây)
-  const weekTabs = useMemo(() => {
-    const tabs = [
-      { key: 'week_0', label: 'Tuần này' },
-      { key: 'week_1', label: '1 tuần trước' },
-      { key: 'week_2', label: '2 tuần trước' },
-      { key: 'week_3', label: '3 tuần trước' },
-      { key: 'all_weeks', label: 'TẤT CẢ TUẦN' },
-    ];
-    return tabs;
-  }, []);
-
-  // Sinh danh sách các tabs cho Quý
-  const quarterTabs = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    return [
-      { key: 'q1', label: `Quý 1/${currentYear}` },
-      { key: 'q2', label: `Quý 2/${currentYear}` },
-      { key: 'q3', label: `Quý 3/${currentYear}` },
-      { key: 'q4', label: `Quý 4/${currentYear}` },
-      { key: 'all_quarters', label: 'TẤT CẢ QUÝ' },
-    ];
-  }, []);
-
-  // Sinh danh sách các tabs cho Năm
-  const yearTabs = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const tabs = [];
-    for (let y = currentYear; y >= currentYear - 3; y--) {
-      tabs.push({ key: String(y), label: `Năm ${y}` });
-    }
-    tabs.push({ key: 'all_years', label: 'TẤT CẢ NĂM' });
-    return tabs;
-  }, []);
-
-  // Hàm kiểm tra giao dịch có thuộc mốc thời gian đã chọn không
+  // 6. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
   const isTxInSelectedTimeline = (tx: Transaction): boolean => {
     const txDateStr = tx.date.slice(0, 10);
     const txDate = new Date(tx.date);
 
     switch (filterMode) {
       case 'month': {
-        if (selectedMonthKey === 'all_months') return true;
         const txMonthKey = tx.date.slice(0, 7);
         return txMonthKey === selectedMonthKey;
       }
@@ -230,7 +277,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         return txDateStr === selectedDayKey;
       }
       case 'week': {
-        if (selectedWeekKey === 'all_weeks') return true;
         const now = new Date();
         const weekOffset = parseInt(selectedWeekKey.replace('week_', ''), 10) || 0;
         const startOfWeek = new Date(now);
@@ -244,22 +290,29 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         return txDate >= startOfWeek && txDate <= endOfWeek;
       }
       case 'quarter': {
-        if (selectedQuarterKey === 'all_quarters') return true;
-        const txYear = txDate.getFullYear();
-        const nowYear = new Date().getFullYear();
-        if (txYear !== nowYear) return false;
+        const targetYear =
+          selectedYearKey && selectedYearKey !== 'all_years'
+            ? parseInt(selectedYearKey, 10)
+            : new Date().getFullYear();
+
+        if (txDate.getFullYear() !== targetYear) return false;
         const txQuarter = Math.floor(txDate.getMonth() / 3) + 1;
         const targetQuarter = parseInt(selectedQuarterKey.replace('q', ''), 10);
         return txQuarter === targetQuarter;
       }
       case 'year': {
+        // CHỈ NĂM MỚI CÓ 'all_years' ĐỂ XEM TOÀN BỘ LỊCH SỬ
         if (selectedYearKey === 'all_years') return true;
         return String(txDate.getFullYear()) === selectedYearKey;
       }
       case 'custom': {
         if (!customStartDate && !customEndDate) return true;
-        const start = customStartDate ? new Date(customStartDate + 'T00:00:00') : new Date('1970-01-01');
-        const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date('2099-12-31');
+        const start = customStartDate
+          ? new Date(customStartDate + 'T00:00:00')
+          : new Date('1970-01-01');
+        const end = customEndDate
+          ? new Date(customEndDate + 'T23:59:59')
+          : new Date('2099-12-31');
         return txDate >= start && txDate <= end;
       }
       default:
@@ -352,89 +405,61 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       'Thứ Bảy',
     ];
 
-    return sortedDates.map((dateKey) => {
-      const rawTxList = groups[dateKey];
+    return sortedDates.map((dKey) => {
+      const d = new Date(dKey);
+      const isToday = dKey === todayStr;
+      const isYesterday = dKey === yesterdayStr;
+      const dayOfWeek = daysOfWeekVi[d.getDay()] || 'Thứ...';
+      const dayNumber = String(d.getDate()).padStart(2, '0');
+      const monthYearString = `Tháng ${d.getMonth() + 1}, ${d.getFullYear()}`;
 
-      // Giao dịch mới hơn nằm trên
-      const sortedTx = [...rawTxList].sort((a, b) => {
-        const timeA = new Date(a.date).getTime() || 0;
-        const timeB = new Date(b.date).getTime() || 0;
-        if (timeB !== timeA) return timeB - timeA;
-        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      const dayTxs = groups[dKey].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      let dayIncome = 0;
+      let dayExpense = 0;
+      dayTxs.forEach((t) => {
+        if (t.type === 'income') dayIncome += t.amount;
+        else if (t.type === 'expense') dayExpense += t.amount;
       });
-
-      let totalIncome = 0;
-      let totalExpense = 0;
-      sortedTx.forEach((tx) => {
-        if (tx.type === 'income') totalIncome += tx.amount;
-        else if (tx.type === 'expense') totalExpense += tx.amount;
-      });
-
-      const parsedDate = new Date(dateKey + 'T12:00:00');
-      const dayNumber = String(parsedDate.getDate()).padStart(2, '0');
-      const dayOfWeek = daysOfWeekVi[parsedDate.getDay()] || 'Thứ';
-      const isToday = dateKey === todayStr;
-      const isYesterday = dateKey === yesterdayStr;
-      const dayLabel = isToday ? 'Hôm nay' : isYesterday ? 'Hôm qua' : dayOfWeek;
-      const monthYearString = `tháng ${parsedDate.getMonth() + 1} ${parsedDate.getFullYear()}`;
 
       return {
-        dateKey,
+        dateKey: dKey,
         dayNumber,
-        dayLabel,
+        dayLabel: isToday ? 'Hôm nay' : isYesterday ? 'Hôm qua' : dayOfWeek,
         monthYearString,
         isToday,
         isYesterday,
-        totalIncome,
-        totalExpense,
-        transactions: sortedTx,
-      } as DayGroup;
+        totalIncome: dayIncome,
+        totalExpense: dayExpense,
+        transactions: dayTxs,
+      };
     });
   }, [filteredList]);
 
-  // Nhãn hiển thị trên nút Chip Bộ Lọc ngoài màn hình chính
+  // Nhãn badge tóm tắt bộ lọc
   const filterBadgeLabel = useMemo(() => {
     let modeText = '';
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
-
     if (filterMode === 'month') {
-      if (selectedMonthKey === 'all_months') {
-        modeText = 'Tất cả tháng';
-      } else {
-        const parts = selectedMonthKey.split('-');
-        if (parts.length === 2) {
-          modeText = `Tháng ${parts[1]}/${parts[0]}`;
-        } else {
-          modeText = 'Tháng này';
-        }
-      }
+      const [y, m] = selectedMonthKey.split('-');
+      modeText = `Tháng ${m}/${y}`;
     } else if (filterMode === 'day') {
-      if (selectedDayKey === todayStr) {
-        modeText = 'Hôm nay';
-      } else if (selectedDayKey === yesterdayStr) {
-        modeText = 'Hôm qua';
-      } else if (selectedDayKey === 'picker') {
-        modeText = specificDate
-          ? `Ngày ${specificDate.slice(8, 10)}/${specificDate.slice(5, 7)}`
-          : 'Ngày chọn';
+      if (selectedDayKey === 'picker') {
+        const [y, m, d] = specificDate.split('-');
+        modeText = `${d}/${m}/${y}`;
       } else {
-        modeText = `Ngày ${selectedDayKey.slice(8, 10)}/${selectedDayKey.slice(5, 7)}`;
+        const [y, m, d] = selectedDayKey.split('-');
+        const todayStr = new Date().toISOString().slice(0, 10);
+        modeText = selectedDayKey === todayStr ? 'Hôm nay' : `${d}/${m}/${y}`;
       }
     } else if (filterMode === 'week') {
-      modeText =
-        selectedWeekKey === 'week_0'
-          ? 'Tuần này'
-          : selectedWeekKey === 'all_weeks'
-          ? 'Tất cả tuần'
-          : 'Tuần chọn';
+      const tab = weekTabs.find((w) => w.key === selectedWeekKey);
+      modeText = tab ? tab.label : 'Tuần';
     } else if (filterMode === 'quarter') {
       modeText = `Quý ${selectedQuarterKey.replace('q', '')}`;
     } else if (filterMode === 'year') {
-      modeText = selectedYearKey === 'all_years' ? 'Tất cả năm' : `Năm ${selectedYearKey}`;
+      modeText = selectedYearKey === 'all_years' ? 'Tất cả các năm' : `Năm ${selectedYearKey}`;
     } else if (filterMode === 'custom') {
       modeText = 'Tùy chỉnh';
     }
@@ -455,153 +480,89 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     selectedQuarterKey,
     selectedYearKey,
     typeFilter,
+    weekTabs,
   ]);
 
   return (
-    <section className="rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper overflow-hidden">
-      {/* 1. TOP HEADER TINH GỌN (CHỈ CÒN TIÊU ĐỀ + KÍNH LÚP + ICON PHỄU BỘ LỌC) */}
-      <div className="p-3.5 sm:p-4 border-b border-[#f0e4d5] space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
-          {/* Tiêu đề & Thông tin sổ */}
-          <div className="flex items-center gap-2 min-w-0">
-            <Receipt className="w-5 h-5 text-[#a25832] shrink-0" />
-            <h2 className="text-base font-bold text-[#3e332a] truncate">
-              Nhật Ký Giao Dịch
-            </h2>
-            {activeLedgerId && activeLedgerId !== 'all' && (
-              <span className="hidden sm:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-[#f5ebe0] text-[#a25832] font-semibold border border-[#ebdcc9] shrink-0 truncate max-w-[120px]">
-                {activeLedgerName || ledgers.find((l) => l.id === activeLedgerId)?.name}
-              </span>
-            )}
-            <span className="text-xs px-2 py-0.5 rounded-full bg-[#f5ebe0] text-[#7a6a58] font-medium shrink-0">
-              {windowSummary.count}
-            </span>
+    <div className="space-y-3 pb-24 animate-in fade-in duration-200">
+      {/* 1. THANH TÓM TẮT TÀI CHÍNH TINH GỌN (TIỀN VÀO / TIỀN RA / CHÊNH LỆCH) */}
+      <div className="bg-white p-3 rounded-2xl border border-[#ebdcc9]/70 shadow-xs grid grid-cols-3 divide-x divide-[#f0ece5] text-center">
+        <div className="px-1">
+          <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
+            Tiền vào
           </div>
-
-          {/* Cụm công cụ bên phải: Kính lúp (Search) & Icon Phễu (Filter) */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Nút 1: Kính lúp Tìm kiếm (Thu gọn search bar) */}
-            <button
-              onClick={() => {
-                setIsSearchOpen((prev) => !prev);
-                if (isSearchOpen && searchQuery) {
-                  onSearchChange('');
-                }
-              }}
-              className={`p-2 rounded-xl transition cursor-pointer active:scale-95 ${
-                isSearchOpen || searchQuery
-                  ? 'bg-[#a25832] text-white shadow-xs'
-                  : 'bg-[#fbf5eb] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
-              }`}
-              title={isSearchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm giao dịch'}
-            >
-              <Search className="w-4 h-4" />
-            </button>
-
-            {/* Nút 2: Icon Phễu mở Bottom Sheet Bộ lọc */}
-            <button
-              onClick={() => setIsFilterSheetOpen(true)}
-              className={`p-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
-                filterMode !== 'month' || typeFilter !== 'all'
-                  ? 'bg-[#a25832] text-white shadow-xs'
-                  : 'bg-[#fbf5eb] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
-              }`}
-              title={`Bộ lọc: ${filterBadgeLabel}`}
-            >
-              <Filter className="w-4 h-4" />
-              {(filterMode !== 'month' || typeFilter !== 'all') && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#ea580c] rounded-full border-2 border-[#fffdfa]" />
-              )}
-            </button>
+          <div className="text-xs sm:text-sm font-bold text-[#2e7d32] mt-0.5 truncate">
+            +{formatCurrency(windowSummary.income)}
           </div>
         </div>
-
-        {/* Thanh tìm kiếm trượt ra khi bấm Kính lúp */}
-        {isSearchOpen && (
-          <div className="relative animate-in slide-in-from-top-2 duration-150 pt-1">
-            <Search className="w-4 h-4 text-[#a89886] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              autoFocus
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Tìm theo ghi chú, danh mục, số tiền, ví..."
-              className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs sm:text-sm text-[#3e332a] placeholder-[#a89886] focus:outline-none focus:border-[#a25832] focus:bg-[#fffdfa] transition"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => onSearchChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#a89886] hover:text-[#3e332a] p-1"
-                title="Xóa từ khóa"
-              >
-                ✕
-              </button>
-            )}
+        <div className="px-1">
+          <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
+            Tiền ra
           </div>
-        )}
-
-        {/* Thanh Tóm tắt tài chính nhỏ gọn (Tiền vào / Tiền ra / Chênh lệch) */}
-        <div className="bg-[#fbf5eb] p-2.5 rounded-xl border border-[#ebdcc9] grid grid-cols-3 divide-x divide-[#ebdcc9] text-center shadow-xs">
-          <div className="px-1">
-            <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
-              Tiền vào
-            </div>
-            <div className="text-xs sm:text-sm font-bold text-[#2e7d32] mt-0.5 truncate">
-              +{formatCurrency(windowSummary.income)}
-            </div>
+          <div className="text-xs sm:text-sm font-bold text-[#b94a3b] mt-0.5 truncate">
+            -{formatCurrency(windowSummary.expense)}
           </div>
-          <div className="px-1">
-            <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
-              Tiền ra
-            </div>
-            <div className="text-xs sm:text-sm font-bold text-[#b94a3b] mt-0.5 truncate">
-              -{formatCurrency(windowSummary.expense)}
-            </div>
+        </div>
+        <div className="px-1">
+          <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
+            Chênh lệch
           </div>
-          <div className="px-1">
-            <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
-              Chênh lệch
-            </div>
-            <div
-              className={`text-xs sm:text-sm font-bold mt-0.5 truncate ${
-                windowSummary.net >= 0 ? 'text-[#3e332a]' : 'text-[#b94a3b]'
-              }`}
-            >
-              {windowSummary.net >= 0 ? '+' : ''}
-              {formatCurrency(windowSummary.net)}
-            </div>
+          <div
+            className={`text-xs sm:text-sm font-bold mt-0.5 truncate ${
+              windowSummary.net >= 0 ? 'text-[#3e332a]' : 'text-[#b94a3b]'
+            }`}
+          >
+            {windowSummary.net >= 0 ? '+' : ''}
+            {formatCurrency(windowSummary.net)}
           </div>
         </div>
       </div>
 
-      {/* 2. DANH SÁCH GIAO DỊCH GOM NHÓM THEO NGÀY (DAILY GROUPING) */}
+      {/* Thanh chip hiển thị mốc lọc hiện tại & số lượng giao dịch */}
+      <div className="flex items-center justify-between px-1 text-xs text-[#7a6a58]">
+        <button
+          onClick={() => setIsFilterSheetOpen(true)}
+          className="flex items-center gap-1.5 font-semibold text-[#a25832] hover:underline cursor-pointer"
+        >
+          <Filter className="w-3.5 h-3.5" />
+          <span>{filterBadgeLabel}</span>
+        </button>
+        <span className="font-medium text-[#8c7b69]">
+          {windowSummary.count} giao dịch
+        </span>
+      </div>
+
+      {/* 2. DANH SÁCH GIAO DỊCH (MODERN CARD STYLE)
+          - XÓA BỎ HOÀN TOÀN ĐƯỜNG KẺ DỌC
+          - MỖI NGÀY LÀ MỘT THẺ NỀN TRẮNG (#FFFFFF), BO GÓC 16px, ĐỔ BÓNG CỰC NHẸ
+          - PHÂN CÁCH BẰNG ĐƯỜNG GẠCH NGANG MỜ (1px solid #F0F0F0), GIAO DỊCH CUỐI THẺ KHÔNG CÓ GẠCH */}
       <div>
         {groupedDays.length === 0 ? (
-          <div className="p-8 text-center space-y-3">
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#ebdcc9]/70 shadow-xs space-y-3">
             <div className="w-12 h-12 rounded-full bg-[#f5ebe0] text-[#a89886] flex items-center justify-center mx-auto">
               <FileQuestion className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-[#3e332a]">
+              <p className="text-sm font-bold text-[#3e332a]">
                 Chưa có giao dịch nào trong khoảng thời gian này
               </p>
-              <p className="text-xs text-[#7a6a58] mt-1">
+              <p className="text-xs text-[#7a6a58] mt-1 max-w-sm mx-auto">
                 {activeLedgerId && activeLedgerId !== 'all'
-                  ? `Đang lọc riêng cho sổ "${activeLedgerName || 'đang chọn'}". Bạn có thể ghi thêm khoản mới.`
-                  : 'Hãy thử đổi mốc thời gian hoặc thêm một khoản ghi chép mới vào sổ.'}
+                  ? `Đang lọc theo sổ "${activeLedgerName || 'đang chọn'}". Bạn có thể ghi thêm khoản mới.`
+                  : 'Hãy thử đổi mốc thời gian bộ lọc hoặc ghi chép khoản chi mới.'}
               </p>
             </div>
             <div className="pt-2 flex items-center justify-center gap-2">
               <button
                 onClick={onOpenNewTransaction}
-                className="px-3.5 py-2 rounded-lg bg-[#a25832] text-white text-xs font-medium hover:bg-[#8c4623] transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 <span>Thêm giao dịch ngay</span>
               </button>
               <button
                 onClick={onOpenReceiptScan}
-                className="px-3.5 py-2 rounded-lg bg-[#f5ebe0] text-[#7a6a58] border border-[#ebdcc9] text-xs font-medium hover:bg-[#ebdcc9] transition cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-[#f5ebe0] text-[#7a6a58] border border-[#ebdcc9] text-xs font-semibold hover:bg-[#ebdcc9] transition cursor-pointer"
               >
                 Quét hóa đơn
               </button>
@@ -611,11 +572,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           groupedDays.map((dayGroup) => (
             <div
               key={dayGroup.dateKey}
-              className="border-b border-[#ebdcc9]/60 last:border-b-0"
+              className="bg-white rounded-[16px] border border-[#f0ece5] shadow-xs overflow-hidden mb-3.5 transition-all"
             >
-              {/* Header Cụm Ngày Nổi Bật (Chuẩn UX: Số ngày to, Thứ/Hôm nay, Tháng năm, Tổng tiền ngày căn phải) */}
-              <div className="bg-[#fcf8f2] px-3.5 sm:px-4 py-2 border-y border-[#ebdcc9] flex items-center justify-between sticky top-0 z-10 shadow-xs">
-                {/* Góc trái: Ngày (số lớn) + Nhãn (Hôm nay/Hôm qua/Thứ) + Tháng năm */}
+              {/* Tiêu đề ngày nằm trên cùng của thẻ */}
+              <div className="px-4 py-2.5 bg-[#faf7f2]/80 border-b border-[#f0f0f0] flex items-center justify-between">
+                {/* Góc trái: Ngày số lớn + Thứ/Hôm nay + Tháng năm */}
                 <div className="flex items-center gap-2.5 sm:gap-3">
                   <div
                     className={`text-2xl sm:text-3xl font-extrabold font-sans tracking-tight leading-none ${
@@ -671,8 +632,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 </div>
               </div>
 
-              {/* Các giao dịch nằm THỤT LỀ ngay bên dưới Header */}
-              <div className="pl-3 sm:pl-4 ml-3 sm:ml-4 border-l-2 border-[#ebdcc9] divide-y divide-[#f7ede2] my-1">
+              {/* Các khoản giao dịch bên trong thẻ - phân cách bằng đường gạch ngang mờ (1px solid #F0F0F0), giao dịch cuối thẻ không có đường gạch */}
+              <div>
                 {dayGroup.transactions.map((tx) => {
                   const category = getCategory(tx.categoryId);
                   const wallet = getWallet(tx.walletId);
@@ -685,7 +646,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                   return (
                     <div
                       key={tx.id}
-                      className="p-2.5 sm:p-3 hover:bg-[#fbf5eb]/60 transition flex items-start justify-between gap-3 group"
+                      className="p-3.5 hover:bg-[#faf7f2]/50 transition flex items-start justify-between gap-3 group border-b border-[#f0f0f0] last:border-b-0"
                     >
                       {/* Left: Icon & Details */}
                       <div className="flex items-start gap-2.5 min-w-0 flex-1">
@@ -711,7 +672,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         {/* Chi tiết nội dung */}
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-semibold text-xs sm:text-sm text-[#3e332a]">
+                            <span className="font-bold text-xs sm:text-sm text-[#3e332a]">
                               {isTransfer
                                 ? 'Chuyển tiền nội bộ'
                                 : category?.name || 'Chi tiêu'}
@@ -748,10 +709,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-[#8c7b69] mt-0.5">
                             {isTransfer ? (
                               <span>
-                                {wallet?.name} → {toWallet?.name}
+                                {wallet?.name || 'Ví nguồn'} →{' '}
+                                {toWallet?.name || 'Ví đích'}
                               </span>
                             ) : (
-                              <span>Ví: {wallet?.name || 'Không rõ'}</span>
+                              <span>Ví: {wallet?.name || 'Tiền mặt'}</span>
                             )}
                             <span>•</span>
                             <span>{formatDateTimeDisplay(tx.date)}</span>
@@ -759,10 +721,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         </div>
                       </div>
 
-                      {/* Right: Số tiền & Nút thao tác */}
-                      <div className="flex flex-col items-end gap-1 shrink-0">
+                      {/* Right: Số tiền & Nút sửa/xóa */}
+                      <div className="text-right flex flex-col items-end gap-1 shrink-0">
                         <div
-                          className={`font-bold text-sm sm:text-base font-sans ${
+                          className={`text-xs sm:text-sm font-bold ${
                             isIncome
                               ? 'text-[#2e7d32]'
                               : isTransfer
@@ -810,7 +772,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         )}
       </div>
 
-      {/* 3. BOTTOM SHEET BỘ LỌC (SLIDE UP TỪ DƯỚI LÊN) */}
+      {/* 3. BOTTOM SHEET BỘ LỌC ĐỘNG (SLIDE UP TỪ DƯỚI LÊN) */}
       {isFilterSheetOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="w-full max-w-lg bg-[#fffdfa] rounded-t-3xl sm:rounded-3xl border border-[#ebdcc9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200">
@@ -832,7 +794,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
             {/* Thân Bottom Sheet */}
             <div className="p-4 overflow-y-auto space-y-4 flex-1">
-              {/* Mục 1: Loại giao dịch */}
+              {/* Mục 1: Loại giao dịch (Thu / Chi) */}
               <div>
                 <label className="text-xs font-bold text-[#7a6a58] block mb-1.5 uppercase tracking-wider">
                   Loại giao dịch
@@ -890,10 +852,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     <button
                       key={item.mode}
                       onClick={() => setFilterMode(item.mode)}
-                      className={`py-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition text-center cursor-pointer ${
                         filterMode === item.mode
-                          ? 'bg-[#a25832] text-white border-[#a25832] shadow-xs'
-                          : 'bg-[#fbf5eb] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
+                          ? 'bg-[#a25832] text-white shadow-xs'
+                          : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
                       }`}
                     >
                       {item.label}
@@ -902,15 +864,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 </div>
               </div>
 
-              {/* Mục 3: Mốc thời gian cụ thể */}
+              {/* Mục 3: Tùy chọn chi tiết sinh ĐỘNG (Dynamic Filters) */}
               <div>
-                <label className="text-xs font-bold text-[#7a6a58] block mb-1.5 uppercase tracking-wider">
-                  Mốc thời gian chi tiết
+                <label className="text-xs font-bold text-[#7a6a58] block mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                  <span>Mốc thời gian cụ thể</span>
+                  {filterMode === 'year' && (
+                    <span className="text-[10px] text-[#ea580c] font-semibold lowercase">
+                      *Chọn "Tất cả các năm" để xem toàn bộ
+                    </span>
+                  )}
                 </label>
 
                 {/* Nếu chọn Tháng */}
                 {filterMode === 'month' && (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-48 overflow-y-auto p-1.5 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9]">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-48 overflow-y-auto p-1 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9]">
                     {monthTabs.map((tab) => (
                       <button
                         key={tab.key}
@@ -930,7 +897,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 {/* Nếu chọn Ngày */}
                 {filterMode === 'day' && (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-40 overflow-y-auto p-1.5 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9]">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-44 overflow-y-auto p-1 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9]">
                       {dayTabs.map((tab) => (
                         <button
                           key={tab.key}
@@ -945,6 +912,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         </button>
                       ))}
                     </div>
+
                     {selectedDayKey === 'picker' && (
                       <input
                         type="date"
@@ -969,7 +937,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                             : 'bg-white text-[#7a6a58] hover:text-[#3e332a] border border-[#ebdcc9]'
                         }`}
                       >
-                        {tab.label}
+                        <div>{tab.label}</div>
+                        <div className="text-[10px] text-[#a89886] font-normal">
+                          {tab.rangeText}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -994,9 +965,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                   </div>
                 )}
 
-                {/* Nếu chọn Năm */}
+                {/* Nếu chọn Năm: CÓ TÙY CHỌN "TẤT CẢ CÁC NĂM" ĐỂ XEM TOÀN BỘ LỊCH SỬ */}
                 {filterMode === 'year' && (
-                  <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9]">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-1.5 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9]">
                     {yearTabs.map((tab) => (
                       <button
                         key={tab.key}
@@ -1068,6 +1039,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 };

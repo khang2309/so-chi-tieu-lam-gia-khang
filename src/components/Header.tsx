@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import {
-  BookMarked,
   FolderPlus,
   Settings,
   ChevronDown,
-  Sparkles,
+  Search,
+  Filter,
   BookOpen,
-  Home,
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
@@ -17,7 +16,13 @@ interface HeaderProps {
   onSelectLedger: (id: string) => void;
   onOpenLedgerManager: () => void;
   onOpenSettings: () => void;
-  onOpenRoommateSplit?: () => void;
+  // Cụm công cụ Kính Lúp & Phễu theo chuẩn UX mới
+  isSearchOpen?: boolean;
+  onToggleSearch?: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  onOpenFilter?: () => void;
+  isFilterActive?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,7 +31,12 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectLedger,
   onOpenLedgerManager,
   onOpenSettings,
-  onOpenRoommateSplit,
+  isSearchOpen = false,
+  onToggleSearch,
+  searchQuery = '',
+  onSearchChange,
+  onOpenFilter,
+  isFilterActive = false,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -34,77 +44,45 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-30 bg-[#fdf8f0]/95 backdrop-blur-md border-b border-[#ebdcc9] transition-all">
-      <div className="max-w-4xl mx-auto px-4 py-3">
-        {/* Top bar with Branding and Actions */}
+      <div className="max-w-4xl mx-auto px-4 py-2.5">
+        {/* Hàng Header chính: Tên Sổ (trái) + Kính Lúp, Phễu, Bánh Răng (phải) */}
         <div className="flex items-center justify-between gap-3">
-          {/* Logo & App Title */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-[#ebdcc9] border border-[#d8c8b4] flex items-center justify-center text-[#a25832] shadow-sm">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-[#3e332a] tracking-tight leading-tight flex items-center gap-1.5">
-                Sổ Chi Tiêu của Lâm Gia Khang
-                <Sparkles className="w-3.5 h-3.5 text-[#c28b38] hidden sm:inline" />
-              </h1>
-              <p className="text-xs text-[#7a6a58] font-serif italic">
-                Sổ tay tài chính đương đại • Ghi chép mỗi ngày
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Action Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Chia tiền phòng / trọ */}
-            {onOpenRoommateSplit && (
-              <button
-                onClick={onOpenRoommateSplit}
-                title="Tính & Chia tiền phòng / trọ"
-                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#3d7a5a] hover:text-[#2d5c43] hover:bg-[#eef8f2] transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
-              >
-                <Home className="w-3.5 h-3.5 text-[#3d7a5a]" />
-                <span className="inline">Chia trọ</span>
-              </button>
-            )}
-
-            {/* Settings & Backup */}
-            <button
-              onClick={onOpenSettings}
-              title="Cài đặt & Sao lưu dữ liệu"
-              className="p-1.5 sm:p-2 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition flex items-center gap-1.5 text-xs font-medium"
-            >
-              <Settings className="w-4 h-4 text-[#7a6a58]" />
-              <span className="hidden sm:inline">Cài đặt</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Ledger Selector Bar */}
-        <div className="mt-2.5 pt-2 border-t border-[#f0e4d5] flex items-center justify-between gap-2">
-          {/* Active Ledger Dropdown */}
-          <div className="relative">
+          {/* 1. BÊN TRÁI: Tên Sổ & Dropdown chuyển sổ */}
+          <div className="relative min-w-0">
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] hover:border-[#d8c8b4] transition text-xs sm:text-sm shadow-xs"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] hover:border-[#d8c8b4] transition text-xs sm:text-sm shadow-xs cursor-pointer max-w-full"
             >
-              <BookMarked className="w-4 h-4 text-[#a25832]" />
-              <span className="text-[#7a6a58]">Sổ:</span>
-              <span className="font-semibold text-[#3e332a]">
+              <div
+                className="w-5 h-5 rounded-md flex items-center justify-center text-white shrink-0 text-[10px]"
+                style={{
+                  backgroundColor:
+                    activeLedgerId === 'all' ? '#a25832' : activeLedger?.color || '#a25832',
+                }}
+              >
+                {activeLedgerId === 'all' ? (
+                  <BookOpen className="w-3 h-3" />
+                ) : (
+                  <DynamicIcon name={activeLedger?.icon || 'BookMarked'} className="w-3 h-3" />
+                )}
+              </div>
+              <span className="text-[#7a6a58] font-medium hidden sm:inline">Sổ:</span>
+              <span className="font-bold text-[#3e332a] truncate max-w-[130px] sm:max-w-[200px]">
                 {activeLedgerId === 'all'
                   ? 'Tất cả các sổ'
                   : activeLedger?.name || 'Chi tiêu cá nhân'}
               </span>
-              <ChevronDown className="w-3.5 h-3.5 text-[#7a6a58]" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#7a6a58] shrink-0" />
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown Menu chọn sổ */}
             {dropdownOpen && (
               <>
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setDropdownOpen(false)}
                 />
-                <div className="absolute left-0 mt-1 w-64 rounded-xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute left-0 mt-1 w-64 rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-3 py-1.5 text-[11px] font-semibold text-[#a89886] uppercase tracking-wider">
                     Chọn Sổ ghi chép
                   </div>
@@ -114,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onSelectLedger('all');
                       setDropdownOpen(false);
                     }}
-                    className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition ${
+                    className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition cursor-pointer ${
                       activeLedgerId === 'all'
                         ? 'bg-[#f5ebe0] font-semibold text-[#3e332a]'
                         : 'text-[#3e332a] hover:bg-[#faf4ec]'
@@ -138,14 +116,14 @@ export const Header: React.FC<HeaderProps> = ({
                         onSelectLedger(ledger.id);
                         setDropdownOpen(false);
                       }}
-                      className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition ${
+                      className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition cursor-pointer ${
                         activeLedgerId === ledger.id
                           ? 'bg-[#f5ebe0] font-semibold text-[#3e332a]'
                           : 'text-[#3e332a] hover:bg-[#faf4ec]'
                       }`}
                     >
                       <div
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-white"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-white shrink-0"
                         style={{ backgroundColor: ledger.color }}
                       >
                         <DynamicIcon name={ledger.icon} className="w-3.5 h-3.5" />
@@ -166,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setDropdownOpen(false);
                       onOpenLedgerManager();
                     }}
-                    className="w-full px-3 py-2 text-left text-xs text-[#a25832] font-medium hover:bg-[#f5ebe0] flex items-center gap-2 transition"
+                    className="w-full px-3 py-2 text-left text-xs text-[#a25832] font-semibold hover:bg-[#f5ebe0] flex items-center gap-2 transition cursor-pointer"
                   >
                     <FolderPlus className="w-4 h-4" />
                     <span>Quản lý & Thêm sổ mới...</span>
@@ -176,30 +154,75 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Quick pills for ledgers on tablet/desktop */}
-          <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto">
-            {ledgers.map((ledger) => {
-              const isSelected = activeLedgerId === ledger.id;
-              return (
-                <button
-                  key={ledger.id}
-                  onClick={() => onSelectLedger(ledger.id)}
-                  className={`px-2.5 py-1 rounded-full text-xs transition flex items-center gap-1.5 border ${
-                    isSelected
-                      ? 'bg-[#3e332a] text-[#fdf8f0] border-[#3e332a]'
-                      : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:border-[#d8c8b4]'
-                  }`}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: ledger.color }}
-                  />
-                  <span>{ledger.name}</span>
-                </button>
-              );
-            })}
+          {/* 2. BÊN PHẢI: Cụm 3 icon [Kính Lúp], [Phễu], [Bánh Răng] */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Icon 1: Kính Lúp (Tìm kiếm) */}
+            {onToggleSearch && (
+              <button
+                onClick={onToggleSearch}
+                className={`p-2 rounded-xl transition cursor-pointer active:scale-95 ${
+                  isSearchOpen || searchQuery
+                    ? 'bg-[#a25832] text-white shadow-xs'
+                    : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
+                }`}
+                title={isSearchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm giao dịch'}
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Icon 2: Phễu (Bộ Lọc dữ liệu) */}
+            {onOpenFilter && (
+              <button
+                onClick={onOpenFilter}
+                className={`p-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
+                  isFilterActive
+                    ? 'bg-[#a25832] text-white shadow-xs'
+                    : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
+                }`}
+                title="Lọc thời gian & thu chi"
+              >
+                <Filter className="w-4 h-4" />
+                {isFilterActive && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#ea580c] rounded-full border-2 border-[#fffdfa]" />
+                )}
+              </button>
+            )}
+
+            {/* Icon 3: Bánh Răng (Cài đặt & Sao lưu) */}
+            <button
+              onClick={onOpenSettings}
+              className="p-2 rounded-xl bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9] transition cursor-pointer active:scale-95"
+              title="Cài đặt & Sao lưu"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
           </div>
         </div>
+
+        {/* Thanh tìm kiếm trượt ra khi bấm Kính lúp */}
+        {isSearchOpen && onSearchChange && (
+          <div className="relative animate-in slide-in-from-top-2 duration-150 pt-2 mt-1">
+            <Search className="w-4 h-4 text-[#a89886] absolute left-3 top-1/2 -translate-y-1/2 mt-1" />
+            <input
+              type="text"
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Tìm theo ghi chú, danh mục, số tiền, ví..."
+              className="w-full pl-9 pr-8 py-2 rounded-xl bg-white border border-[#ebdcc9] text-xs sm:text-sm text-[#3e332a] placeholder-[#a89886] focus:outline-none focus:border-[#a25832] shadow-xs transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 mt-1 text-xs text-[#a89886] hover:text-[#3e332a] p-1 cursor-pointer"
+                title="Xóa từ khóa"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );
