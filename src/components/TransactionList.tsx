@@ -533,11 +533,18 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     if (typeFilter === 'expense') {
-      return `${modeText} • Chi`;
+      modeText = `${modeText} • Chi`;
+    } else if (typeFilter === 'income') {
+      modeText = `${modeText} • Thu`;
     }
-    if (typeFilter === 'income') {
-      return `${modeText} • Thu`;
+
+    if (selectedCategoryId && selectedCategoryId !== 'all') {
+      const cat = categories.find((c) => c.id === selectedCategoryId);
+      if (cat) {
+        modeText = `${modeText} • ${cat.name}`;
+      }
     }
+
     return modeText;
   }, [
     filterMode,
@@ -548,6 +555,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     selectedQuarterKey,
     selectedYearKey,
     typeFilter,
+    selectedCategoryId,
+    categories,
     weekTabs,
   ]);
 
@@ -587,53 +596,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       </div>
 
       {/* Thanh chip hiển thị mốc lọc hiện tại & số lượng giao dịch */}
-      <div className="flex items-center justify-between px-1 text-xs gap-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Nút 1: Bộ lọc Thời gian */}
-          <button
-            onClick={() => setIsFilterSheetOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-[#ebdcc9] hover:border-[#a25832] text-[#a25832] font-bold shadow-2xs hover:bg-[#fff9f4] transition cursor-pointer active:scale-95"
-            title="Bấm để mở Bộ lọc thời gian"
-          >
-            <Calendar className="w-3.5 h-3.5 text-[#a25832]" />
-            <span>{filterBadgeLabel}</span>
-            <span className="text-[10px] text-[#7a6a58] font-normal">▼</span>
-          </button>
+      <div className="flex items-center justify-between px-1 text-xs">
+        {/* Nút duy nhất: Bộ lọc Thời gian */}
+        <button
+          onClick={() => setIsFilterSheetOpen(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-[#ebdcc9] hover:border-[#a25832] text-[#a25832] font-bold shadow-2xs hover:bg-[#fff9f4] transition cursor-pointer active:scale-95"
+          title="Bấm để mở Bộ lọc thời gian"
+        >
+          <Calendar className="w-3.5 h-3.5 text-[#a25832]" />
+          <span>{filterBadgeLabel}</span>
+          <span className="text-[10px] text-[#7a6a58] font-normal">▼</span>
+        </button>
 
-          {/* Nút 2: Icon Phễu - Lọc theo Danh mục (CHỈ TẠI SỔ CÁI, TUYỆT ĐỐI KHÔNG CUỘN NGANG) */}
-          <button
-            onClick={() => setIsCategoryFilterSheetOpen(true)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition cursor-pointer active:scale-95 ${
-              selectedCategoryId !== 'all'
-                ? 'bg-[#a25832] text-white border-[#a25832] font-bold shadow-xs'
-                : 'bg-white text-[#7a6a58] border-[#ebdcc9] hover:border-[#a25832] hover:text-[#a25832] font-semibold shadow-2xs'
-            }`}
-            title="Lọc theo danh mục"
-          >
-            <Filter className="w-3.5 h-3.5" />
-            <span>
-              {selectedCategoryId === 'all'
-                ? 'Danh mục'
-                : categories.find((c) => c.id === selectedCategoryId)?.name || 'Danh mục'}
-            </span>
-            {selectedCategoryId !== 'all' ? (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedCategoryId('all');
-                }}
-                className="ml-0.5 hover:bg-black/10 rounded-full px-1 text-[11px]"
-                title="Bỏ lọc danh mục"
-              >
-                ✕
-              </span>
-            ) : (
-              <span className="text-[10px] text-[#7a6a58] font-normal">▼</span>
-            )}
-          </button>
-        </div>
-
-        <span className="font-medium text-[#8c7b69] shrink-0">
+        <span className="font-medium text-[#8c7b69]">
           {windowSummary.count} giao dịch
         </span>
       </div>
@@ -1180,8 +1155,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
       {/* 4. BOTTOM SHEET LỌC THEO DANH MỤC (SLIDE UP TỪ DƯỚI LÊN - CHỈ TẠI SỔ CÁI, KHÔNG DÙNG CUỘN NGANG) */}
       {isCategoryFilterSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#fffdfa] rounded-t-3xl sm:rounded-3xl border border-[#ebdcc9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in slide-from-bottom duration-200">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setIsCategoryFilterSheetOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-[#fffdfa] rounded-t-3xl sm:rounded-3xl border border-[#ebdcc9] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header Bottom Sheet */}
             <div className="p-4 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
               <div className="flex items-center gap-2">

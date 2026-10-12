@@ -175,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {/* Icon 2: Phễu (Lọc danh mục - CHỈ HIỂN THỊ KHI Ở SỔ CÁI) */}
-            {activeTab === 'dashboard' && onOpenCategoryFilter && (
+            {(activeTab === 'dashboard' || activeTab === undefined) && onOpenCategoryFilter && (
               <button
                 onClick={onOpenCategoryFilter}
                 className={`p-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
