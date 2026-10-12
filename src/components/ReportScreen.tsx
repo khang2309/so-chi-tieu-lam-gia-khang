@@ -45,7 +45,38 @@ interface ReportScreenProps {
   activeLedgerName?: string;
 }
 
-type PeriodType = 'month' | 'year' | 'day';
+type PeriodType = 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+// Helper hàm xử lý Date an toàn tuyệt đối, chống Null Pointer Exception & Invalid Date
+const getSafeDate = (val?: string | null | Date): Date => {
+  if (!val) return new Date();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? new Date() : d;
+};
+
+const formatDateToYMD = (d: Date): string => {
+  const safe = getSafeDate(d);
+  const year = safe?.getFullYear?.() || new Date().getFullYear();
+  const month = String((safe?.getMonth?.() ?? 0) + 1).padStart(2, '0');
+  const day = String(safe?.getDate?.() ?? 1).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Tính khoảng ngày Thứ 2 đến Chủ nhật của 1 tuần bằng Date object
+const getWeekRange = (baseDate: Date, offsetWeeks: number = 0) => {
+  const d = new Date(baseDate);
+  const day = d.getDay(); // 0: CN, 1: T2...
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diffToMonday - offsetWeeks * 7);
+  d.setHours(0, 0, 0, 0);
+
+  const startOfWeek = new Date(d);
+  const endOfWeek = new Date(d);
+  endOfWeek.setDate(d.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  return { startOfWeek, endOfWeek };
+};
 
 export const ReportScreen: React.FC<ReportScreenProps> = ({
   transactions,
@@ -56,62 +87,143 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth() + 1; // 1-12
+  const currentQuarter = Math.floor(currentDate.getMonth() / 3) + 1; // 1-4
 
-  // 1. Filter States
+  // 1. Filter States với fallback an toàn
   const [periodType, setPeriodType] = useState<PeriodType>('month');
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(currentQuarter);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return currentDate.toISOString().slice(0, 10);
+    return formatDateToYMD(currentDate);
   });
   const [compareWithPrevious, setCompareWithPrevious] = useState<boolean>(true);
   const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income'>('all');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [isYearPickerOpen, setIsYearPickerOpen] = useState<boolean>(false);
 
-  // Available years for Year Picker (e.g., from 2022 to currentYear + 2)
+  // LOGIC ĐỘNG HOÀN TOÀN (TUYỆT ĐỐI KHÔNG HARDCODE)
+  // 1. Tự động sinh danh sách NĂM từ currentYear - 5 đến currentYear + 2
   const availableYears = useMemo(() => {
+    const curY = new Date().getFullYear();
+    const startY = curY - 5;
+    const endY = curY + 2;
     const years: number[] = [];
-    const minYear = 2022;
-    const maxYear = Math.max(currentYear + 2, 2028);
-    for (let y = maxYear; y >= minYear; y--) {
+    for (let y = endY; y >= startY; y--) {
       years.push(y);
     }
     return years;
-  }, [currentYear]);
+  }, []);
 
-  // Quick navigation handlers
+  // 2. Tự động sinh danh sách 12 THÁNG bằng Date Object (tự tính ngày nhuận tháng 2)
+  const dynamicMonths = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(selectedYear, i, 1);
+      const m = d.getMonth() + 1;
+      const daysInMonth = new Date(selectedYear, i + 1, 0).getDate();
+      return {
+        month: m,
+        label: `Tháng ${m}`,
+        shortLabel: `T${m}`,
+        daysInMonth,
+      };
+    });
+  }, [selectedYear]);
+
+  // 3. Tự động sinh 4 QUÝ bằng Date Object (tính tháng bắt đầu và kết thúc)
+  const dynamicQuarters = useMemo(() => {
+    return [1, 2, 3, 4].map((q) => {
+      const startM = (q - 1) * 3;
+      const endM = startM + 2;
+      const startDate = new Date(selectedYear, startM, 1);
+      const endDate = new Date(selectedYear, endM + 1, 0);
+      return {
+        quarter: q,
+        label: `Quý ${q}`,
+        monthsText: `T${startDate.getMonth() + 1} - T${endDate.getMonth() + 1}`,
+        startDate,
+        endDate,
+      };
+    });
+  }, [selectedYear]);
+
+  // 4. Tự động sinh danh sách TUẦN gần đây bằng Date arithmetic
+  const dynamicWeeks = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const { startOfWeek, endOfWeek } = getWeekRange(now, i);
+      const startStr = `${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1}`;
+      const endStr = `${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}`;
+      return {
+        offset: i,
+        label: i === 0 ? 'Tuần này' : i === 1 ? 'Tuần trước' : `${i} tuần trước`,
+        rangeText: `(${startStr} - ${endStr})`,
+        startDate: startOfWeek,
+        endDate: endOfWeek,
+      };
+    });
+  }, []);
+
+  // Safe Date Picker change handler (Fallback chống trắng màn hình khi người dùng bấm XOÁ)
+  const handleDateChange = (val?: string | null) => {
+    if (!val || val.trim() === '') {
+      setSelectedDate(formatDateToYMD(new Date()));
+    } else {
+      setSelectedDate(val);
+    }
+  };
+
+  // Quick navigation handlers cho cả 5 mốc thời gian
   const handlePrevPeriod = () => {
-    if (periodType === 'month') {
+    if (periodType === 'day') {
+      const d = getSafeDate(selectedDate);
+      d.setDate(d.getDate() - 1);
+      setSelectedDate(formatDateToYMD(d));
+    } else if (periodType === 'week') {
+      setSelectedWeekOffset((prev) => prev + 1);
+    } else if (periodType === 'month') {
       if (selectedMonth === 1) {
         setSelectedMonth(12);
         setSelectedYear((y) => y - 1);
       } else {
         setSelectedMonth((m) => m - 1);
       }
+    } else if (periodType === 'quarter') {
+      if (selectedQuarter === 1) {
+        setSelectedQuarter(4);
+        setSelectedYear((y) => y - 1);
+      } else {
+        setSelectedQuarter((q) => q - 1);
+      }
     } else if (periodType === 'year') {
       setSelectedYear((y) => y - 1);
-    } else if (periodType === 'day') {
-      const d = new Date(selectedDate);
-      d.setDate(d.getDate() - 1);
-      setSelectedDate(d.toISOString().slice(0, 10));
     }
   };
 
   const handleNextPeriod = () => {
-    if (periodType === 'month') {
+    if (periodType === 'day') {
+      const d = getSafeDate(selectedDate);
+      d.setDate(d.getDate() + 1);
+      setSelectedDate(formatDateToYMD(d));
+    } else if (periodType === 'week') {
+      setSelectedWeekOffset((prev) => prev - 1);
+    } else if (periodType === 'month') {
       if (selectedMonth === 12) {
         setSelectedMonth(1);
         setSelectedYear((y) => y + 1);
       } else {
         setSelectedMonth((m) => m + 1);
       }
+    } else if (periodType === 'quarter') {
+      if (selectedQuarter === 4) {
+        setSelectedQuarter(1);
+        setSelectedYear((y) => y + 1);
+      } else {
+        setSelectedQuarter((q) => q + 1);
+      }
     } else if (periodType === 'year') {
       setSelectedYear((y) => y + 1);
-    } else if (periodType === 'day') {
-      const d = new Date(selectedDate);
-      d.setDate(d.getDate() + 1);
-      setSelectedDate(d.toISOString().slice(0, 10));
     }
   };
 
@@ -125,21 +237,29 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   // 3. Current Period Transactions
   const currentPeriodTransactions = useMemo(() => {
     return ledgerTransactions.filter((tx) => {
-      const txDate = new Date(tx.date);
+      if (!tx.date) return false;
+      const txDate = getSafeDate(tx.date);
+
       if (periodType === 'day') {
-        const txDateStr = tx.date.slice(0, 10);
-        if (txDateStr !== selectedDate) return false;
+        const safeD = getSafeDate(selectedDate);
+        const targetStr = formatDateToYMD(safeD);
+        if (tx.date.slice(0, 10) !== targetStr) return false;
+      } else if (periodType === 'week') {
+        const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset);
+        if (txDate < startOfWeek || txDate > endOfWeek) return false;
       } else if (periodType === 'month') {
         if (
-          txDate.getFullYear() !== selectedYear ||
-          txDate.getMonth() + 1 !== selectedMonth
+          txDate?.getFullYear?.() !== selectedYear ||
+          (txDate?.getMonth?.() ?? -1) + 1 !== selectedMonth
         ) {
           return false;
         }
+      } else if (periodType === 'quarter') {
+        if (txDate?.getFullYear?.() !== selectedYear) return false;
+        const txQuarter = Math.floor((txDate?.getMonth?.() ?? 0) / 3) + 1;
+        if (txQuarter !== selectedQuarter) return false;
       } else if (periodType === 'year') {
-        if (txDate.getFullYear() !== selectedYear) {
-          return false;
-        }
+        if (txDate?.getFullYear?.() !== selectedYear) return false;
       }
 
       // Filter by category if selected
@@ -158,8 +278,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     ledgerTransactions,
     periodType,
     selectedDate,
+    selectedWeekOffset,
     selectedYear,
     selectedMonth,
+    selectedQuarter,
     selectedCategoryId,
     selectedType,
   ]);
@@ -169,27 +291,35 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     if (!compareWithPrevious) return [];
 
     return ledgerTransactions.filter((tx) => {
-      const txDate = new Date(tx.date);
+      if (!tx.date) return false;
+      const txDate = getSafeDate(tx.date);
 
       if (periodType === 'day') {
-        const currentD = new Date(selectedDate);
-        currentD.setDate(currentD.getDate() - 1);
-        const prevDateStr = currentD.toISOString().slice(0, 10);
+        const safeD = getSafeDate(selectedDate);
+        const prevD = new Date(safeD);
+        prevD.setDate((prevD?.getDate?.() ?? 1) - 1);
+        const prevDateStr = formatDateToYMD(prevD);
         if (tx.date.slice(0, 10) !== prevDateStr) return false;
+      } else if (periodType === 'week') {
+        const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset + 1);
+        if (txDate < startOfWeek || txDate > endOfWeek) return false;
       } else if (periodType === 'month') {
-        // Compare with same month of previous year (hoặc tháng trước)
         const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
         const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
         if (
-          txDate.getFullYear() !== prevYear ||
-          txDate.getMonth() + 1 !== prevMonth
+          txDate?.getFullYear?.() !== prevYear ||
+          (txDate?.getMonth?.() ?? -1) + 1 !== prevMonth
         ) {
           return false;
         }
+      } else if (periodType === 'quarter') {
+        const prevYear = selectedQuarter === 1 ? selectedYear - 1 : selectedYear;
+        const prevQuarter = selectedQuarter === 1 ? 4 : selectedQuarter - 1;
+        if (txDate?.getFullYear?.() !== prevYear) return false;
+        const txQuarter = Math.floor((txDate?.getMonth?.() ?? 0) / 3) + 1;
+        if (txQuarter !== prevQuarter) return false;
       } else if (periodType === 'year') {
-        if (txDate.getFullYear() !== selectedYear - 1) {
-          return false;
-        }
+        if (txDate?.getFullYear?.() !== selectedYear - 1) return false;
       }
 
       if (selectedCategoryId !== 'all' && tx.categoryId !== selectedCategoryId) {
@@ -206,8 +336,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     compareWithPrevious,
     periodType,
     selectedDate,
+    selectedWeekOffset,
     selectedYear,
     selectedMonth,
+    selectedQuarter,
     selectedCategoryId,
     selectedType,
   ]);
@@ -357,10 +489,82 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     };
   }, [donutTotal]);
 
-  // 8. Bar Chart Data (Tương quan Thu / Chi theo trục thời gian)
+  // 8. Bar Chart Data (Tương quan Thu / Chi theo trục thời gian cho cả 5 mốc)
   const barChartData = useMemo(() => {
-    if (periodType === 'month') {
-      // Nhóm theo 5 tuần trong tháng: Tuần 1 (1-7), Tuần 2 (8-14), Tuần 3 (15-21), Tuần 4 (22-28), Tuần 5 (29-cuối)
+    if (periodType === 'day') {
+      const parts = [
+        { label: 'Sáng (0h-11h)', income: 0, expense: 0 },
+        { label: 'Chiều (12h-17h)', income: 0, expense: 0 },
+        { label: 'Tối (18h-23h)', income: 0, expense: 0 },
+      ];
+
+      currentPeriodTransactions.forEach((tx) => {
+        const d = getSafeDate(tx.date);
+        const h = d?.getHours?.() ?? 12;
+        let pIndex = 0;
+        if (h >= 12 && h < 18) pIndex = 1;
+        else if (h >= 18) pIndex = 2;
+
+        if (tx.type === 'income') parts[pIndex].income += tx.amount;
+        if (tx.type === 'expense') parts[pIndex].expense += tx.amount;
+      });
+
+      return {
+        labels: parts.map((p) => p.label),
+        datasets: [
+          {
+            label: 'Thu nhập (+)',
+            data: parts.map((p) => p.income),
+            backgroundColor: '#10b981',
+            borderRadius: 8,
+            maxBarThickness: 32,
+          },
+          {
+            label: 'Chi tiêu (-)',
+            data: parts.map((p) => p.expense),
+            backgroundColor: '#ea580c',
+            borderRadius: 8,
+            maxBarThickness: 32,
+          },
+        ],
+      };
+    } else if (periodType === 'week') {
+      // 7 ngày trong tuần
+      const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'].map((label) => ({
+        label,
+        income: 0,
+        expense: 0,
+      }));
+
+      currentPeriodTransactions.forEach((tx) => {
+        const d = getSafeDate(tx.date);
+        const dayIdx = d?.getDay?.() ?? 0; // 0 is Sun, 1 is Mon...
+        const arrayIdx = dayIdx === 0 ? 6 : dayIdx - 1;
+        if (tx.type === 'income') days[arrayIdx].income += tx.amount;
+        if (tx.type === 'expense') days[arrayIdx].expense += tx.amount;
+      });
+
+      return {
+        labels: days.map((d) => d.label),
+        datasets: [
+          {
+            label: 'Thu nhập (+)',
+            data: days.map((d) => d.income),
+            backgroundColor: '#10b981',
+            borderRadius: 6,
+            maxBarThickness: 24,
+          },
+          {
+            label: 'Chi tiêu (-)',
+            data: days.map((d) => d.expense),
+            backgroundColor: '#ea580c',
+            borderRadius: 6,
+            maxBarThickness: 24,
+          },
+        ],
+      };
+    } else if (periodType === 'month') {
+      // Nhóm theo 5 tuần trong tháng
       const weeks = [
         { label: 'T.1 (1-7)', income: 0, expense: 0 },
         { label: 'T.2 (8-14)', income: 0, expense: 0 },
@@ -370,7 +574,8 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       ];
 
       currentPeriodTransactions.forEach((tx) => {
-        const day = new Date(tx.date).getDate();
+        const d = getSafeDate(tx.date);
+        const day = d?.getDate?.() ?? 1;
         let weekIndex = 0;
         if (day <= 7) weekIndex = 0;
         else if (day <= 14) weekIndex = 1;
@@ -401,7 +606,49 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
           },
         ],
       };
-    } else if (periodType === 'year') {
+    } else if (periodType === 'quarter') {
+      // 3 tháng của quý được tính động
+      const startM = (selectedQuarter - 1) * 3;
+      const quarterMonths = [0, 1, 2].map((offset) => {
+        const m = startM + offset + 1;
+        return {
+          month: m,
+          label: `Tháng ${m}`,
+          income: 0,
+          expense: 0,
+        };
+      });
+
+      currentPeriodTransactions.forEach((tx) => {
+        const d = getSafeDate(tx.date);
+        const m = (d?.getMonth?.() ?? 0) + 1;
+        const target = quarterMonths.find((item) => item.month === m);
+        if (target) {
+          if (tx.type === 'income') target.income += tx.amount;
+          if (tx.type === 'expense') target.expense += tx.amount;
+        }
+      });
+
+      return {
+        labels: quarterMonths.map((m) => m.label),
+        datasets: [
+          {
+            label: 'Thu nhập (+)',
+            data: quarterMonths.map((m) => m.income),
+            backgroundColor: '#10b981',
+            borderRadius: 6,
+            maxBarThickness: 28,
+          },
+          {
+            label: 'Chi tiêu (-)',
+            data: quarterMonths.map((m) => m.expense),
+            backgroundColor: '#ea580c',
+            borderRadius: 6,
+            maxBarThickness: 28,
+          },
+        ],
+      };
+    } else {
       // 12 tháng trong năm
       const months = Array.from({ length: 12 }, (_, i) => ({
         label: `T${i + 1}`,
@@ -410,9 +657,12 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       }));
 
       currentPeriodTransactions.forEach((tx) => {
-        const m = new Date(tx.date).getMonth(); // 0-11
-        if (tx.type === 'income') months[m].income += tx.amount;
-        if (tx.type === 'expense') months[m].expense += tx.amount;
+        const d = getSafeDate(tx.date);
+        const m = d?.getMonth?.() ?? 0;
+        if (m >= 0 && m < 12) {
+          if (tx.type === 'income') months[m].income += tx.amount;
+          if (tx.type === 'expense') months[m].expense += tx.amount;
+        }
       });
 
       return {
@@ -434,45 +684,8 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
           },
         ],
       };
-    } else {
-      // Theo Ngày: Các buổi trong ngày (Sáng, Trưa/Chiều, Tối/Đêm)
-      const parts = [
-        { label: 'Sáng (0h-11h)', income: 0, expense: 0 },
-        { label: 'Chiều (12h-17h)', income: 0, expense: 0 },
-        { label: 'Tối (18h-23h)', income: 0, expense: 0 },
-      ];
-
-      currentPeriodTransactions.forEach((tx) => {
-        const h = new Date(tx.date).getHours();
-        let pIndex = 0;
-        if (h >= 12 && h < 18) pIndex = 1;
-        else if (h >= 18) pIndex = 2;
-
-        if (tx.type === 'income') parts[pIndex].income += tx.amount;
-        if (tx.type === 'expense') parts[pIndex].expense += tx.amount;
-      });
-
-      return {
-        labels: parts.map((p) => p.label),
-        datasets: [
-          {
-            label: 'Thu nhập (+)',
-            data: parts.map((p) => p.income),
-            backgroundColor: '#10b981',
-            borderRadius: 8,
-            maxBarThickness: 32,
-          },
-          {
-            label: 'Chi tiêu (-)',
-            data: parts.map((p) => p.expense),
-            backgroundColor: '#ea580c',
-            borderRadius: 8,
-            maxBarThickness: 32,
-          },
-        ],
-      };
     }
-  }, [currentPeriodTransactions, periodType]);
+  }, [currentPeriodTransactions, periodType, selectedQuarter]);
 
   const barChartOptions = useMemo(() => {
     return {
@@ -529,17 +742,27 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       .slice(0, 5);
   }, [currentPeriodTransactions]);
 
-  // Title display
+  // Title display hỗ trợ đủ 5 mốc
   const periodTitle = useMemo(() => {
     if (periodType === 'day') {
-      const d = new Date(selectedDate);
-      return `Ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+      const d = getSafeDate(selectedDate);
+      return `Ngày ${d?.getDate?.()}/${(d?.getMonth?.() ?? 0) + 1}/${d?.getFullYear?.()}`;
+    }
+    if (periodType === 'week') {
+      const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset);
+      const prefix = selectedWeekOffset === 0 ? 'Tuần này' : selectedWeekOffset === 1 ? 'Tuần trước' : `${selectedWeekOffset} tuần trước`;
+      return `${prefix} (${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()})`;
     }
     if (periodType === 'month') {
       return `Tháng ${selectedMonth}/${selectedYear}`;
     }
+    if (periodType === 'quarter') {
+      const startM = (selectedQuarter - 1) * 3 + 1;
+      const endM = selectedQuarter * 3;
+      return `Quý ${selectedQuarter}/${selectedYear} (Tháng ${startM} - ${endM})`;
+    }
     return `Năm ${selectedYear}`;
-  }, [periodType, selectedDate, selectedMonth, selectedYear]);
+  }, [periodType, selectedDate, selectedWeekOffset, selectedMonth, selectedQuarter, selectedYear]);
 
   return (
     <div className="space-y-4 pb-20 animate-in fade-in duration-200">
@@ -563,19 +786,21 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
             </div>
           </div>
 
-          {/* Nút chuyển chế độ Ngày / Tháng / Năm */}
-          <div className="flex items-center bg-[#f5ebe0] p-1 rounded-xl border border-[#ebdcc9] self-start sm:self-auto">
+          {/* Nút chuyển chế độ ĐỦ 5 MỐC: ['Ngày', 'Tuần', 'Tháng', 'Quý', 'Năm'] */}
+          <div className="flex items-center bg-[#f5ebe0] p-1 rounded-xl border border-[#ebdcc9] self-start sm:self-auto overflow-x-auto scrollbar-none">
             {(
               [
                 { type: 'day', label: 'Ngày' },
+                { type: 'week', label: 'Tuần' },
                 { type: 'month', label: 'Tháng' },
+                { type: 'quarter', label: 'Quý' },
                 { type: 'year', label: 'Năm' },
               ] as const
             ).map((item) => (
               <button
                 key={item.type}
                 onClick={() => setPeriodType(item.type)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
                   periodType === item.type
                     ? 'bg-[#a25832] text-white shadow-xs'
                     : 'text-[#7a6a58] hover:text-[#3e332a]'
@@ -600,14 +825,14 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
           {/* Middle: Period Label + Quick Picker */}
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-[#a25832]" />
-            <span className="text-sm font-bold text-[#3e332a]">
+            <span className="text-xs sm:text-sm font-bold text-[#3e332a] truncate max-w-[200px] sm:max-w-none">
               {periodTitle}
             </span>
 
             {/* Nút mở nhanh Year Picker */}
             <button
               onClick={() => setIsYearPickerOpen((prev) => !prev)}
-              className="px-2 py-0.5 rounded-md bg-white border border-[#ebdcc9] text-[11px] font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer"
+              className="px-2 py-0.5 rounded-md bg-white border border-[#ebdcc9] text-[11px] font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer shrink-0"
               title="Đổi năm nhanh"
             >
               Năm {selectedYear} ▼
@@ -623,7 +848,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
           </button>
         </div>
 
-        {/* Year Picker Dropdown (Cuộn chọn năm bất kỳ) */}
+        {/* Year Picker Dropdown (Cuộn chọn năm bất kỳ - Sinh động 100%) */}
         {isYearPickerOpen && (
           <div className="p-3 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9] space-y-2 animate-in slide-in-from-top-1 duration-150">
             <div className="flex items-center justify-between text-xs font-bold text-[#7a6a58]">
@@ -657,35 +882,120 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
           </div>
         )}
 
-        {/* Bộ chọn tháng (khi ở chế độ Tháng) */}
-        {periodType === 'month' && (
-          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 pt-1">
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+        {/* GIAO DIỆN CHỌN THỜI GIAN TƯƠNG ỨNG TỪNG CHẾ ĐỘ (ĐỘNG 100%) */}
+
+        {/* 1. Nếu chọn Ngày: DatePicker với Fallback an toàn + Quick Chips */}
+        {periodType === 'day' && (
+          <div className="space-y-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-[#7a6a58] font-semibold">Chọn ngày:</span>
+              <input
+                type="date"
+                value={selectedDate || formatDateToYMD(new Date())}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="px-3 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+              />
+              {/* Quick chips */}
               <button
-                key={m}
-                onClick={() => setSelectedMonth(m)}
-                className={`py-1 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
-                  selectedMonth === m
-                    ? 'bg-[#3e332a] text-white shadow-xs'
-                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
+                onClick={() => setSelectedDate(formatDateToYMD(new Date()))}
+                className="px-2.5 py-1 rounded-lg bg-white border border-[#ebdcc9] text-xs font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer"
+              >
+                Hôm nay
+              </button>
+              <button
+                onClick={() => {
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  setSelectedDate(formatDateToYMD(yesterday));
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
+              >
+                Hôm qua
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 2. Nếu chọn Tuần: Lưới các tuần gần đây */}
+        {periodType === 'week' && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+            {dynamicWeeks.map((w) => (
+              <button
+                key={w.offset}
+                onClick={() => setSelectedWeekOffset(w.offset)}
+                className={`py-2 px-2.5 rounded-xl text-xs font-semibold transition text-left cursor-pointer border ${
+                  selectedWeekOffset === w.offset
+                    ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs'
+                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border-[#ebdcc9]'
                 }`}
               >
-                T{m}
+                <div className="font-bold">{w.label}</div>
+                <div className={`text-[10px] ${selectedWeekOffset === w.offset ? 'text-[#ebdcc9]' : 'text-[#a89886]'}`}>
+                  {w.rangeText}
+                </div>
               </button>
             ))}
           </div>
         )}
 
-        {/* Chọn ngày cụ thể (khi ở chế độ Ngày) */}
-        {periodType === 'day' && (
-          <div className="flex items-center gap-2 pt-1">
-            <span className="text-xs text-[#7a6a58] font-semibold">Chọn ngày:</span>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-            />
+        {/* 3. Nếu chọn Tháng: 12 tháng sinh động bằng Date Object */}
+        {periodType === 'month' && (
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 pt-1">
+            {dynamicMonths.map((m) => (
+              <button
+                key={m.month}
+                onClick={() => setSelectedMonth(m.month)}
+                className={`py-1 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
+                  selectedMonth === m.month
+                    ? 'bg-[#3e332a] text-white shadow-xs'
+                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
+                }`}
+                title={`Tháng ${m.month} (${m.daysInMonth} ngày)`}
+              >
+                {m.shortLabel}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 4. Nếu chọn Quý: 4 Quý sinh động bằng Date Object */}
+        {periodType === 'quarter' && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+            {dynamicQuarters.map((q) => (
+              <button
+                key={q.quarter}
+                onClick={() => setSelectedQuarter(q.quarter)}
+                className={`p-2.5 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${
+                  selectedQuarter === q.quarter
+                    ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs'
+                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border-[#ebdcc9]'
+                }`}
+              >
+                <div className="text-sm">{q.label}</div>
+                <div className={`text-[10px] font-normal mt-0.5 ${selectedQuarter === q.quarter ? 'text-[#ebdcc9]' : 'text-[#a89886]'}`}>
+                  {q.monthsText}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 5. Nếu chọn Năm: Danh sách năm */}
+        {periodType === 'year' && (
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-1">
+            {availableYears.map((y) => (
+              <button
+                key={y}
+                onClick={() => setSelectedYear(y)}
+                className={`py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
+                  selectedYear === y
+                    ? 'bg-[#3e332a] text-white shadow-xs'
+                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
+                }`}
+              >
+                {y}
+              </button>
+            ))}
           </div>
         )}
 
@@ -699,7 +1009,18 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
               onChange={(e) => setCompareWithPrevious(e.target.checked)}
               className="w-4 h-4 rounded text-[#a25832] focus:ring-[#a25832] border-[#ebdcc9]"
             />
-            <span>So sánh với {periodType === 'year' ? 'năm trước' : periodType === 'month' ? 'tháng trước' : 'hôm qua'}</span>
+            <span>
+              So sánh với{' '}
+              {periodType === 'year'
+                ? 'năm trước'
+                : periodType === 'quarter'
+                ? 'quý trước'
+                : periodType === 'month'
+                ? 'tháng trước'
+                : periodType === 'week'
+                ? 'tuần trước'
+                : 'hôm qua'}
+            </span>
           </label>
 
           {/* Lọc Thu / Chi */}

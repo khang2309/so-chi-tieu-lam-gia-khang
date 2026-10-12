@@ -179,11 +179,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
+    const safeDate = date && !isNaN(new Date(date).getTime()) ? new Date(date) : new Date();
+
     onSave(
       {
         amount: numAmount,
         type,
-        date: new Date(date).toISOString(),
+        date: safeDate.toISOString(),
         categoryId,
         ledgerId,
         walletId,
@@ -464,7 +466,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <input
               type="datetime-local"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => setDate(e.target.value || new Date().toISOString().slice(0, 16))}
               className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
             />
           </div>

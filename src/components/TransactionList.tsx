@@ -119,13 +119,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const yearTabs = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const yearSet = new Set<number>();
-    yearSet.add(currentYear);
+    
+    // Sinh mảng động từ currentYear - 5 đến currentYear + 2
+    for (let y = currentYear - 5; y <= currentYear + 2; y++) {
+      yearSet.add(y);
+    }
 
-    // Quét toàn bộ năm từ giao dịch
+    // Quét bổ sung các năm từ giao dịch thực tế nếu có
     transactions.forEach((tx) => {
       if (tx.date) {
         const y = new Date(tx.date).getFullYear();
-        if (!isNaN(y) && y >= 2000 && y <= 2100) {
+        if (!isNaN(y) && y >= 1990 && y <= 2100) {
           yearSet.add(y);
         }
       }
@@ -916,8 +920,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     {selectedDayKey === 'picker' && (
                       <input
                         type="date"
-                        value={specificDate}
-                        onChange={(e) => setSpecificDate(e.target.value)}
+                        value={specificDate || new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSpecificDate(val && val.trim() ? val : new Date().toISOString().slice(0, 10));
+                        }}
                         className="w-full px-3 py-2 rounded-xl bg-white border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
                       />
                     )}
