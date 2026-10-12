@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { auth, isFirebaseConfigured } from '../firebase';
+import { deepClearAllStorage } from '../utils/storageCleaner';
 
 interface AuthContextType {
   user: User | null;
@@ -66,6 +67,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      // Nếu người dùng đã chủ động đăng xuất, tuyệt đối không tự động phục hồi phiên đăng nhập
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('user_is_logged_out') === 'true') {
+        if (currentUser) {
+          signOut(auth).catch(() => {});
+        }
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       setUser(currentUser);
       setLoading(false);
       if (currentUser) {
@@ -82,6 +93,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
     }
     await signInWithEmailAndPassword(auth, email, pass);
+    localStorage.removeItem('user_is_logged_out');
+    localStorage.setItem('hasSeenLoginPopup', 'true');
     setIsAuthModalOpen(false);
   };
 
@@ -90,6 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
     }
     await createUserWithEmailAndPassword(auth, email, pass);
+    localStorage.removeItem('user_is_logged_out');
+    localStorage.setItem('hasSeenLoginPopup', 'true');
     setIsAuthModalOpen(false);
   };
 
@@ -114,6 +129,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const credential = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, credential);
+      localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem('hasSeenLoginPopup', 'true');
       setIsAuthModalOpen(false);
     } catch (err: any) {
       console.warn('Lỗi xác thực Google Native:', err);
@@ -128,6 +145,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    try {
+      localStorage.setItem('user_is_logged_out', 'true');
+      localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
+    } catch {}
+
     if (auth) {
       try {
         await signOut(auth);
@@ -141,20 +163,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Bỏ qua nếu chưa đăng nhập qua GoogleAuth
     }
     setUser(null);
-    setIsOfflineMode(false);
-    // Xóa sạch 100% bộ nhớ cứng để không bị dính dữ liệu khi xóa đa nhiệm
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch (e) {
-      console.warn('Lỗi clear storage:', e);
-    }
-    setIsAuthModalOpen(true);
+    setIsOfflineMode(true);
+    // Xóa sạch 100% bộ nhớ cứng (localStorage, Preferences, IndexedDB, sessionStorage)
+    await deepClearAllStorage();
   };
 
   const continueOffline = () => {
     setIsOfflineMode(true);
     localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
+    localStorage.setItem('hasSeenLoginPopup', 'true');
     setIsAuthModalOpen(false);
   };
 

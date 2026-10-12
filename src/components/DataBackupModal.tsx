@@ -11,15 +11,14 @@ import {
   FileSpreadsheet,
   Cloud,
   Mail,
-  Lock,
   LogOut,
   CloudUpload,
-  AlertCircle,
   CheckCircle2,
   Cpu,
   Key,
   ExternalLink,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getSavedVisionConfig, saveVisionConfig } from '../utils/cloudVisionService';
@@ -48,15 +47,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onSyncToCloud,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, isOnline, loginWithEmail, registerWithEmail, loginWithGoogleNative, logout } = useAuth();
-
-  // Auth in-app state
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
-  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const { user, isOnline, logout, openAuthModal } = useAuth();
 
   // Manual cloud sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -105,78 +96,6 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     e.target.value = '';
   };
 
-  const handleGoogleSignIn = async () => {
-    setAuthError(null);
-    setSyncFeedback(null);
-    setIsGoogleSubmitting(true);
-    try {
-      await loginWithGoogleNative();
-    } catch (err: any) {
-      console.warn('Lỗi đăng nhập Google Native:', err);
-      alert('Lỗi Firebase: ' + (err?.message || JSON.stringify(err)));
-      const detail =
-        typeof err === 'object'
-          ? (err.message ? `${err.message} (${JSON.stringify(err)})` : JSON.stringify(err))
-          : String(err);
-      setAuthError(detail);
-    } finally {
-      setIsGoogleSubmitting(false);
-    }
-  };
-
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    setSyncFeedback(null);
-
-    const cleanEmail = email.trim();
-    const cleanPassword = password.trim();
-
-    if (!cleanEmail || !cleanPassword) {
-      setAuthError('Vui lòng nhập đầy đủ Email và Mật khẩu.');
-      return;
-    }
-
-    if (cleanPassword.length < 6) {
-      setAuthError('Mật khẩu cần tối thiểu 6 ký tự.');
-      return;
-    }
-
-    setIsAuthSubmitting(true);
-    try {
-      if (authMode === 'login') {
-        await loginWithEmail(cleanEmail, cleanPassword);
-      } else {
-        await registerWithEmail(cleanEmail, cleanPassword);
-      }
-      setEmail('');
-      setPassword('');
-      setAuthError(null);
-    } catch (err: any) {
-      console.warn('Lỗi xác thực:', err);
-      alert('Lỗi Firebase: ' + (err?.message || String(err)));
-      let msg = err?.message || 'Thao tác không thành công.';
-      if (
-        msg.includes('user-not-found') ||
-        msg.includes('wrong-password') ||
-        msg.includes('invalid-credential')
-      ) {
-        msg = 'Email hoặc mật khẩu không chính xác.';
-      } else if (msg.includes('email-already-in-use')) {
-        msg = 'Email này đã tồn tại. Vui lòng bấm tab Đăng nhập.';
-      } else if (msg.includes('weak-password')) {
-        msg = 'Mật khẩu phải từ 6 ký tự trở lên.';
-      } else if (msg.includes('invalid-email')) {
-        msg = 'Địa chỉ Email không hợp lệ.';
-      } else if (msg.includes('network-request-failed')) {
-        msg = 'Không thể kết nối mạng. Vui lòng kiểm tra WiFi/4G.';
-      }
-      setAuthError(msg);
-    } finally {
-      setIsAuthSubmitting(false);
-    }
-  };
-
   const handleManualSync = async () => {
     if (!onSyncToCloud) return;
     setIsSyncing(true);
@@ -199,12 +118,26 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     }
   };
 
-  const handleLogout = async () => {
-    if (onClearUserData) {
-      onClearUserData();
+  // Logout Confirmation state
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleConfirmLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      if (onClearUserData) {
+        onClearUserData();
+      }
+      await logout();
+      setShowLogoutConfirm(false);
+      onClose();
+      alert('Đã đăng xuất tài khoản và dọn sạch dữ liệu cá nhân trên thiết bị thành công! Dữ liệu trên Cloud vẫn an toàn.');
+    } catch (err: any) {
+      console.warn('Lỗi khi đăng xuất:', err);
+      alert('Lỗi đăng xuất: ' + (err?.message || String(err)));
+    } finally {
+      setIsLoggingOut(false);
     }
-    await logout();
-    onClose();
   };
 
   return (
@@ -260,8 +193,8 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   </div>
 
                   <button
-                    onClick={handleLogout}
-                    className="px-2.5 py-1.5 rounded-lg border border-[#fca5a5] bg-[#fef2f2] text-xs font-semibold text-[#b91c1c] hover:bg-[#fee2e2] active:scale-95 transition flex items-center gap-1 shrink-0"
+                    onClick={() => setShowLogoutConfirm(true)}
+                    className="px-2.5 py-1.5 rounded-lg border border-[#fca5a5] bg-[#fef2f2] text-xs font-semibold text-[#b91c1c] hover:bg-[#fee2e2] active:scale-95 transition flex items-center gap-1 shrink-0 cursor-pointer"
                     title="Đăng xuất tài khoản"
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -292,52 +225,17 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 )}
               </div>
             ) : (
-              /* CHƯA ĐĂNG NHẬP */
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center shrink-0">
-                      <Cloud className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-[#3e332a]">Tài Khoản & Đồng Bộ Cloud</div>
-                      <div className="text-[10px] text-[#d97706] font-semibold flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#d97706] animate-pulse" />
-                        <span>Đang dùng Offline (LocalStorage)</span>
-                      </div>
-                    </div>
+              /* CHƯA ĐĂNG NHẬP: Gọn gàng, điều hướng mở AuthModal duy nhất ở Root */
+              <div className="space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center shrink-0">
+                    <Cloud className="w-4 h-4" />
                   </div>
-
-                  {/* Tabs chuyển Đăng nhập / Đăng ký */}
-                  <div className="flex p-0.5 rounded-lg bg-[#f0e4d5] border border-[#d8c8b4]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('login');
-                        setAuthError(null);
-                      }}
-                      className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${
-                        authMode === 'login'
-                          ? 'bg-[#fffdfa] text-[#a25832] shadow-xs'
-                          : 'text-[#7a6a58] hover:text-[#3e332a]'
-                      }`}
-                    >
-                      Đăng nhập
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('register');
-                        setAuthError(null);
-                      }}
-                      className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${
-                        authMode === 'register'
-                          ? 'bg-[#fffdfa] text-[#a25832] shadow-xs'
-                          : 'text-[#7a6a58] hover:text-[#3e332a]'
-                      }`}
-                    >
-                      Đăng ký
-                    </button>
+                  <div>
+                    <div className="text-xs font-bold text-[#3e332a]">Tài Khoản & Đồng Bộ Đám Mây</div>
+                    <div className="text-[11px] text-[#7a6a58]">
+                      Đăng nhập để đồng bộ và sao lưu dữ liệu tự động
+                    </div>
                   </div>
                 </div>
 
@@ -347,107 +245,16 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   </div>
                 )}
 
-                {authError && (
-                  <div className="p-2 rounded-lg bg-[#fef2f2] border border-[#fecaca] text-[11px] text-[#b91c1c] flex items-start gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span>{authError}</span>
-                  </div>
-                )}
-
-                {/* Form In-App */}
-                <form onSubmit={handleAuthSubmit} className="space-y-2">
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#5a4c3f] flex items-center gap-1 mb-1">
-                      <Mail className="w-3 h-3 text-[#a25832]" />
-                      <span>Email:</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="nhap-email@gmail.com"
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-[#ebdcc9] bg-[#fbf5eb] focus:bg-white focus:outline-none focus:border-[#a25832] text-[#3e332a]"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#5a4c3f] flex items-center gap-1 mb-1">
-                      <Lock className="w-3 h-3 text-[#a25832]" />
-                      <span>Mật khẩu:</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Tối thiểu 6 ký tự"
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-[#ebdcc9] bg-[#fbf5eb] focus:bg-white focus:outline-none focus:border-[#a25832] text-[#3e332a]"
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isAuthSubmitting}
-                    className="w-full py-2 rounded-lg bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] active:scale-[0.99] disabled:opacity-60 transition shadow-xs flex items-center justify-center gap-1.5"
-                  >
-                    {isAuthSubmitting ? (
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Đang xử lý...</span>
-                      </span>
-                    ) : authMode === 'login' ? (
-                      <span>Đăng nhập ngay</span>
-                    ) : (
-                      <span>Tạo tài khoản & Đồng bộ</span>
-                    )}
-                  </button>
-                </form>
-
-                {/* Phân cách và Nút Đăng nhập bằng Google (Native) */}
-                <div className="relative my-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-[#ebdcc9]" />
-                  </div>
-                  <div className="relative flex justify-center text-[10px] uppercase">
-                    <span className="bg-[#fffdfa] px-2 text-[#7a6a58] font-medium">Hoặc</span>
-                  </div>
-                </div>
-
                 <button
                   type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={isGoogleSubmitting || isAuthSubmitting}
-                  className="w-full py-2 px-3 rounded-lg border border-[#d8c8b4] bg-white hover:bg-[#fbf5eb] active:scale-[0.99] text-xs font-semibold text-[#3e332a] transition shadow-xs flex items-center justify-center gap-2 disabled:opacity-60"
+                  onClick={() => {
+                    onClose();
+                    openAuthModal();
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-[#a25832] hover:bg-[#8c4623] active:scale-[0.99] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {isGoogleSubmitting ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3.5 h-3.5 border-2 border-[#a25832] border-t-transparent rounded-full animate-spin" />
-                      <span>Đang kết nối Google...</span>
-                    </span>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.98 0 12c0 2.02.45 3.84 1.25 5.42l4.03-3.15z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                        />
-                      </svg>
-                      <span>Đăng nhập bằng Google</span>
-                    </>
-                  )}
+                  <Cloud className="w-4 h-4" />
+                  <span>Đăng nhập / Đăng ký tài khoản</span>
                 </button>
               </div>
             )}
@@ -673,6 +480,64 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* POPUP XÁC NHẬN ĐĂNG XUẤT & XÓA DỮ LIỆU CỤC BỘ */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl p-5 space-y-4 text-center animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-full bg-[#fef2f2] text-[#b91c1c] border border-[#fca5a5] flex items-center justify-center mx-auto shadow-xs">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h4 className="text-base font-bold text-[#3e332a]">
+                Xác nhận Đăng xuất & Xóa dữ liệu?
+              </h4>
+              <p className="text-xs text-[#7a6a58] mt-1.5 leading-relaxed">
+                Bạn có chắc muốn đăng xuất khỏi tài khoản{' '}
+                <strong className="text-[#3e332a]">{user?.email}</strong>?
+              </p>
+              <div className="text-[11px] text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] p-3 rounded-xl mt-3 text-left space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <span>⚠️ Lưu ý quan trọng:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-[#991b1b]">
+                  Dữ liệu trên máy này sẽ được dọn sạch hoàn toàn để bảo vệ riêng tư. Dữ liệu trên <strong>Cloud</strong> vẫn được bảo toàn 100% và sẽ đồng bộ lại đầy đủ khi bạn đăng nhập lại.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-[#d8c8b4] bg-[#fbf5eb] text-xs font-semibold text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={handleConfirmLogout}
+                className="flex-1 py-2.5 rounded-xl bg-[#b91c1c] hover:bg-[#991b1b] text-white text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isLoggingOut ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Đang dọn sạch...</span>
+                  </span>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Đăng xuất & Xóa</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

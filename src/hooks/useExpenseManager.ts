@@ -34,6 +34,7 @@ export function useExpenseManager() {
   // 1. Initial State from LocalStorage (được deep sanitize triệt để loại bỏ undefined)
   const [ledgers, setLedgers] = useState<Ledger[]>(() => {
     try {
+      if (localStorage.getItem('user_is_logged_out') === 'true') return DEFAULT_LEDGERS;
       const saved = localStorage.getItem(STORAGE_KEYS.LEDGERS);
       return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_LEDGERS;
     } catch {
@@ -43,6 +44,7 @@ export function useExpenseManager() {
 
   const [wallets, setWallets] = useState<Wallet[]>(() => {
     try {
+      if (localStorage.getItem('user_is_logged_out') === 'true') return DEFAULT_WALLETS;
       const saved = localStorage.getItem(STORAGE_KEYS.WALLETS);
       return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_WALLETS;
     } catch {
@@ -52,6 +54,7 @@ export function useExpenseManager() {
 
   const [categories, setCategories] = useState<Category[]>(() => {
     try {
+      if (localStorage.getItem('user_is_logged_out') === 'true') return DEFAULT_CATEGORIES;
       const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
       if (saved) {
         const parsed = sanitizeData(JSON.parse(saved));
@@ -69,6 +72,7 @@ export function useExpenseManager() {
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
+      if (localStorage.getItem('user_is_logged_out') === 'true') return [];
       const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
       return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_TRANSACTIONS;
     } catch {
@@ -135,6 +139,9 @@ export function useExpenseManager() {
 
   // Hàm kéo ngay lập tức toàn bộ dữ liệu từ Cloud về và cập nhật vào State (Không chờ F5 / Tải lại)
   const fetchAndSyncUserData = async (targetUid?: string) => {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('user_is_logged_out') === 'true') {
+      return;
+    }
     const uid = targetUid || auth?.currentUser?.uid;
     if (!uid) return;
 
@@ -250,6 +257,10 @@ export function useExpenseManager() {
       if (unsubData) {
         unsubData();
         unsubData = null;
+      }
+
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('user_is_logged_out') === 'true') {
+        return;
       }
 
       if (currentUser?.uid) {
@@ -649,6 +660,9 @@ export function useExpenseManager() {
 
   const resetToDefaults = () => {
     if (window.confirm('Bạn có chắc chắn muốn đặt lại dữ liệu mẫu ban đầu? Mọi thay đổi hiện tại sẽ được thay thế.')) {
+      try {
+        localStorage.removeItem('user_is_logged_out');
+      } catch (_) {}
       setLedgers(DEFAULT_LEDGERS);
       setWallets(DEFAULT_WALLETS);
       setCategories(DEFAULT_CATEGORIES);
@@ -662,16 +676,23 @@ export function useExpenseManager() {
 
   const clearUserData = () => {
     try {
-      localStorage.clear();
+      localStorage.setItem('user_is_logged_out', 'true');
+      localStorage.setItem('sochitieu_user_offline_preference', 'true');
+      localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, '[]');
+      localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(DEFAULT_WALLETS));
+      localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(DEFAULT_LEDGERS));
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_LEDGER, 'ledger-personal');
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_WALLET, 'all');
       sessionStorage.clear();
     } catch (_) {}
 
-    // Đưa state ứng dụng về trạng thái trống trơn hoàn toàn
+    // Đưa state ứng dụng về trạng thái trắng tinh ban đầu (0 giao dịch)
     setTransactions([]);
-    setWallets([]);
-    setLedgers([]);
-    setCategories([]);
-    setActiveLedgerId('all');
+    setWallets(DEFAULT_WALLETS);
+    setLedgers(DEFAULT_LEDGERS);
+    setCategories(DEFAULT_CATEGORIES);
+    setActiveLedgerId('ledger-personal');
     setActiveWalletId('all');
   };
 

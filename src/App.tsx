@@ -14,7 +14,6 @@ import { WalletManagerModal } from './components/WalletManagerModal';
 import { WalletTransferModal } from './components/WalletTransferModal';
 import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { DataBackupModal } from './components/DataBackupModal';
-import { FirstTimeLoginModal } from './components/FirstTimeLoginModal';
 import { AuthModal } from './components/AuthModal';
 import { WalletTab } from './components/WalletTab';
 import { exportTransactionsToExcel } from './utils/excelExporter';
@@ -27,13 +26,12 @@ import {
   Receipt,
   Mic,
   BarChart3,
-  Settings,
   Users,
 } from 'lucide-react';
 
 export function App() {
   const manager = useExpenseManager();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, openAuthModal } = useAuth();
 
   // Modals visibility state
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -58,21 +56,30 @@ export function App() {
   const [isCategoryFilterSheetOpen, setIsCategoryFilterSheetOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
-
-  // Popup Đăng nhập lần đầu & Toast thông báo
-  const [isFirstTimeLoginModalOpen, setIsFirstTimeLoginModalOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const [activeTab, setActiveTab] = useState<'dashboard' | 'reports' | 'wallets'>('dashboard');
 
-  // 1. Logic kiểm tra "Lần đầu mở App" (Chỉ hiển thị 1 lần duy nhất)
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleToast = (e: any) => {
+      setToastMessage(e.detail);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 3500);
+    };
+    window.addEventListener('show-app-toast', handleToast);
+    return () => window.removeEventListener('show-app-toast', handleToast);
+  }, []);
+
+  // 1. Logic kiểm tra "Lần đầu mở App" (Chỉ mở AuthModal 1 lần duy nhất)
   useEffect(() => {
     if (authLoading) return;
     const hasSeenLoginPopup = localStorage.getItem('hasSeenLoginPopup');
     if (!hasSeenLoginPopup && !user) {
-      setIsFirstTimeLoginModalOpen(true);
+      openAuthModal();
     }
-  }, [authLoading, user]);
+  }, [authLoading, user, openAuthModal]);
 
   // 2. Kéo ngay lập tức toàn bộ dữ liệu từ Cloud về NGAY KHI user đăng nhập thành công
   useEffect(() => {
@@ -80,26 +87,6 @@ export function App() {
       manager.fetchAndSyncUserData(user.uid);
     }
   }, [user?.uid]);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4500);
-  };
-
-  const handleDismissFirstTimeLogin = () => {
-    setIsFirstTimeLoginModalOpen(false);
-    showToast('Bạn có thể đăng nhập sau tại mục Cài đặt');
-  };
-
-  const handleSuccessFirstTimeLogin = () => {
-    setIsFirstTimeLoginModalOpen(false);
-    if (user?.uid) {
-      manager.fetchAndSyncUserData(user.uid);
-    }
-    showToast('Đăng nhập thành công! Đang tải dữ liệu của bạn...');
-  };
 
   // Quick Open Handlers
   const handleOpenNewTransaction = () => {
@@ -508,27 +495,15 @@ export function App() {
         onSyncToCloud={manager.syncToCloud}
       />
 
-      {/* Popup Đăng nhập lần đầu Onboarding (Chỉ hiển thị 1 lần duy nhất) */}
-      <FirstTimeLoginModal
-        isOpen={isFirstTimeLoginModalOpen}
-        onDismiss={handleDismissFirstTimeLogin}
-        onSuccess={handleSuccessFirstTimeLogin}
-      />
+      {/* Duy nhất 1 AuthModal tại Root level điều khiển bằng Global State isAuthModalOpen */}
+      <AuthModal />
 
-      {/* Toast Notification khi người dùng chọn "Để sau" */}
+      {/* Floating Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-[92%] sm:max-w-md w-full px-4 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-none">
-          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-[#2c241d]/95 backdrop-blur-md text-[#fffdfa] shadow-2xl border border-[#5a4c3f] text-xs sm:text-sm font-medium">
-            <div className="w-7 h-7 rounded-lg bg-[#ea580c]/20 text-[#ea580c] flex items-center justify-center shrink-0">
-              <Settings className="w-4 h-4" />
-            </div>
-            <span className="flex-1 leading-snug">{toastMessage}</span>
-          </div>
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-70 max-w-sm w-[90%] bg-[#3e332a] text-[#fdf8f0] px-4 py-3 rounded-2xl shadow-2xl border border-[#ebdcc9]/40 flex items-center justify-center gap-2 text-xs font-semibold animate-in slide-in-from-top-4 fade-in duration-200">
+          <span>{toastMessage}</span>
         </div>
       )}
-
-      {/* Firebase Auth & Offline First Modal */}
-      <AuthModal />
     </div>
   );
 }

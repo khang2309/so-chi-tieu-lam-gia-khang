@@ -26,91 +26,76 @@ class SpeechService {
 
     if (this.isNative) {
       try {
-        // Dọn dẹp phiên trước
+        // 1. Kiểm tra tính khả dụng của Speech Recognition
+        const isAvailable = await SpeechRecognition.available().catch(() => ({ available: true }));
+        if (!isAvailable.available) {
+          console.warn('SpeechRecognition không khả dụng trên thiết bị, thử Web Speech fallback');
+          return this.startWebSpeechFallback(callbacks);
+        }
+
+        // 2. Dọn dẹp phiên trước
         try {
           await SpeechRecognition.stop();
         } catch {}
-        try {
-          await SpeechRecognition.removeAllListeners();
-        } catch {}
 
-        // Trễ 300ms để Android giải phóng tài nguyên Audio
-        await new Promise((resolve) => setTimeout(resolve, 300));
-
-        // Xin quyền Microphone
-        await SpeechRecognition.requestPermissions().catch((e) => {
-          console.warn('requestPermissions:', e);
-        });
-
-        await SpeechRecognition.removeAllListeners().catch(() => {});
-
-        // Lắng nghe kết quả từng phần (realtime)
-        this.partialListenerHandle = await SpeechRecognition.addListener(
-          'partialResults',
-          (data: { matches: string[] }) => {
-            if (data.matches && data.matches.length > 0) {
-              const text = data.matches[0];
-              this.currentTranscript = text;
-              callbacks.onPartialResult(text);
-            }
-          }
-        );
-
-        // Lắng nghe trạng thái dừng
-        this.stateListenerHandle = await SpeechRecognition.addListener(
-          'listeningState',
-          (data: { status: 'started' | 'stopped' }) => {
-            if (data.status === 'stopped') {
-              this.isListeningActive = false;
-              callbacks.onListeningStateChange?.(false);
-              if (this.currentTranscript.trim()) {
-                callbacks.onFinalResult(this.currentTranscript.trim());
-              }
-            }
-          }
-        );
-
-        // BẮT BUỘC SET CỨNG NGÔN NGỮ vi-VN
-        const startResult = await SpeechRecognition.start({
-          language: 'vi-VN',
-          maxResults: 1,
-          partialResults: true,
-          prompt: 'Đang lắng nghe tiếng Việt (vi-VN)...',
-        });
-
-        if (startResult && startResult.matches && startResult.matches.length > 0) {
-          const text = startResult.matches[0];
-          this.currentTranscript = text;
-          callbacks.onPartialResult(text);
-          callbacks.onFinalResult(text);
+        // 3. Xin quyền Microphone nếu chưa có
+        const permStatus = await SpeechRecognition.checkPermissions().catch(() => null);
+        if (permStatus?.speechRecognition !== 'granted') {
+          await SpeechRecognition.requestPermissions().catch((e) => {
+            console.warn('requestPermissions warning:', e);
+          });
         }
 
+        // 4. Kích hoạt Google Voice Dialog chuẩn trên Android với popup: true và vi-VN
+        const startResult = await SpeechRecognition.start({
+          language: 'vi-VN',
+          maxResults: 5,
+          prompt: 'Nói chi tiêu bằng tiếng Việt (VD: "Ăn trưa 35k ví Momo")...',
+          popup: true,
+          partialResults: false,
+        });
+
+        const matches =
+          startResult?.matches ||
+          (startResult as any)?.results ||
+          (startResult as any)?.value;
+
+        if (matches && matches.length > 0) {
+          const text = String(matches[0] || '').trim();
+          if (text) {
+            this.currentTranscript = text;
+            callbacks.onPartialResult(text);
+            callbacks.onFinalResult(text);
+          }
+        }
+
+        this.isListeningActive = false;
+        callbacks.onListeningStateChange?.(false);
         return true;
       } catch (error: any) {
-        console.warn('Native SpeechRecognition lỗi, thử Web Speech API fallback:', error);
+        this.isListeningActive = false;
+        callbacks.onListeningStateChange?.(false);
 
+        const errMsg = String(error?.message || error || '').toLowerCase();
+        // Hủy bỏ (mã 0 trên Android là RESULT_CANCELED)
+        if (errMsg === '0' || errMsg.includes('cancel') || errMsg.includes('abort') || errMsg.includes('no-speech')) {
+          return false;
+        }
+
+        console.warn('Native SpeechRecognition lỗi, thử Web Speech API fallback:', error);
         const webFallbackStarted = this.startWebSpeechFallback(callbacks);
         if (webFallbackStarted) {
           return true;
         }
 
-        const errMsg = String(error?.message || error || '').toLowerCase();
-        if (errMsg.includes('aborted') || errMsg.includes('abort') || errMsg.includes('no-speech')) {
-          this.isListeningActive = false;
-          callbacks.onListeningStateChange?.(false);
-          return false;
-        }
-
         callbacks.onError(error?.message || 'Không thể bắt đầu nhận diện giọng nói');
-        this.isListeningActive = false;
-        callbacks.onListeningStateChange?.(false);
         return false;
       }
     } else {
-      // Môi trường Web / WebView
+      // Môi trường Web / Chrome / WebView
       const webFallbackStarted = this.startWebSpeechFallback(callbacks);
       if (!webFallbackStarted) {
-        callbacks.onError('Trình duyệt chưa hỗ trợ Web Speech API. Vui lòng sử dụng Google Chrome hoặc Android.');
+        callbacks.onError('Trình duyệt chưa hỗ trợ Web Speech API. Vui lòng sử dụng Google Chrome hoặc ứng dụng Android.');
         this.isListeningActive = false;
         callbacks.onListeningStateChange?.(false);
         return false;
@@ -212,6 +197,8 @@ class SpeechService {
     if (this.isNative) {
       try {
         await SpeechRecognition.stop().catch(() => {});
+        // Chờ ngắn để luồng Android gửi nốt partialResults cuối cùng về WebView
+        await new Promise((r) => setTimeout(r, 350));
         if (this.partialListenerHandle) {
           this.partialListenerHandle.remove();
           this.partialListenerHandle = null;
@@ -234,6 +221,10 @@ class SpeechService {
       this.webRecognition = null;
     }
 
+    return this.currentTranscript.trim();
+  }
+
+  public getTranscript(): string {
     return this.currentTranscript.trim();
   }
 

@@ -5,12 +5,12 @@ import {
   Lock,
   Cloud,
   WifiOff,
-  Sparkles,
   ArrowRight,
   ShieldCheck,
   AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { showToast } from '../utils/toast';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -31,17 +31,23 @@ export const AuthModal: React.FC = () => {
 
   if (!isAuthModalOpen) return null;
 
+  const handleSkip = () => {
+    localStorage.setItem('hasSeenLoginPopup', 'true');
+    continueOffline();
+    showToast('Bạn có thể đăng nhập sau tại mục Cài đặt ⚙️');
+  };
+
   const handleGoogleSignIn = async () => {
     setError(null);
     setIsGoogleSubmitting(true);
     try {
       await loginWithGoogleNative();
+      showToast('Đăng nhập Google thành công! ☁️');
     } catch (err: any) {
       console.warn('Lỗi đăng nhập Google Native:', err);
-      alert('Lỗi Firebase: ' + (err?.message || JSON.stringify(err)));
       const detail =
         typeof err === 'object'
-          ? (err.message ? `${err.message} (${JSON.stringify(err)})` : JSON.stringify(err))
+          ? (err.message ? `${err.message}` : JSON.stringify(err))
           : String(err);
       setError(detail);
     } finally {
@@ -68,12 +74,13 @@ export const AuthModal: React.FC = () => {
     try {
       if (mode === 'login') {
         await loginWithEmail(cleanEmail, cleanPassword);
+        showToast('Đăng nhập thành công! ☁️');
       } else {
         await registerWithEmail(cleanEmail, cleanPassword);
+        showToast('Đăng ký tài khoản thành công! ☁️');
       }
     } catch (err: any) {
       console.warn('Lỗi xác thực:', err);
-      alert('Lỗi Firebase: ' + (err?.message || String(err)));
       let msg = err?.message || 'Đăng nhập không thành công.';
       if (
         msg.includes('user-not-found') ||
@@ -102,39 +109,38 @@ export const AuthModal: React.FC = () => {
         {/* Top binder strip */}
         <div className="h-1.5 w-full bg-gradient-to-r from-[#a25832] via-[#c28b38] to-[#3d7a5a]" />
 
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
-              <Cloud className="w-4 h-4" />
+        {/* Header Onboarding */}
+        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-start justify-between bg-[#fbf5eb]">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#a25832]/10 text-[#a25832] flex items-center justify-center shrink-0 mt-0.5">
+              <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-bold text-[#3e332a] flex items-center gap-1.5">
-                <span>Tài Khoản & Đồng Bộ</span>
-                <Sparkles className="w-3.5 h-3.5 text-[#c28b38]" />
+              <h3 className="text-base sm:text-lg font-bold text-[#3e332a] flex items-center gap-1.5">
+                <span>Đồng bộ dữ liệu lên đám mây ☁️</span>
               </h3>
-              <p className="text-[11px] text-[#7a6a58]">
-                Bảo vệ dữ liệu chi tiêu cá nhân trên đám mây
+              <p className="text-xs text-[#7a6a58] mt-1 leading-relaxed">
+                Đăng nhập để sao lưu an toàn Sổ Chi Tiêu. Nếu bỏ qua bây giờ, bạn vẫn có thể đăng nhập lại bất cứ lúc nào trong mục Cài đặt.
               </p>
             </div>
           </div>
 
           <button
-            onClick={() => continueOffline()}
-            className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
-            title="Đóng / Dùng ngoại tuyến"
+            onClick={handleSkip}
+            className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition shrink-0 ml-1"
+            title="Bỏ qua / Đóng"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
           {/* Thông báo trạng thái ngoại tuyến nếu mất mạng */}
           {!isOnline && (
             <div className="p-3 rounded-xl bg-[#fef3c7] border border-[#fde68a] flex items-start gap-2 text-xs text-[#92400e]">
               <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong>Thiết bị đang ngoại tuyến:</strong> Mọi thao tác thêm/sửa/xóa đều được lưu trên máy và tự động đồng bộ khi có mạng trở lại.
+                <strong>Thiết bị đang ngoại tuyến:</strong> Mọi thao tác đều được lưu trên máy và tự động đồng bộ khi có mạng trở lại.
               </div>
             </div>
           )}
@@ -146,8 +152,57 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
 
+          {/* 1. NÚT GOOGLE NỔI BẬT TO BẢN Ở TRÊN CÙNG */}
+          <div>
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleSubmitting || isSubmitting}
+              className="w-full py-3 px-4 rounded-xl border-2 border-[#d8c8b4] bg-white hover:bg-[#fbf5eb] active:scale-[0.99] text-xs sm:text-sm font-bold text-[#3e332a] transition shadow-xs flex items-center justify-center gap-3 disabled:opacity-60 cursor-pointer"
+            >
+              {isGoogleSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-[#a25832] border-t-transparent rounded-full animate-spin" />
+                  <span>Đang kết nối Google...</span>
+                </span>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.98 0 12c0 2.02.45 3.84 1.25 5.42l4.03-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                  <span>Đăng nhập nhanh bằng Google</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Phân cách */}
+          <div className="relative my-1">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#ebdcc9]" />
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase font-bold">
+              <span className="bg-[#fffdfa] px-2 text-[#7a6a58]">Hoặc sử dụng Email</span>
+            </div>
+          </div>
+
+          {/* 2. FORM EMAIL / MẬT KHẨU */}
           <div className="space-y-3">
-            {/* Tabs Đăng nhập / Đăng ký */}
             <div className="flex bg-[#f5ebe0] p-1 rounded-xl border border-[#ebdcc9]">
               <button
                 type="button"
@@ -155,13 +210,13 @@ export const AuthModal: React.FC = () => {
                   setMode('login');
                   setError(null);
                 }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
                   mode === 'login'
                     ? 'bg-[#fffdfa] text-[#3e332a] shadow-xs'
                     : 'text-[#7a6a58] hover:text-[#3e332a]'
                 }`}
               >
-                Đăng nhập Email
+                Đăng nhập
               </button>
               <button
                 type="button"
@@ -169,7 +224,7 @@ export const AuthModal: React.FC = () => {
                   setMode('register');
                   setError(null);
                 }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
                   mode === 'register'
                     ? 'bg-[#fffdfa] text-[#3e332a] shadow-xs'
                     : 'text-[#7a6a58] hover:text-[#3e332a]'
@@ -179,8 +234,7 @@ export const AuthModal: React.FC = () => {
               </button>
             </div>
 
-            {/* Form Email / Pass */}
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-2.5">
               <div>
                 <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center gap-1">
                   <Mail className="w-3 h-3 text-[#a25832]" />
@@ -190,7 +244,7 @@ export const AuthModal: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tenban@gmail.com"
+                  placeholder="vidu@gmail.com"
                   required
                   className="w-full mt-1 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:outline-none focus:border-[#a25832]"
                 />
@@ -214,7 +268,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-2.5 rounded-xl bg-[#a25832] text-white text-xs sm:text-sm font-bold hover:bg-[#8c4623] active:scale-[0.99] disabled:opacity-50 transition shadow-sm flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-[#a25832] text-white text-xs sm:text-sm font-bold hover:bg-[#8c4623] active:scale-[0.99] disabled:opacity-50 transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
@@ -229,61 +283,16 @@ export const AuthModal: React.FC = () => {
                 )}
               </button>
             </form>
-
-            {/* Phân cách và Nút Đăng nhập bằng Google (Native) */}
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#ebdcc9]" />
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase">
-                <span className="bg-[#fffdfa] px-2 text-[#7a6a58] font-medium">Hoặc tiếp tục với</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={isGoogleSubmitting || isSubmitting}
-              className="w-full py-2.5 px-3 rounded-xl border border-[#d8c8b4] bg-white hover:bg-[#fbf5eb] active:scale-[0.99] text-xs sm:text-sm font-semibold text-[#3e332a] transition shadow-xs flex items-center justify-center gap-2.5 disabled:opacity-60"
-            >
-              {isGoogleSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 border-2 border-[#a25832] border-t-transparent rounded-full animate-spin" />
-                  <span>Đang kết nối Google...</span>
-                </span>
-              ) : (
-                <>
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.98 0 12c0 2.02.45 3.84 1.25 5.42l4.03-3.15z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                    />
-                  </svg>
-                  <span>Đăng nhập bằng Google</span>
-                </>
-              )}
-            </button>
           </div>
 
-          {/* Dùng ngoại tuyến không bắt buộc */}
-          <div className="pt-3 border-t border-[#f0e4d5] flex flex-col gap-2">
+          {/* 3. NÚT ĐỂ SAU / TIẾP TỤC NGOẠI TUYẾN */}
+          <div className="pt-2 border-t border-[#f0e4d5] flex flex-col gap-2">
             <button
-              onClick={() => continueOffline()}
-              className="w-full py-2 rounded-xl bg-[#ebdcc9]/40 border border-[#d8c8b4] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] text-xs font-semibold transition"
+              type="button"
+              onClick={handleSkip}
+              className="w-full py-2.5 rounded-xl bg-[#f5ebe0] hover:bg-[#ebdcc9] active:scale-[0.99] text-[#7a6a58] hover:text-[#3e332a] text-xs font-bold transition cursor-pointer"
             >
-              Bỏ qua, tiếp tục dùng Ngoại tuyến (Offline)
+              Để sau / Bỏ qua (Dùng ngoại tuyến)
             </button>
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#7a6a58]">
               <ShieldCheck className="w-3.5 h-3.5 text-[#2e7d32]" />

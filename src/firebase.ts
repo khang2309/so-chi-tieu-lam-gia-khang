@@ -6,6 +6,8 @@ import {
   persistentMultipleTabManager,
   getFirestore,
   Firestore,
+  terminate,
+  clearIndexedDbPersistence,
 } from 'firebase/firestore';
 
 /**
@@ -55,6 +57,24 @@ if (isFirebaseConfigured) {
     }
   } catch (err) {
     console.warn('Cảnh báo khởi tạo Firebase:', err);
+  }
+}
+
+export async function shutdownAndClearFirebase(): Promise<void> {
+  if (auth) {
+    try {
+      await auth.signOut();
+    } catch (e) {
+      console.warn('auth.signOut error:', e);
+    }
+  }
+  if (db) {
+    try {
+      await terminate(db);
+      await clearIndexedDbPersistence(db);
+    } catch (e) {
+      console.warn('Firestore terminate/clear error:', e);
+    }
   }
 }
 

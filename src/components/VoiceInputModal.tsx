@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, MicOff, X, ArrowRight, Sparkles, Volume2, AlertCircle, Loader2, Check, Wallet as WalletIcon } from 'lucide-react';
+import { Mic, MicOff, X, ArrowRight, Sparkles, AlertCircle, Loader2, Check, Wallet as WalletIcon } from 'lucide-react';
 import { Category, Wallet } from '../types';
 import { audioRecorder } from '../utils/audioRecorder';
 import { speechService } from '../utils/speechService';
@@ -72,7 +72,6 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     setPreviewResult(null);
     setIsAnalyzing(false);
     setRecordingDuration(0);
-    setLiveTranscript('');
 
     const cfg = getSavedVisionConfig();
     if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
@@ -82,91 +81,157 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
     }
 
     try {
-      // 1. Khởi động SpeechRecognition cứng vi-VN
-      await speechService.startListening({
+      setIsRecording(true);
+      // Kích hoạt nhận diện giọng nói vi-VN (Google Voice Dialog trên Android Native hoặc Web Speech)
+      const ok = await speechService.startListening({
         onPartialResult: (text) => {
           if (text) setLiveTranscript(text);
         },
         onFinalResult: (text) => {
-          if (text) setLiveTranscript(text);
+          if (text) {
+            setLiveTranscript(text);
+            // Tự động phân tích ngay khi nhận diện thành công văn bản
+            handleAnalyzeText(text);
+          }
         },
         onError: (err) => {
           console.warn('SpeechRecognition callback warning:', err);
+          setErrorMsg(err);
+        },
+        onListeningStateChange: (listening) => {
+          setIsRecording(listening);
         },
       });
 
-      // 2. Khởi động AudioRecorder dự phòng
-      try {
-        await audioRecorder.startRecording();
-      } catch (e) {
-        console.warn('AudioRecorder start warning:', e);
+      if (!ok) {
+        setIsRecording(false);
+        const transcript = speechService.getTranscript();
+        if (transcript) {
+          setLiveTranscript(transcript);
+          handleAnalyzeText(transcript);
+        }
       }
-
-      setIsRecording(true);
     } catch (err: any) {
       setIsRecording(false);
       setErrorMsg(err?.message || 'Không thể mở Microphone để ghi âm.');
     }
   };
 
-  const handleStopAndParse = async () => {
+  const handleAnalyzeText = async (customText?: string) => {
     if (isAnalyzing) return;
+    const textToProcess = (customText !== undefined ? customText : liveTranscript).trim();
+    if (!textToProcess) {
+      setErrorMsg('Vui lòng nói hoặc nhập văn bản câu lệnh chi tiêu trước khi phân tích!');
+      return;
+    }
+
     setIsRecording(false);
     setIsAnalyzing(true);
     setStatusMessage('Google Gemini AI đang bóc tách giao dịch...');
     setErrorMsg(null);
 
     try {
-      // Dừng Speech Recognition
-      const speechText = await speechService.stopListening();
-      const finalTranscript = (speechText || liveTranscript || '').trim();
+      speechService.stopListening();
+      audioRecorder.cancelRecording();
 
-      // Dừng AudioRecorder
-      let audioResult = null;
-      try {
-        audioResult = await audioRecorder.stopRecording();
-      } catch {}
-
-      let parsed: ParsedVoiceResult;
-
-      // 1. Ưu tiên cao nhất: Dùng transcript thu được từ Mic vi-VN
-      if (finalTranscript) {
-        setLiveTranscript(finalTranscript);
-        parsed = await parseVoiceWithGemini(
-          finalTranscript,
-          categories,
-          wallets,
-          undefined,
-          undefined,
-          (modelName, reason) => {
-            setStatusMessage(`Model ${modelName} ${reason}`);
-          }
-        );
-      } else if (audioResult && audioResult.base64Data) {
-        // 2. Dự phòng: Gửi audio lên Gemini Audio Multimodal
-        parsed = await parseVoiceAudioWithGemini(
-          audioResult.base64Data,
-          audioResult.mimeType,
-          categories,
-          wallets,
-          undefined,
-          undefined,
-          (modelName, reason) => {
-            setStatusMessage(`Model ${modelName} ${reason}`);
-          }
-        );
-        if (parsed.transcript) {
-          setLiveTranscript(parsed.transcript);
+      const parsed = await parseVoiceWithGemini(
+        textToProcess,
+        categories,
+        wallets,
+        undefined,
+        undefined,
+        (modelName, reason) => {
+          setStatusMessage(`Model ${modelName} ${reason}`);
         }
-      } else {
-        throw new Error('Chưa ghi nhận được âm thanh. Vui lòng bấm vào Micro và nói lại!');
-      }
+      );
 
       setPreviewResult(parsed);
-      // Hiển thị preview 700ms rồi tự động xác nhận điền vào form
       setTimeout(() => {
         handleConfirm(parsed);
       }, 700);
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      setErrorMsg(err?.message || 'Không thể xử lý văn bản với Gemini. Vui lòng thử lại!');
+    }
+  };
+
+  const [isAudioDirectRecording, setIsAudioDirectRecording] = useState(false);
+
+  const handleStartAudioDirect = async () => {
+    setErrorMsg(null);
+    setPreviewResult(null);
+    setIsAnalyzing(false);
+    try {
+      await speechService.stopListening();
+      await audioRecorder.startRecording();
+      setIsAudioDirectRecording(true);
+      setIsRecording(true);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Không thể mở Microphone để ghi âm audio.');
+    }
+  };
+
+  const handleStopAudioDirect = async () => {
+    setIsRecording(false);
+    setIsAudioDirectRecording(false);
+    setIsAnalyzing(true);
+    setStatusMessage('Google Gemini Audio AI đang phân tích âm thanh...');
+    try {
+      const audioResult = await audioRecorder.stopRecording();
+      if (!audioResult || !audioResult.base64Data) {
+        throw new Error('Chưa ghi nhận được âm thanh.');
+      }
+      const parsed = await parseVoiceAudioWithGemini(
+        audioResult.base64Data,
+        audioResult.mimeType,
+        categories,
+        wallets,
+        undefined,
+        undefined,
+        (modelName, reason) => {
+          setStatusMessage(`Model ${modelName} ${reason}`);
+        }
+      );
+      if (parsed.transcript) {
+        setLiveTranscript(parsed.transcript);
+      }
+      setPreviewResult(parsed);
+      setTimeout(() => {
+        handleConfirm(parsed);
+      }, 700);
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      setErrorMsg(err?.message || 'Không thể xử lý âm thanh với Gemini Audio.');
+    }
+  };
+
+  const handleStopAndParse = async () => {
+    if (isAnalyzing) return;
+
+    if (isAudioDirectRecording) {
+      return handleStopAudioDirect();
+    }
+
+    setIsRecording(false);
+
+    try {
+      // 1. Dừng Speech Recognition và lấy kết quả
+      let speechText = await speechService.stopListening();
+      let finalTranscript = (speechText || speechService.getTranscript() || liveTranscript || '').trim();
+
+      // Nếu chưa có, chờ 200ms kiểm tra lại
+      if (!finalTranscript) {
+        await new Promise((r) => setTimeout(r, 200));
+        speechText = speechService.getTranscript();
+        finalTranscript = (speechText || liveTranscript || '').trim();
+      }
+
+      if (finalTranscript) {
+        setLiveTranscript(finalTranscript);
+        await handleAnalyzeText(finalTranscript);
+      } else {
+        setErrorMsg('Chưa ghi nhận được âm thanh. Bạn có thể bấm nói lại hoặc nhập trực tiếp câu lệnh vào ô văn bản phía dưới!');
+      }
     } catch (err: any) {
       setIsAnalyzing(false);
       setErrorMsg(err?.message || 'Không thể xử lý giọng nói với Gemini. Vui lòng thử lại!');
@@ -256,41 +321,53 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           </button>
         </div>
 
-        {/* Khung hiển thị trực tiếp văn bản thu được từ Micro (Live Transcript - BẮT BUỘC HIỂN THỊ) */}
-        {liveTranscript ? (
-          <div className="w-full p-3.5 rounded-2xl bg-[#fff7ed] border border-[#fed7aa] text-left mb-4 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between text-[11px] font-bold text-[#c2410c] uppercase mb-1">
-              <span className="flex items-center gap-1.5">
-                <Mic className="w-3.5 h-3.5 text-[#ea580c]" />
-                <span>Micro đã thu được (vi-VN):</span>
+        {/* Khung hiển thị & nhập văn bản giọng nói (BẮT BUỘC LUÔN HIỂN THỊ VÀ BIND VỚI STATE liveTranscript) */}
+        <div className="w-full text-left mb-4 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between text-[11px] font-bold text-[#c2410c] uppercase mb-1.5 px-0.5">
+            <span className="flex items-center gap-1.5">
+              <Mic className="w-3.5 h-3.5 text-[#ea580c]" />
+              <span>Văn bản thu từ giọng nói (vi-VN):</span>
+            </span>
+            {liveTranscript.trim() ? (
+              <span className="text-[10px] font-bold text-[#16a34a] bg-[#dcfce7] px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span>✓</span>
+                <span>Đã có văn bản</span>
               </span>
-              <span className="text-[10px] font-bold text-[#16a34a] bg-[#dcfce7] px-2 py-0.5 rounded-full">
-                ✓ Đã thu chữ
-              </span>
-            </div>
-            <p className="text-sm font-bold text-[#3e332a] leading-relaxed break-words">
-              "{liveTranscript}"
-            </p>
-          </div>
-        ) : (
-          <div className="w-full min-h-[56px] p-3 rounded-2xl bg-[#fbf5eb] border border-[#ebdcc9] flex flex-col justify-center items-center mb-4 transition">
-            {isAnalyzing ? (
-              <div className="flex flex-col items-center gap-1 py-1">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#ea580c] animate-pulse">
-                  <Sparkles className="w-4 h-4 animate-spin text-[#ea580c]" />
-                  <span>AI đang bóc tách số tiền, ví & danh mục...</span>
-                </div>
-              </div>
             ) : isRecording ? (
-              <p className="text-xs text-[#7a6a58] flex items-center gap-1.5 animate-pulse">
-                <Volume2 className="w-3.5 h-3.5 text-[#ea580c]" />
-                <span>Nói câu lệnh (VD: "Ăn cơm thịt kho 25ca bằng momo")...</span>
-              </p>
+              <span className="text-[10px] font-bold text-[#ea580c] bg-[#ffedd5] px-2 py-0.5 rounded-full animate-pulse">
+                Đang lắng nghe...
+              </span>
             ) : (
-              <p className="text-xs text-[#7a6a58]">Bấm vào Micro để ghi âm câu nói</p>
+              <span className="text-[10px] font-medium text-[#7a6a58]">
+                Sẵn sàng
+              </span>
             )}
           </div>
-        )}
+
+          <div className="relative">
+            <textarea
+              value={liveTranscript}
+              onChange={(e) => setLiveTranscript(e.target.value)}
+              placeholder={
+                isRecording
+                  ? 'Đang lắng nghe tiếng Việt... (Ví dụ: "Ăn cơm thịt kho 25ca bằng momo")'
+                  : 'Bấm Micro để ghi âm, hoặc nhập/sửa câu lệnh chi tiêu trực tiếp tại đây...'
+              }
+              rows={3}
+              className="w-full p-3 pr-8 rounded-2xl bg-[#fff7ed] border border-[#fed7aa] focus:border-[#ea580c] focus:bg-[#fffdfa] text-sm font-semibold text-[#3e332a] leading-relaxed resize-none transition outline-hidden placeholder:text-[#9c8979] placeholder:font-normal shadow-2xs"
+            />
+            {liveTranscript ? (
+              <button
+                type="button"
+                onClick={() => setLiveTranscript('')}
+                className="absolute top-2.5 right-2.5 p-1 text-[#9c8979] hover:text-[#3e332a] rounded-full bg-white/80 hover:bg-white shadow-xs transition cursor-pointer"
+                title="Xóa nội dung"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+          </div>
+        </div>
 
         {/* Xem trước bóc tách thông minh (Live Parser Preview) */}
         {previewResult && previewResult.amount > 0 && (
@@ -351,7 +428,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
               audioRecorder.cancelRecording();
               onClose();
             }}
-            className="flex-1 py-3 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
+            className="px-4 py-3 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
           >
             Đóng
           </button>
@@ -361,7 +438,7 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
               className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold hover:brightness-105 shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 animate-pulse cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              <span>Xong / Xử lý ngay</span>
+              <span>Xong / Phân tích ngay</span>
             </button>
           ) : isAnalyzing ? (
             <button
@@ -374,19 +451,48 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
           ) : previewResult && previewResult.amount > 0 ? (
             <button
               onClick={() => handleConfirm(previewResult)}
-              className="flex-1 py-3 rounded-xl bg-[#ea580c] text-white text-xs font-semibold hover:bg-[#c2410c] shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+              className="flex-1 py-3 rounded-xl bg-[#16a34a] text-white text-xs font-bold hover:bg-[#15803d] shadow-sm flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
             >
-              <span>Điền vào hóa đơn</span>
+              <Check className="w-4 h-4" />
+              <span>Điền vào hóa đơn ({formatCurrency(previewResult.amount)})</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+          ) : liveTranscript.trim().length > 0 ? (
+            <>
+              <button
+                onClick={startRecording}
+                className="px-3 py-3 rounded-xl border border-[#ea580c]/30 text-[#ea580c] bg-[#fff7ed] text-xs font-semibold hover:bg-[#ffedd5] transition flex items-center justify-center gap-1 cursor-pointer"
+                title="Ghi âm lại từ đầu"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Nói lại</span>
+              </button>
+              <button
+                onClick={() => handleAnalyzeText()}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold hover:brightness-105 shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Phân tích câu lệnh này</span>
+              </button>
+            </>
           ) : (
-            <button
-              onClick={startRecording}
-              className="flex-1 py-3 rounded-xl bg-[#3e332a] text-white text-xs font-semibold hover:bg-[#2c241d] shadow-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
-            >
-              <Mic className="w-4 h-4" />
-              <span>Ghi âm lại</span>
-            </button>
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={startRecording}
+                className="flex-1 py-3 rounded-xl bg-[#ea580c] text-white text-xs font-bold hover:bg-[#c2410c] shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+              >
+                <Mic className="w-4 h-4" />
+                <span>Nói tiếng Việt</span>
+              </button>
+              <button
+                onClick={handleStartAudioDirect}
+                className="px-3 py-3 rounded-xl border border-[#ea580c]/30 bg-[#fff7ed] text-[#ea580c] text-[11px] font-bold hover:bg-[#ffedd5] shadow-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer"
+                title="Ghi âm gửi trực tiếp cho Gemini Multimodal"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Gemini Audio</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
