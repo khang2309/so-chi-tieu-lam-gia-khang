@@ -436,7 +436,6 @@ export async function pullUserDataFromFirestore(uid: string): Promise<{
     return { transactions, wallets, ledgers, categories };
   } catch (err: any) {
     console.warn('Lỗi tải dữ liệu Firestore:', err);
-    alert('Lỗi Firebase: ' + (err?.message || String(err)));
     return null;
   }
 }

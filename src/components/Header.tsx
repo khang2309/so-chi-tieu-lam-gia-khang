@@ -4,7 +4,6 @@ import {
   Settings,
   ChevronDown,
   Search,
-  Filter,
   BookOpen,
 } from 'lucide-react';
 import { Ledger } from '../types';
@@ -16,13 +15,11 @@ interface HeaderProps {
   onSelectLedger: (id: string) => void;
   onOpenLedgerManager: () => void;
   onOpenSettings: () => void;
-  // Cụm công cụ Kính Lúp & Phễu theo chuẩn UX mới
+  // Cụm công cụ Kính Lúp & Cài đặt
   isSearchOpen?: boolean;
   onToggleSearch?: () => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
-  onOpenFilter?: () => void;
-  isFilterActive?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -35,8 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSearch,
   searchQuery = '',
   onSearchChange,
-  onOpenFilter,
-  isFilterActive = false,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -171,25 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Icon 2: Phễu (Bộ Lọc dữ liệu) */}
-            {onOpenFilter && (
-              <button
-                onClick={onOpenFilter}
-                className={`p-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
-                  isFilterActive
-                    ? 'bg-[#a25832] text-white shadow-xs'
-                    : 'bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9]'
-                }`}
-                title="Lọc thời gian & thu chi"
-              >
-                <Filter className="w-4 h-4" />
-                {isFilterActive && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#ea580c] rounded-full border-2 border-[#fffdfa]" />
-                )}
-              </button>
-            )}
-
-            {/* Icon 3: Bánh Răng (Cài đặt & Sao lưu) */}
+            {/* Icon 2: Bánh Răng (Cài đặt & Sao lưu) */}
             <button
               onClick={onOpenSettings}
               className="p-2 rounded-xl bg-[#fffdfa] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] border border-[#ebdcc9] transition cursor-pointer active:scale-95"

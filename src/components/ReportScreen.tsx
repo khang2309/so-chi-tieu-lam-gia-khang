@@ -104,17 +104,17 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   const [isYearPickerOpen, setIsYearPickerOpen] = useState<boolean>(false);
 
   // LOGIC ĐỘNG HOÀN TOÀN (TUYỆT ĐỐI KHÔNG HARDCODE)
-  // 1. Tự động sinh danh sách NĂM từ currentYear - 5 đến currentYear + 2
+  // 1. Tự động sinh danh sách NĂM xoay quanh selectedYear (Dynamic Shift 2 chiều)
   const availableYears = useMemo(() => {
-    const curY = new Date().getFullYear();
-    const startY = curY - 5;
-    const endY = curY + 2;
+    const baseYear = selectedYear || new Date().getFullYear();
+    const startY = baseYear - 4;
+    const endY = baseYear + 3;
     const years: number[] = [];
-    for (let y = endY; y >= startY; y--) {
+    for (let y = startY; y <= endY; y++) {
       years.push(y);
     }
     return years;
-  }, []);
+  }, [selectedYear]);
 
   // 2. Tự động sinh danh sách 12 THÁNG bằng Date Object (tự tính ngày nhuận tháng 2)
   const dynamicMonths = useMemo(() => {
@@ -148,22 +148,61 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     });
   }, [selectedYear]);
 
-  // 4. Tự động sinh danh sách TUẦN gần đây bằng Date arithmetic
+  // 4. Tự động sinh danh sách TUẦN xoay quanh selectedWeekOffset (Dynamic Shift 2 chiều)
   const dynamicWeeks = useMemo(() => {
     const now = new Date();
-    return Array.from({ length: 6 }, (_, i) => {
-      const { startOfWeek, endOfWeek } = getWeekRange(now, i);
+    // Sinh 6 tuần trượt động xoay quanh selectedWeekOffset (từ selectedWeekOffset - 2 đến selectedWeekOffset + 3)
+    const offsets: number[] = [];
+    for (let off = selectedWeekOffset - 2; off <= selectedWeekOffset + 3; off++) {
+      offsets.push(off);
+    }
+    return offsets.map((off) => {
+      const { startOfWeek, endOfWeek } = getWeekRange(now, off);
       const startStr = `${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1}`;
       const endStr = `${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}`;
+      let label = '';
+      if (off === 0) label = 'Tuần này';
+      else if (off === 1) label = 'Tuần trước';
+      else if (off === -1) label = 'Tuần sau';
+      else if (off > 1) label = `${off} tuần trước`;
+      else label = `${Math.abs(off)} tuần sau`;
+
       return {
-        offset: i,
-        label: i === 0 ? 'Tuần này' : i === 1 ? 'Tuần trước' : `${i} tuần trước`,
+        offset: off,
+        label,
         rangeText: `(${startStr} - ${endStr})`,
         startDate: startOfWeek,
         endDate: endOfWeek,
       };
     });
-  }, []);
+  }, [selectedWeekOffset]);
+
+  // 5. Tự động sinh danh sách NGÀY xoay quanh selectedDate (Dynamic Shift 2 chiều)
+  const dynamicDays = useMemo(() => {
+    const safeD = getSafeDate(selectedDate);
+    const todayStr = formatDateToYMD(new Date());
+    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const days = [];
+    for (let offset = -3; offset <= 3; offset++) {
+      const d = new Date(safeD);
+      d.setDate(d.getDate() + offset);
+      const dateStr = formatDateToYMD(d);
+      const isToday = dateStr === todayStr;
+      const dayNum = d.getDate();
+      const monthNum = d.getMonth() + 1;
+      const dayName = isToday ? 'Hôm nay' : dayNames[d.getDay()];
+
+      days.push({
+        dateStr,
+        dayNum,
+        monthNum,
+        dayName,
+        isToday,
+        isSelected: dateStr === selectedDate,
+      });
+    }
+    return days;
+  }, [selectedDate]);
 
   // Safe Date Picker change handler (Fallback chống trắng màn hình khi người dùng bấm XOÁ)
   const handleDateChange = (val?: string | null) => {
@@ -884,33 +923,44 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
 
         {/* GIAO DIỆN CHỌN THỜI GIAN TƯƠNG ỨNG TỪNG CHẾ ĐỘ (ĐỘNG 100%) */}
 
-        {/* 1. Nếu chọn Ngày: DatePicker với Fallback an toàn + Quick Chips */}
+        {/* 1. Nếu chọn Ngày: Dải ngày trượt động 2 chiều + DatePicker với Fallback an toàn */}
         {periodType === 'day' && (
           <div className="space-y-2 pt-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-[#7a6a58] font-semibold">Chọn ngày:</span>
+            {/* Dải ngày trượt động 2 chiều xoay quanh selectedDate */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {dynamicDays.map((d) => (
+                <button
+                  key={d.dateStr}
+                  onClick={() => setSelectedDate(d.dateStr)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 text-center cursor-pointer border ${
+                    d.isSelected
+                      ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs'
+                      : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border-[#ebdcc9]'
+                  }`}
+                >
+                  <div className={`text-[10px] ${d.isSelected ? 'text-[#ebdcc9]' : 'opacity-70'}`}>
+                    {d.dayName}
+                  </div>
+                  <div className="font-bold text-xs mt-0.5">
+                    {d.dayNum}/{d.monthNum}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#f0e4d5]/60">
+              <span className="text-xs text-[#7a6a58] font-semibold">Hoặc chọn ngày:</span>
               <input
                 type="date"
                 value={selectedDate || formatDateToYMD(new Date())}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                className="px-3 py-1.5 rounded-lg bg-white border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
               />
-              {/* Quick chips */}
               <button
                 onClick={() => setSelectedDate(formatDateToYMD(new Date()))}
-                className="px-2.5 py-1 rounded-lg bg-white border border-[#ebdcc9] text-xs font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-white border border-[#ebdcc9] text-xs font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer"
               >
                 Hôm nay
-              </button>
-              <button
-                onClick={() => {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  setSelectedDate(formatDateToYMD(yesterday));
-                }}
-                className="px-2.5 py-1 rounded-lg bg-white border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
-              >
-                Hôm qua
               </button>
             </div>
           </div>

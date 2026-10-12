@@ -72,6 +72,13 @@ export function App() {
     }
   }, [authLoading, user]);
 
+  // 2. Kéo ngay lập tức toàn bộ dữ liệu từ Cloud về NGAY KHI user đăng nhập thành công
+  useEffect(() => {
+    if (user?.uid) {
+      manager.fetchAndSyncUserData(user.uid);
+    }
+  }, [user?.uid]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -86,6 +93,10 @@ export function App() {
 
   const handleSuccessFirstTimeLogin = () => {
     setIsFirstTimeLoginModalOpen(false);
+    if (user?.uid) {
+      manager.fetchAndSyncUserData(user.uid);
+    }
+    showToast('Đăng nhập thành công! Đang tải dữ liệu của bạn...');
   };
 
   // Quick Open Handlers
@@ -145,8 +156,6 @@ export function App() {
         onToggleSearch={() => setIsSearchOpen((prev) => !prev)}
         searchQuery={manager.searchQuery}
         onSearchChange={manager.setSearchQuery}
-        onOpenFilter={() => setIsFilterSheetOpen(true)}
-        isFilterActive={manager.typeFilter !== 'all' || !!manager.searchQuery}
       />
 
       {/* Main Content Container */}

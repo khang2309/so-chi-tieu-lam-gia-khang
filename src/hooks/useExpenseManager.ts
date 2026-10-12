@@ -15,6 +15,7 @@ import {
   mergeEntitiesById,
   performTwoWaySync,
   sanitizeData,
+  pullUserDataFromFirestore,
 } from '../utils/firestoreSync';
 import { saveAndShareFile, utf8ToBase64 } from '../utils/fileExporter';
 
@@ -132,6 +133,59 @@ export function useExpenseManager() {
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
   const autoSyncRunningRef = useRef(false);
 
+  // Hàm kéo ngay lập tức toàn bộ dữ liệu từ Cloud về và cập nhật vào State (Không chờ F5 / Tải lại)
+  const fetchAndSyncUserData = async (targetUid?: string) => {
+    const uid = targetUid || auth?.currentUser?.uid;
+    if (!uid) return;
+
+    try {
+      setIsAutoSyncing(true);
+      const cloudData = await pullUserDataFromFirestore(uid);
+      if (cloudData) {
+        let curTxs: Transaction[] = transactions;
+        let curWallets: Wallet[] = wallets;
+        let curLedgers: Ledger[] = ledgers;
+        let curCategories: Category[] = categories;
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+          if (raw) curTxs = JSON.parse(raw);
+          const rawW = localStorage.getItem(STORAGE_KEYS.WALLETS);
+          if (rawW) curWallets = JSON.parse(rawW);
+          const rawL = localStorage.getItem(STORAGE_KEYS.LEDGERS);
+          if (rawL) curLedgers = JSON.parse(rawL);
+          const rawC = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+          if (rawC) curCategories = JSON.parse(rawC);
+        } catch (_) {}
+
+        // Gộp dữ liệu: Cloud + Local
+        const mergedTxs = mergeEntitiesById(curTxs, cloudData.transactions || []);
+        mergedTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const mergedWallets = mergeEntitiesById(curWallets, cloudData.wallets || []);
+        const mergedLedgers = mergeEntitiesById(curLedgers, cloudData.ledgers || []);
+        const mergedCategories = mergeEntitiesById(curCategories, cloudData.categories || []);
+
+        const cleanTxs = sanitizeData(mergedTxs);
+        const cleanWallets = sanitizeData(mergedWallets);
+        const cleanLedgers = sanitizeData(mergedLedgers);
+        const cleanCategories = sanitizeData(mergedCategories);
+
+        setTransactions(cleanTxs);
+        setWallets(cleanWallets);
+        setLedgers(cleanLedgers);
+        setCategories(cleanCategories);
+
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cleanTxs));
+        localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(cleanWallets));
+        localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(cleanLedgers));
+        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cleanCategories));
+      }
+    } catch (err) {
+      console.warn('Lỗi fetchAndSyncUserData:', err);
+    } finally {
+      setIsAutoSyncing(false);
+    }
+  };
+
   // Hàm tự động đồng bộ 2 chiều (Auto-Sync) ngầm khi đăng nhập
   const runAutoSync = async (uid: string) => {
     if (autoSyncRunningRef.current) return;
@@ -201,10 +255,10 @@ export function useExpenseManager() {
       if (currentUser?.uid) {
         const uid = currentUser.uid;
 
-        // 1. Tự động kích hoạt đồng bộ 2 chiều ngầm khi phát hiện đăng nhập
-        await runAutoSync(uid);
+        // 1. Tải nhanh toàn bộ dữ liệu từ cloud về State ngay lập tức (Không để màn hình trống)
+        fetchAndSyncUserData(uid);
 
-        // 2. Gắn bộ lắng nghe thay đổi thời gian thực
+        // 2. Gắn bộ lắng nghe thay đổi thời gian thực ngay lập tức
         unsubData = subscribeToUserFirestoreData(uid, {
           onTransactions: (fireTxs, isEmpty) => {
             if (!isEmpty) {
@@ -231,6 +285,9 @@ export function useExpenseManager() {
             }
           },
         });
+
+        // 3. Tự động đồng bộ 2 chiều ngầm
+        runAutoSync(uid);
       }
     });
 
@@ -724,5 +781,6 @@ export function useExpenseManager() {
     importDataJson,
     syncToCloud,
     isAutoSyncing,
+    fetchAndSyncUserData,
   };
 }

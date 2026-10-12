@@ -96,6 +96,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
 
+  // Xác thực khoảng thời gian tùy chỉnh (Từ ngày > Đến ngày)
+  const isInvalidCustomDateRange = useMemo(() => {
+    if (filterMode !== 'custom') return false;
+    if (!customStartDate || !customEndDate) return false;
+    return customStartDate > customEndDate;
+  }, [filterMode, customStartDate, customEndDate]);
+
+  const handleSwapCustomDates = () => {
+    const temp = customStartDate;
+    setCustomStartDate(customEndDate);
+    setCustomEndDate(temp);
+  };
+
   const getCategory = (catId: string) => categories.find((c) => c.id === catId);
   const getWallet = (wId: string) => wallets.find((w) => w.id === wId);
   const getLedger = (lId: string) => ledgers.find((l) => l.id === lId);
@@ -114,14 +127,18 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   // TUYỆT ĐỐI KHÔNG HARDCODE MẢNG THỜI GIAN
   // =========================================================================
 
-  // 1. Tự động sinh danh sách NĂM từ dữ liệu giao dịch thực tế + năm hiện tại
+  // 1. Tự động sinh danh sách NĂM từ dữ liệu giao dịch thực tế + xoay quanh selectedYearKey
   // CHỈ CÓ BỘ LỌC NĂM MỚI CÓ TÙY CHỌN "TẤT CẢ" ĐỂ XEM TOÀN BỘ LỊCH SỬ
   const yearTabs = useMemo(() => {
     const currentYear = new Date().getFullYear();
+    const targetYear =
+      selectedYearKey && selectedYearKey !== 'all_years'
+        ? parseInt(selectedYearKey, 10)
+        : currentYear;
     const yearSet = new Set<number>();
     
-    // Sinh mảng động từ currentYear - 5 đến currentYear + 2
-    for (let y = currentYear - 5; y <= currentYear + 2; y++) {
+    // Sinh mảng động xoay quanh targetYear: 4 năm trước đến 3 năm sau
+    for (let y = targetYear - 4; y <= targetYear + 3; y++) {
       yearSet.add(y);
     }
 
@@ -144,7 +161,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     // CHỈ DUY NHẤT BỘ LỌC NĂM CÓ TÙY CHỌN "TẤT CẢ" (để xem toàn bộ lịch sử)
     tabs.push({ key: 'all_years', label: 'Tất cả các năm (Toàn bộ)' });
     return tabs;
-  }, [transactions]);
+  }, [selectedYearKey, transactions]);
 
   // 2. Tự động sinh danh sách THÁNG động dựa trên năm đang chọn hoặc năm hiện tại
   // (XÓA BỎ "TẤT CẢ THÁNG" theo yêu cầu)
@@ -202,13 +219,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     // TUYỆT ĐỐI KHÔNG CÓ "all_quarters"
   }, [selectedYearKey]);
 
-  // 4. Tự động sinh danh sách TUẦN động (các tuần gần đây)
+  // 4. Tự động sinh danh sách TUẦN động xoay quanh selectedWeekKey (Dynamic Shift 2 chiều)
   // (XÓA BỎ "TẤT CẢ TUẦN" theo yêu cầu)
   const weekTabs = useMemo(() => {
     const now = new Date();
+    const currOffset = parseInt(selectedWeekKey.replace('week_', ''), 10) || 0;
     const tabs: Array<{ key: string; label: string; rangeText: string }> = [];
 
-    for (let w = 0; w < 6; w++) {
+    // Sinh 6 tuần trượt động xoay quanh currOffset (từ currOffset - 2 đến currOffset + 3)
+    for (let w = currOffset - 2; w <= currOffset + 3; w++) {
       const start = new Date(now);
       start.setDate(now.getDate() - now.getDay() - w * 7);
       const end = new Date(start);
@@ -217,7 +236,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       const startStr = `${start.getDate()}/${start.getMonth() + 1}`;
       const endStr = `${end.getDate()}/${end.getMonth() + 1}`;
 
-      let label = w === 0 ? 'Tuần này' : w === 1 ? 'Tuần trước' : `${w} tuần trước`;
+      let label = '';
+      if (w === 0) label = 'Tuần này';
+      else if (w === 1) label = 'Tuần trước';
+      else if (w === -1) label = 'Tuần sau';
+      else if (w > 1) label = `${w} tuần trước`;
+      else label = `${Math.abs(w)} tuần sau`;
 
       tabs.push({
         key: `week_${w}`,
@@ -228,24 +252,29 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
     // TUYỆT ĐỐI KHÔNG CÓ "all_weeks"
     return tabs;
-  }, []);
+  }, [selectedWeekKey]);
 
-  // 5. Tự động sinh danh sách NGÀY động (14 ngày gần nhất từ mốc hiện tại)
+  // 5. Tự động sinh danh sách NGÀY động xoay quanh selectedDayKey (Dynamic Shift 2 chiều)
   // (XÓA BỎ "TẤT CẢ NGÀY" theo yêu cầu)
   const dayTabs = useMemo(() => {
-    const now = new Date();
+    const baseDate =
+      selectedDayKey && selectedDayKey !== 'picker'
+        ? new Date(selectedDayKey)
+        : new Date();
+    const safeBase = isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    const todayStr = new Date().toISOString().slice(0, 10);
     const tabs: Array<{ key: string; label: string; dateStr: string }> = [];
 
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
+    // Sinh 10 ngày trượt động xoay quanh ngày đang chọn (-5 đến +4)
+    for (let i = -5; i <= 4; i++) {
+      const d = new Date(safeBase);
+      d.setDate(d.getDate() + i);
       const isoDate = d.toISOString().slice(0, 10);
       const dayNum = String(d.getDate()).padStart(2, '0');
       const monthNum = String(d.getMonth() + 1).padStart(2, '0');
 
       let label = `${dayNum}/${monthNum}`;
-      if (i === 0) label = `Hôm nay (${label})`;
-      else if (i === 1) label = `Hôm qua (${label})`;
+      if (isoDate === todayStr) label = `Hôm nay (${label})`;
 
       tabs.push({
         key: isoDate,
@@ -262,7 +291,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
     // TUYỆT ĐỐI KHÔNG CÓ "all_days"
     return tabs;
-  }, [specificDate]);
+  }, [selectedDayKey, specificDate]);
 
   // 6. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
   const isTxInSelectedTimeline = (tx: Transaction): boolean => {
@@ -523,13 +552,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       </div>
 
       {/* Thanh chip hiển thị mốc lọc hiện tại & số lượng giao dịch */}
-      <div className="flex items-center justify-between px-1 text-xs text-[#7a6a58]">
+      <div className="flex items-center justify-between px-1 text-xs">
         <button
           onClick={() => setIsFilterSheetOpen(true)}
-          className="flex items-center gap-1.5 font-semibold text-[#a25832] hover:underline cursor-pointer"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-[#ebdcc9] hover:border-[#a25832] text-[#a25832] font-bold shadow-2xs hover:bg-[#fff9f4] transition cursor-pointer active:scale-95"
+          title="Bấm để mở Bộ lọc"
         >
-          <Filter className="w-3.5 h-3.5" />
+          <Filter className="w-3.5 h-3.5 text-[#a25832]" />
           <span>{filterBadgeLabel}</span>
+          <span className="text-[10px] text-[#7a6a58] font-normal">▼</span>
         </button>
         <span className="font-medium text-[#8c7b69]">
           {windowSummary.count} giao dịch
@@ -1002,7 +1033,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         type="date"
                         value={customStartDate}
                         onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#ebdcc9] font-medium"
+                        className={`w-full px-3 py-2 rounded-lg bg-white border font-medium ${
+                          isInvalidCustomDateRange ? 'border-[#b94a3b]' : 'border-[#ebdcc9]'
+                        }`}
                       />
                     </div>
                     <div>
@@ -1013,9 +1046,27 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         type="date"
                         value={customEndDate}
                         onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#ebdcc9] font-medium"
+                        className={`w-full px-3 py-2 rounded-lg bg-white border font-medium ${
+                          isInvalidCustomDateRange ? 'border-[#b94a3b]' : 'border-[#ebdcc9]'
+                        }`}
                       />
                     </div>
+
+                    {/* Dòng cảnh báo lỗi màu đỏ & nút hoán đổi */}
+                    {isInvalidCustomDateRange && (
+                      <div className="p-2.5 rounded-lg bg-[#fee2e2] border border-[#fca5a5] text-[#b94a3b] text-xs flex items-center justify-between gap-2 animate-in fade-in">
+                        <span className="font-semibold">
+                          ⚠️ "Từ ngày" không thể lớn hơn "Đến ngày"!
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleSwapCustomDates}
+                          className="px-2 py-0.5 rounded bg-white border border-[#fca5a5] text-[11px] font-bold text-[#b94a3b] hover:bg-[#fff5f5] transition cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          Hoán đổi ⇄
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1037,10 +1088,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 Mặc định
               </button>
               <button
+                disabled={isInvalidCustomDateRange}
                 onClick={() => setIsFilterSheetOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[#a25832] hover:bg-[#8c4623] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-1.5 ${
+                  isInvalidCustomDateRange
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                    : 'bg-[#a25832] hover:bg-[#8c4623] text-white cursor-pointer active:scale-95'
+                }`}
               >
-                <span>Xem {windowSummary.count} giao dịch</span>
+                <span>
+                  {isInvalidCustomDateRange
+                    ? 'Khoảng ngày không hợp lệ'
+                    : `Xem ${windowSummary.count} giao dịch`}
+                </span>
               </button>
             </div>
           </div>
