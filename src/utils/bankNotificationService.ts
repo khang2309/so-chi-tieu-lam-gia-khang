@@ -217,6 +217,12 @@ function matchWalletByAppName(appName: string, rawText: string, wallets: Wallet[
     }
   }
 
+  // 1b. Khớp nếu là Túi Thần Tài của MoMo
+  if (rawText.toLowerCase().includes('thần tài') || rawText.toLowerCase().includes('than tai')) {
+    const tttWallet = wallets.find((w) => /(thần tài|than tai)/i.test(w.name));
+    if (tttWallet) return tttWallet.id;
+  }
+
   // 2. Khớp theo tên ứng dụng (MoMo, ZaloPay, MB, VCB, Techcombank...)
   for (const w of wallets) {
     const wName = w.name.toLowerCase();
@@ -300,10 +306,10 @@ export function parseRawBankNotification(
     type = sign === '+' ? 'income' : 'expense';
   }
 
-  // Mẫu B: Cụm từ hành động trước số tiền (ghi có, ghi nợ, tăng, giảm, cộng, trừ, chuyển thành công, thanh toán, nhận được...)
+  // Mẫu B: Cụm từ hành động hoặc chỉ định số tiền (Số tiền, nạp tiền, chuyển tiền, thanh toán, nhận được, về Túi Thần Tài...)
   if (!amount || amount < 1000) {
     const actionMatch = textWithoutBalance.match(
-      /(ghi có|ghi co|cộng|cong|tăng|tang|nhận được|nhan duoc|nhận tiền|nhan tien|hoàn tiền|hoan tien|nạp tiền|nap tien|ghi nợ|ghi no|trừ|tru|giảm|giam|thanh toán|thanh toan|chuyển tiền|chuyen tien|chuyển khoản|chuyen khoan|chuyển thành công|chuyen thanh cong|chi tiêu|mua|rút tiền|rut tien)\s*(?:thành công|thanh cong|TK|tài khoản|tai khoan|cho|tại|tai|vào|vao|đến|den|từ|tu)?\s*[:=-]?\s*([+-]?)\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)?/i
+      /(ghi có|ghi co|cộng|cong|tăng|tang|nhận được|nhan duoc|nhận tiền|nhan tien|hoàn tiền|hoan tien|nạp tiền|nap tien|ghi nợ|ghi no|trừ|tru|giảm|giam|thanh toán|thanh toan|chuyển tiền|chuyen tien|chuyển khoản|chuyen khoan|chuyển thành công|chuyen thanh cong|chi tiêu|mua|rút tiền|rut tien|số tiền|so tien)\s*(?:thành công|thanh cong|TK|tài khoản|tai khoan|cho|tại|tai|vào|vao|đến|den|từ|tu|giao dịch|gd)?\s*[:=-]?\s*([+-]?)\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)?/i
     );
 
     if (actionMatch) {
@@ -316,7 +322,10 @@ export function parseRawBankNotification(
         /(ghi có|ghi co|cộng|cong|tăng|tang|nhận được|nhan duoc|nhận tiền|nhan tien|hoàn tiền|hoan tien|nạp tiền|nap tien)/.test(
           action
         ) ||
-        sign === '+'
+        sign === '+' ||
+        /(về túi thần tài|ve tui than tai|về ví|ve vi|về tài khoản|ve tai khoan|về tk|ve tk|vào túi thần tài|vao tui than tai|vào ví|vao vi|vào tài khoản|nhận|cộng|tăng|ghi có|nạp|hoàn tiền|tiền vào|tiền về)/i.test(
+          lower
+        )
       ) {
         type = 'income';
       } else {
@@ -333,7 +342,11 @@ export function parseRawBankNotification(
     if (currencyMatch) {
       const rawNum = currencyMatch[1].replace(/[.,]/g, '');
       amount = parseInt(rawNum, 10) || 0;
-      if (/(nhận|cộng|tăng|ghi có|nạp|hoàn tiền|tiền vào)/i.test(lower)) {
+      if (
+        /(về túi thần tài|ve tui than tai|về ví|ve vi|về tài khoản|ve tai khoan|về tk|ve tk|vào túi thần tài|vao tui than tai|vào ví|vao vi|vào tài khoản|nhận|cộng|tăng|ghi có|nạp|hoàn tiền|tiền vào|tiền về)/i.test(
+          lower
+        )
+      ) {
         type = 'income';
       } else {
         type = 'expense';

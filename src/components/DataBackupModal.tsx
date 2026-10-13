@@ -538,6 +538,30 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                     <span>Test Timo (+100.000đ)</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.AndroidUpdater?.simulateTestNotificationWithData) {
+                        window.AndroidUpdater.simulateTestNotificationWithData(
+                          'com.mservice.momopay',
+                          'MoMo',
+                          'MoMo',
+                          'Số tiền: 15.000 đ về Túi Thần Tài. Vào Chat để phản hồi người gửi'
+                        );
+                        setTimeout(() => {
+                          setNotifHistory(getBankNotifHistoryLog());
+                          const raw = window.AndroidUpdater?.getRawNotificationLog?.() || '[]';
+                          try { setRawSystemLogs(JSON.parse(raw)); } catch (_) {}
+                        }, 400);
+                      } else {
+                        alert('Tính năng thử nghiệm hoạt động trên file cài đặt Android APK.');
+                      }
+                    }}
+                    className="flex-1 py-1.5 px-2 rounded-lg border border-pink-200 bg-pink-50 hover:bg-pink-100 text-pink-800 text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-pink-600" />
+                    <span>Test MoMo (+15k)</span>
+                  </button>
                 </div>
               </div>
 
