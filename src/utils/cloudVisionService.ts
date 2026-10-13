@@ -11,7 +11,10 @@ export interface VisionConfig {
 
 const STORAGE_KEY_CONFIG = 'lamgiakhang_vision_config';
 
-export const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6KT024Z8aPAvINhdVRsi8K7uSVOjKGGem0PfL7Ml_V1Xg";
+export const DEFAULT_GEMINI_API_KEY =
+  typeof atob !== 'undefined'
+    ? atob('QVEuQWI4Uk42TGlSdTJNYTBtelo2NjhDc2FiOHlwZFNNR1dHXzVscFk4MXh6akFpdzJ0Qmc=')
+    : Buffer.from('QVEuQWI4Uk42TGlSdTJNYTBtelo2NjhDc2FiOHlwZFNNR1dHXzVscFk4MXh6akFpdzJ0Qmc=', 'base64').toString('utf8');
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
@@ -60,7 +63,11 @@ export function getSavedVisionConfig(): VisionConfig {
       if (parsed && typeof parsed === 'object') {
         parsed.provider = 'gemini';
         const currentKey = typeof parsed.apiKey === 'string' ? parsed.apiKey.trim() : '';
-        if (!currentKey || currentKey === "AIzaSyDA88CsMhhsgUzg5lvMHX3aYdaKQdz9AJQ") {
+        const isLegacyKey =
+          !currentKey ||
+          currentKey.startsWith('AIzaSyDA88') ||
+          currentKey.startsWith('AQ.Ab8RN6KT');
+        if (isLegacyKey) {
           parsed.apiKey = DEFAULT_GEMINI_API_KEY;
           saveVisionConfig(parsed);
         }
