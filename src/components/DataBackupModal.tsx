@@ -30,7 +30,9 @@ import {
   saveBankNotifConfig,
   isNotificationPermissionGranted,
   openAndroidNotificationSettings,
+  getBankNotifHistoryLog,
   BankNotifConfig,
+  BankNotifHistoryItem,
 } from '../utils/bankNotificationService';
 
 interface DataBackupModalProps {
@@ -81,6 +83,9 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   );
   const [notifPermGranted, setNotifPermGranted] = useState<boolean>(() =>
     isNotificationPermissionGranted()
+  );
+  const [notifHistory, setNotifHistory] = useState<BankNotifHistoryItem[]>(() =>
+    getBankNotifHistoryLog()
   );
 
   // Logout Confirmation state
@@ -404,6 +409,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   onClick={() => {
                     setNotifPermGranted(isNotificationPermissionGranted());
                     window.AndroidUpdater?.triggerActiveNotificationsScan?.();
+                    setTimeout(() => setNotifHistory(getBankNotifHistoryLog()), 1000);
                   }}
                   className="p-2 rounded-lg border border-[#d8c8b4] bg-[#fbf5eb] text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer"
                   title="Quét lại thông báo đang có trên máy"
@@ -412,7 +418,18 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 </button>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer select-none pt-0.5">
+              {/* Hướng dẫn quan trọng cho điện thoại Xiaomi / Redmi / POCO */}
+              <div className="p-2.5 rounded-lg bg-[#fefce8] border border-[#fef08a] text-[11px] text-[#854d0e] space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <span>💡 Lưu ý quan trọng cho điện thoại Xiaomi / HyperOS:</span>
+                </div>
+                <div className="text-[10.5px] leading-relaxed text-[#713f12]">
+                  1. Vào Cài đặt máy ➔ Ứng dụng ➔ Quản lý ứng dụng ➔ <b>Sổ Chi Tiêu</b> ➔ Bật <b>"Tự khởi chạy" (Autostart)</b>.<br/>
+                  2. Mục <b>Tiết kiệm pin</b> ➔ Chọn <b>"Không hạn chế" (No restrictions)</b> để hệ thống không tự ngắt dịch vụ đọc thông báo khi khóa màn hình.
+                </div>
+              </div>
+
+              <label className="flex items-start gap-2 cursor-pointer select-none pt-0.5">
                 <input
                   type="checkbox"
                   checked={bankNotifConfig.autoSave}
@@ -421,30 +438,94 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     setBankNotifConfig(next);
                     saveBankNotifConfig(next);
                   }}
-                  className="w-4 h-4 rounded accent-[#a25832]"
+                  className="w-4 h-4 rounded accent-[#a25832] mt-0.5"
                 />
-                <span className="text-xs font-semibold text-[#3e332a]">
-                  Tự động lưu thẳng vào Sổ mặc định (Nếu bỏ tích sẽ hiện ở khay "Chờ duyệt" để bạn kiểm tra)
+                <span className="text-xs font-semibold text-[#3e332a] leading-tight">
+                  Tự động lưu và cập nhật số dư ví ngay lập tức (Nếu bỏ tích, thông báo sẽ nằm ở khay "Chờ duyệt" trên trang chủ để bạn bấm duyệt)
                 </span>
               </label>
 
               {/* Nút thử nghiệm giả lập biến động số dư */}
-              <div className="pt-1">
+              <div className="pt-1 flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     if (window.AndroidUpdater?.simulateTestNotification) {
                       window.AndroidUpdater.simulateTestNotification();
+                      setTimeout(() => setNotifHistory(getBankNotifHistoryLog()), 600);
                       onClose();
                     } else {
                       alert('Tính năng thử nghiệm hoạt động trên file cài đặt Android APK.');
                     }
                   }}
-                  className="w-full py-1.5 px-3 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  className="flex-1 py-1.5 px-3 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-sky-600" />
                   <span>Bấm vào đây để Test thử thông báo (+50.000đ từ MB Bank)</span>
                 </button>
+              </div>
+
+              {/* Nhật ký đọc thông báo gần nhất (Debug Log) */}
+              <div className="pt-2 border-t border-[#f0e4d5]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-[#5c4d3c] flex items-center gap-1">
+                    📋 Nhật ký đọc thông báo gần nhất ({notifHistory.length})
+                  </span>
+                  {notifHistory.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem('sochitieu_bank_notif_history_log_v1');
+                        setNotifHistory([]);
+                      }}
+                      className="text-[10px] text-stone-500 hover:text-stone-700 underline cursor-pointer"
+                    >
+                      Xóa nhật ký
+                    </button>
+                  )}
+                </div>
+
+                {notifHistory.length === 0 ? (
+                  <div className="p-2.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-center text-[10.5px] text-[#7a6a58]">
+                    Chưa có thông báo nào được nhận. Khi máy nhận thông báo ngân hàng, thông tin sẽ hiển thị chi tiết tại đây!
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {notifHistory.slice(0, 5).map((log) => (
+                      <div
+                        key={log.id}
+                        className="p-2 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-[10.5px] space-y-0.5"
+                      >
+                        <div className="flex items-center justify-between font-bold">
+                          <span className="text-[#3e332a]">{log.appName}</span>
+                          <span
+                            className={
+                              log.status === 'saved'
+                                ? 'text-emerald-600'
+                                : log.status === 'pending'
+                                ? 'text-amber-600'
+                                : 'text-stone-400'
+                            }
+                          >
+                            {log.status === 'saved'
+                              ? `Đã lưu: ${log.type === 'income' ? '+' : '-'}${log.amount?.toLocaleString()}đ`
+                              : log.status === 'pending'
+                              ? `Chờ duyệt: ${log.type === 'income' ? '+' : '-'}${log.amount?.toLocaleString()}đ`
+                              : 'Bỏ qua (không khớp số tiền)'}
+                          </span>
+                        </div>
+                        <div className="text-[#7a6a58] truncate">{log.text}</div>
+                        <div className="text-[9.5px] text-stone-400">
+                          {new Date(log.timestamp).toLocaleTimeString('vi-VN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

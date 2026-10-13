@@ -68,6 +68,14 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         instance = this;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            try {
+                android.service.notification.NotificationListenerService.requestRebind(
+                        new android.content.ComponentName(this, BankNotificationListenerService.class)
+                );
+            } catch (Exception ignored) {
+            }
+        }
         if (this.bridge != null && this.bridge.getWebView() != null) {
             if (BankNotificationListenerService.currentServiceInstance != null) {
                 BankNotificationListenerService.currentServiceInstance.scanActiveNotifications();
@@ -172,9 +180,18 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void triggerActiveNotificationsScan() {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                try {
+                    android.service.notification.NotificationListenerService.requestRebind(
+                            new android.content.ComponentName(MainActivity.this, BankNotificationListenerService.class)
+                    );
+                } catch (Exception ignored) {
+                }
+            }
             if (BankNotificationListenerService.currentServiceInstance != null) {
                 BankNotificationListenerService.currentServiceInstance.scanActiveNotifications();
             }
+            notifyBankNotificationReceived();
         }
 
         @JavascriptInterface

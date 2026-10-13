@@ -101,18 +101,40 @@ public class BankNotificationListenerService extends NotificationListenerService
             CharSequence titleCs = extras.getCharSequence(Notification.EXTRA_TITLE);
             CharSequence textCs = extras.getCharSequence(Notification.EXTRA_TEXT);
             CharSequence bigTextCs = extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
+            CharSequence subTextCs = extras.getCharSequence(Notification.EXTRA_SUB_TEXT);
+            CharSequence[] lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
 
+            StringBuilder bodyBuilder = new StringBuilder();
+            if (bigTextCs != null && bigTextCs.length() > 0) {
+                bodyBuilder.append(bigTextCs.toString().trim());
+            } else if (textCs != null && textCs.length() > 0) {
+                bodyBuilder.append(textCs.toString().trim());
+            }
+            if (lines != null && lines.length > 0) {
+                for (CharSequence line : lines) {
+                    if (line != null && line.length() > 0) {
+                        if (bodyBuilder.length() > 0) bodyBuilder.append(" ");
+                        bodyBuilder.append(line.toString().trim());
+                    }
+                }
+            }
+            if (subTextCs != null && subTextCs.length() > 0) {
+                if (bodyBuilder.length() > 0) bodyBuilder.append(" ");
+                bodyBuilder.append(subTextCs.toString().trim());
+            }
+
+            String body = bodyBuilder.toString().trim();
             String title = titleCs != null ? titleCs.toString().trim() : "";
-            String body = (bigTextCs != null && bigTextCs.length() > 0)
-                    ? bigTextCs.toString().trim()
-                    : (textCs != null ? textCs.toString().trim() : "");
 
+            if (body.isEmpty() && !title.isEmpty()) {
+                body = title;
+            }
             if (body.isEmpty()) return;
 
             String appName = SUPPORTED_PACKAGES.get(pkg);
             if (appName == null) {
                 String lowerPkg = pkg.toLowerCase();
-                String upperTitle = title.toUpperCase();
+                String upperFull = (title + " " + body).toUpperCase();
 
                 // 1. Khớp theo tên gói ứng dụng ngân hàng / ví
                 if (lowerPkg.contains("momo")) appName = "MoMo";
@@ -127,26 +149,36 @@ public class BankNotificationListenerService extends NotificationListenerService
                 else if (lowerPkg.contains("acb")) appName = "ACB";
                 else if (lowerPkg.contains("agribank")) appName = "Agribank";
                 else if (lowerPkg.contains("sacombank")) appName = "Sacombank";
+                else if (lowerPkg.contains("vib")) appName = "VIB";
+                else if (lowerPkg.contains("shb")) appName = "SHB";
+                else if (lowerPkg.contains("hdbank")) appName = "HDBank";
+                else if (lowerPkg.contains("seabank")) appName = "SeABank";
+                else if (lowerPkg.contains("ocb")) appName = "OCB";
+                else if (lowerPkg.contains("cake")) appName = "Cake";
+                else if (lowerPkg.contains("timo")) appName = "Timo";
+                else if (lowerPkg.contains("vtpay") || lowerPkg.contains("viettelmoney")) appName = "Viettel Money";
 
-                // 2. Khớp thông báo SMS Ngân hàng (Google Messages, Xiaomi MMS, Samsung Messages...)
-                else if (lowerPkg.contains("mms") || lowerPkg.contains("sms") || lowerPkg.contains("message") || lowerPkg.contains("messaging")) {
-                    if (upperTitle.contains("MBBANK") || upperTitle.contains("MB BANK")) appName = "MB Bank";
-                    else if (upperTitle.contains("VIETCOMBANK") || upperTitle.contains("VCB")) appName = "Vietcombank";
-                    else if (upperTitle.contains("TECHCOMBANK") || upperTitle.contains("TCB")) appName = "Techcombank";
-                    else if (upperTitle.contains("BIDV")) appName = "BIDV";
-                    else if (upperTitle.contains("VIETINBANK") || upperTitle.contains("CTG")) appName = "VietinBank";
-                    else if (upperTitle.contains("ACB")) appName = "ACB";
-                    else if (upperTitle.contains("TPBANK") || upperTitle.contains("TPB")) appName = "TPBank";
-                    else if (upperTitle.contains("VPBANK") || upperTitle.contains("VPB")) appName = "VPBank";
-                    else if (upperTitle.contains("AGRIBANK")) appName = "Agribank";
-                    else if (upperTitle.contains("SACOMBANK")) appName = "Sacombank";
-                    else if (upperTitle.contains("VIB")) appName = "VIB";
-                    else if (upperTitle.contains("MOMO")) appName = "MoMo";
-                    else if (upperTitle.contains("ZALOPAY")) appName = "ZaloPay";
+                // 2. Nhận diện từ nội dung (SMS Banking hoặc ứng dụng tài chính khác)
+                else if (upperFull.contains("MBBANK") || upperFull.contains("MB BANK")) appName = "MB Bank";
+                else if (upperFull.contains("VIETCOMBANK") || upperFull.contains("VCB")) appName = "Vietcombank";
+                else if (upperFull.contains("TECHCOMBANK") || upperFull.contains("TCB")) appName = "Techcombank";
+                else if (upperFull.contains("BIDV")) appName = "BIDV";
+                else if (upperFull.contains("VIETINBANK") || upperFull.contains("CTG")) appName = "VietinBank";
+                else if (upperFull.contains("ACB")) appName = "ACB";
+                else if (upperFull.contains("TPBANK") || upperFull.contains("TPB")) appName = "TPBank";
+                else if (upperFull.contains("VPBANK") || upperFull.contains("VPB")) appName = "VPBank";
+                else if (upperFull.contains("AGRIBANK")) appName = "Agribank";
+                else if (upperFull.contains("SACOMBANK")) appName = "Sacombank";
+                else if (upperFull.contains("VIB")) appName = "VIB";
+                else if (upperFull.contains("MOMO")) appName = "MoMo";
+                else if (upperFull.contains("ZALOPAY")) appName = "ZaloPay";
+                else if (upperFull.contains("VIETTEL MONEY") || upperFull.contains("VIETTELPAY")) appName = "Viettel Money";
+                else if (upperFull.contains("BIẾN ĐỘNG SỐ DƯ") || upperFull.contains("BIEN DONG SO DU") || upperFull.contains("SỐ DƯ TK") || upperFull.contains("SO DU TK") || upperFull.contains("GD: +") || upperFull.contains("GD: -")) {
+                    appName = "Ngân hàng";
                 }
 
                 if (appName == null) {
-                    return; // Bỏ qua các thông báo không phải ngân hàng/ví
+                    return; // Bỏ qua nếu không phải ngân hàng/ví
                 }
             }
 

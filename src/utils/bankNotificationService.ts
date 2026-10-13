@@ -8,6 +8,36 @@ export interface BankNotifConfig {
   autoSave: boolean; // true = Tự động lưu thẳng vào sổ mặc định; false = Hiện ở khay Chờ duyệt
 }
 
+const BANK_NOTIF_HISTORY_LOG_KEY = 'sochitieu_bank_notif_history_log_v1';
+
+export interface BankNotifHistoryItem {
+  id: string;
+  appName: string;
+  title: string;
+  text: string;
+  timestamp: number;
+  status: 'saved' | 'pending' | 'ignored';
+  amount?: number;
+  type?: 'expense' | 'income' | 'transfer';
+  reason?: string;
+}
+
+export function getBankNotifHistoryLog(): BankNotifHistoryItem[] {
+  try {
+    const raw = localStorage.getItem(BANK_NOTIF_HISTORY_LOG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return [];
+}
+
+export function addBankNotifHistoryLog(item: BankNotifHistoryItem): void {
+  try {
+    const current = getBankNotifHistoryLog();
+    const updated = [item, ...current.filter((i) => i.id !== item.id)].slice(0, 30);
+    localStorage.setItem(BANK_NOTIF_HISTORY_LOG_KEY, JSON.stringify(updated));
+  } catch (_) {}
+}
+
 export interface RawAndroidBankNotification {
   id: string;
   packageName: string;
@@ -241,18 +271,24 @@ export function parseRawBankNotification(
     return null;
   }
 
-  // 2. Loại bỏ phần "Số dư cuối / SD:" trước khi tìm số tiền giao dịch để không bao giờ lấy nhầm số dư tài khoản
-  const textWithoutBalance = fullText.replace(
-    /(?:SD|Số dư|So du|Số dư cuối|So du cuoi)\s*[:=]?\s*[+-]?\s*[\d.,]+\s*(?:VND|VNĐ|đ|d)?/gi,
+  // 2. Loại bỏ thông tin số dư (SD, Số dư, SD khả dụng, v.v.)
+  let textWithoutBalance = fullText.replace(
+    /(?:SD|Số dư|So du|SD KD)\s*(?:khả dụng|kha dung|cuối|cuoi|hiện tại|hien tai|mới|moi|tài khoản|tai khoan)?\s*[:=]?\s*[+-]?\s*[\d.,]+\s*(?:VND|VNĐ|đ|d\b)?/gi,
+    ' '
+  );
+
+  // 2b. Loại bỏ số tài khoản / số thẻ (VD: TK 12345678, Tài khoản 0123xxx, Thẻ 9704...) để không nhầm thành số tiền
+  textWithoutBalance = textWithoutBalance.replace(
+    /(?:TK|tài khoản|tai khoan|số TK|so TK|thẻ|the)\s*(?:số|so)?\s*[:=]?\s*[0-9*xX.-]{4,}\b/gi,
     ' '
   );
 
   let amount = 0;
   let type: 'expense' | 'income' = 'expense';
 
-  // Mẫu A: Có dấu +/- rõ ràng trước số tiền (VD: -45,000VND, +500.000đ, GD: -50,000 VND)
+  // Mẫu A: Có dấu +/- rõ ràng trước số tiền (VD: -45,000VND, +500.000, GD: -50,000 VND, TK -75.000)
   const signedMatch = textWithoutBalance.match(
-    /([+-])\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)/i
+    /(?:GD|giao dịch|thay đổi|biến động|TK|tài khoản)?\s*[:=]?\s*([+-])\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)?/i
   );
 
   if (signedMatch) {
@@ -260,21 +296,46 @@ export function parseRawBankNotification(
     const rawNum = signedMatch[2].replace(/[.,]/g, '');
     amount = parseInt(rawNum, 10) || 0;
     type = sign === '+' ? 'income' : 'expense';
-  } else {
-    // Mẫu B: Ví điện tử MoMo / ZaloPay ("Bạn vừa thanh toán 45.000đ", "Bạn vừa nhận được 100.000đ")
-    const paymentMatch = textWithoutBalance.match(
-      /(?:thanh toán|chuyển tiền|trừ|chi tiêu|mua)\s+.*?(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)/i
-    );
-    const receiveMatch = textWithoutBalance.match(
-      /(?:nhận được|cộng|hoàn tiền|nhận tiền)\s+.*?(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)/i
+  }
+
+  // Mẫu B: Cụm từ hành động trước số tiền (ghi có, ghi nợ, tăng, giảm, cộng, trừ, chuyển thành công, thanh toán, nhận được...)
+  if (!amount || amount < 1000) {
+    const actionMatch = textWithoutBalance.match(
+      /(ghi có|ghi co|cộng|cong|tăng|tang|nhận được|nhan duoc|nhận tiền|nhan tien|hoàn tiền|hoan tien|nạp tiền|nap tien|ghi nợ|ghi no|trừ|tru|giảm|giam|thanh toán|thanh toan|chuyển tiền|chuyen tien|chuyển khoản|chuyen khoan|chuyển thành công|chuyen thanh cong|chi tiêu|mua|rút tiền|rut tien)\s*(?:thành công|thanh cong|TK|tài khoản|tai khoan|cho|tại|tai|vào|vao|đến|den|từ|tu)?\s*[:=-]?\s*([+-]?)\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)?/i
     );
 
-    if (paymentMatch) {
-      amount = parseInt(paymentMatch[1].replace(/[.,]/g, ''), 10) || 0;
-      type = 'expense';
-    } else if (receiveMatch) {
-      amount = parseInt(receiveMatch[1].replace(/[.,]/g, ''), 10) || 0;
-      type = 'income';
+    if (actionMatch) {
+      const action = actionMatch[1].toLowerCase();
+      const sign = actionMatch[2];
+      const rawNum = actionMatch[3].replace(/[.,]/g, '');
+      amount = parseInt(rawNum, 10) || 0;
+
+      if (
+        /(ghi có|ghi co|cộng|cong|tăng|tang|nhận được|nhan duoc|nhận tiền|nhan tien|hoàn tiền|hoan tien|nạp tiền|nap tien)/.test(
+          action
+        ) ||
+        sign === '+'
+      ) {
+        type = 'income';
+      } else {
+        type = 'expense';
+      }
+    }
+  }
+
+  // Mẫu C: Bất kỳ số tiền nào có đơn vị VND / VNĐ / đ / d
+  if (!amount || amount < 1000) {
+    const currencyMatch = textWithoutBalance.match(
+      /(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:VND|VNĐ|đ|d\b)/i
+    );
+    if (currencyMatch) {
+      const rawNum = currencyMatch[1].replace(/[.,]/g, '');
+      amount = parseInt(rawNum, 10) || 0;
+      if (/(nhận|cộng|tăng|ghi có|nạp|hoàn tiền|tiền vào)/i.test(lower)) {
+        type = 'income';
+      } else {
+        type = 'expense';
+      }
     }
   }
 
@@ -387,6 +448,7 @@ export function pullNewBankNotificationsFromAndroid(params: {
     const processedIds = getProcessedNotifIds();
     const newlyParsed: ParsedBankNotificationItem[] = [];
 
+    const cfg = getBankNotifConfig();
     for (const rawItem of rawList) {
       if (!rawItem || !rawItem.id || processedIds.has(rawItem.id)) continue;
       processedIds.add(rawItem.id);
@@ -399,6 +461,26 @@ export function pullNewBankNotificationsFromAndroid(params: {
       );
       if (parsed) {
         newlyParsed.push(parsed);
+        addBankNotifHistoryLog({
+          id: rawItem.id,
+          appName: rawItem.appName,
+          title: rawItem.title,
+          text: rawItem.text,
+          timestamp: rawItem.timestamp || Date.now(),
+          status: cfg.autoSave ? 'saved' : 'pending',
+          amount: parsed.amount,
+          type: parsed.type,
+        });
+      } else {
+        addBankNotifHistoryLog({
+          id: rawItem.id,
+          appName: rawItem.appName,
+          title: rawItem.title,
+          text: rawItem.text,
+          timestamp: rawItem.timestamp || Date.now(),
+          status: 'ignored',
+          reason: 'Không xác định được số tiền biến động',
+        });
       }
     }
 

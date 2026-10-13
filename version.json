@@ -1,8 +1,8 @@
 {
-  "version": "2.1.3",
+  "version": "2.1.4",
   "updateType": "apk",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
   "releaseNotes": "- Tự động đọc biến động số dư ngân hàng & ví điện tử (MB, VCB, MoMo, ZaloPay...)\n- Khay chờ duyệt biến động số dư thông minh trên trang chủ\n- Tự động nhận diện chuyển tiền nội bộ giữa các ví\n- Kéo thả và đổi thứ tự các sổ chi tiêu",
   "allowSkip": true,
-  "updatedAt": "2026-10-13T08:49:12.011Z"
+  "updatedAt": "2026-10-13T09:31:27.786Z"
 }

@@ -145,9 +145,14 @@ export function App() {
       if (cfg.autoSave) {
         const txsToSave = newParsed.map(convertBankItemToTransaction);
         manager.addBatchTransactions(txsToSave);
+        const first = newParsed[0];
+        const detailMsg =
+          newParsed.length === 1
+            ? `🎉 Đã tự động cập nhật ${first.type === 'income' ? '+' : '-'}${first.amount.toLocaleString()}đ từ ${first.appName} vào ví!`
+            : `🎉 Đã tự động cập nhật ${txsToSave.length} biến động số dư vào ví!`;
         window.dispatchEvent(
           new CustomEvent('show-app-toast', {
-            detail: `Đã tự động lưu ${txsToSave.length} biến động số dư!`,
+            detail: detailMsg,
           })
         );
       } else {
@@ -156,9 +161,14 @@ export function App() {
           saveReviewQueue(merged);
           return merged;
         });
+        const first = newParsed[0];
+        const detailMsg =
+          newParsed.length === 1
+            ? `🔔 Biến động mới: ${first.type === 'income' ? '+' : '-'}${first.amount.toLocaleString()}đ (${first.appName}) - Chờ duyệt!`
+            : `🔔 Có ${newParsed.length} biến động số dư mới chờ bạn duyệt!`;
         window.dispatchEvent(
           new CustomEvent('show-app-toast', {
-            detail: `Có ${newParsed.length} biến động số dư mới chờ bạn duyệt!`,
+            detail: detailMsg,
           })
         );
       }
