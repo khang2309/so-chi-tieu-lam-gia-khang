@@ -50,14 +50,19 @@ public class BankNotificationListenerService extends NotificationListenerService
         SUPPORTED_PACKAGES.put("com.airpay.vn", "ShopeePay");
     }
 
+    public static BankNotificationListenerService currentServiceInstance = null;
+
     @Override
     public void onListenerConnected() {
         super.onListenerConnected();
+        currentServiceInstance = this;
+        scanActiveNotifications();
     }
 
     @Override
     public void onListenerDisconnected() {
         super.onListenerDisconnected();
+        currentServiceInstance = null;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
                 requestRebind(new ComponentName(this, BankNotificationListenerService.class));
@@ -66,29 +71,28 @@ public class BankNotificationListenerService extends NotificationListenerService
         }
     }
 
+    public void scanActiveNotifications() {
+        try {
+            StatusBarNotification[] active = getActiveNotifications();
+            if (active != null) {
+                for (StatusBarNotification sbn : active) {
+                    processNotification(sbn);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
+        processNotification(sbn);
+    }
+
+    private void processNotification(StatusBarNotification sbn) {
         if (sbn == null) return;
         try {
             String pkg = sbn.getPackageName();
             if (pkg == null) return;
-
-            String appName = SUPPORTED_PACKAGES.get(pkg);
-            // Hỗ trợ thêm trường hợp tên package chứa từ khóa ngân hàng/ví nhưng chưa có trong map cứng
-            if (appName == null) {
-                String lowerPkg = pkg.toLowerCase();
-                if (lowerPkg.contains("momo")) appName = "MoMo";
-                else if (lowerPkg.contains("zalopay")) appName = "ZaloPay";
-                else if (lowerPkg.contains("vcb") || lowerPkg.contains("vietcombank")) appName = "Vietcombank";
-                else if (lowerPkg.contains("mbmobile") || lowerPkg.contains("mbbank")) appName = "MB Bank";
-                else if (lowerPkg.contains("techcombank")) appName = "Techcombank";
-                else if (lowerPkg.contains("vietinbank") || lowerPkg.contains("ipay")) appName = "VietinBank";
-                else if (lowerPkg.contains("bidv")) appName = "BIDV";
-                else if (lowerPkg.contains("vpbank")) appName = "VPBank";
-                else if (lowerPkg.contains("tpb")) appName = "TPBank";
-                else if (lowerPkg.contains("acb")) appName = "ACB";
-                else return; // Bỏ qua ngay lập tức mọi thông báo cá nhân (Zalo, Messenger, Facebook...)
-            }
 
             Notification notification = sbn.getNotification();
             if (notification == null || notification.extras == null) return;
@@ -104,6 +108,47 @@ public class BankNotificationListenerService extends NotificationListenerService
                     : (textCs != null ? textCs.toString().trim() : "");
 
             if (body.isEmpty()) return;
+
+            String appName = SUPPORTED_PACKAGES.get(pkg);
+            if (appName == null) {
+                String lowerPkg = pkg.toLowerCase();
+                String upperTitle = title.toUpperCase();
+
+                // 1. Khớp theo tên gói ứng dụng ngân hàng / ví
+                if (lowerPkg.contains("momo")) appName = "MoMo";
+                else if (lowerPkg.contains("zalopay")) appName = "ZaloPay";
+                else if (lowerPkg.contains("vcb") || lowerPkg.contains("vietcombank")) appName = "Vietcombank";
+                else if (lowerPkg.contains("mbmobile") || lowerPkg.contains("mbbank")) appName = "MB Bank";
+                else if (lowerPkg.contains("techcombank")) appName = "Techcombank";
+                else if (lowerPkg.contains("vietinbank") || lowerPkg.contains("ipay")) appName = "VietinBank";
+                else if (lowerPkg.contains("bidv")) appName = "BIDV";
+                else if (lowerPkg.contains("vpbank")) appName = "VPBank";
+                else if (lowerPkg.contains("tpb")) appName = "TPBank";
+                else if (lowerPkg.contains("acb")) appName = "ACB";
+                else if (lowerPkg.contains("agribank")) appName = "Agribank";
+                else if (lowerPkg.contains("sacombank")) appName = "Sacombank";
+
+                // 2. Khớp thông báo SMS Ngân hàng (Google Messages, Xiaomi MMS, Samsung Messages...)
+                else if (lowerPkg.contains("mms") || lowerPkg.contains("sms") || lowerPkg.contains("message") || lowerPkg.contains("messaging")) {
+                    if (upperTitle.contains("MBBANK") || upperTitle.contains("MB BANK")) appName = "MB Bank";
+                    else if (upperTitle.contains("VIETCOMBANK") || upperTitle.contains("VCB")) appName = "Vietcombank";
+                    else if (upperTitle.contains("TECHCOMBANK") || upperTitle.contains("TCB")) appName = "Techcombank";
+                    else if (upperTitle.contains("BIDV")) appName = "BIDV";
+                    else if (upperTitle.contains("VIETINBANK") || upperTitle.contains("CTG")) appName = "VietinBank";
+                    else if (upperTitle.contains("ACB")) appName = "ACB";
+                    else if (upperTitle.contains("TPBANK") || upperTitle.contains("TPB")) appName = "TPBank";
+                    else if (upperTitle.contains("VPBANK") || upperTitle.contains("VPB")) appName = "VPBank";
+                    else if (upperTitle.contains("AGRIBANK")) appName = "Agribank";
+                    else if (upperTitle.contains("SACOMBANK")) appName = "Sacombank";
+                    else if (upperTitle.contains("VIB")) appName = "VIB";
+                    else if (upperTitle.contains("MOMO")) appName = "MoMo";
+                    else if (upperTitle.contains("ZALOPAY")) appName = "ZaloPay";
+                }
+
+                if (appName == null) {
+                    return; // Bỏ qua các thông báo không phải ngân hàng/ví
+                }
+            }
 
             long postTime = sbn.getPostTime() > 0 ? sbn.getPostTime() : System.currentTimeMillis();
 

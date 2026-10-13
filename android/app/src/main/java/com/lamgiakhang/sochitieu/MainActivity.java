@@ -8,12 +8,10 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
-import android.webkit.PermissionRequest;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.BridgeWebChromeClient;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -33,10 +31,10 @@ public class MainActivity extends BridgeActivity {
 
     public static void notifyBankNotificationReceived() {
         if (instance != null && instance.bridge != null && instance.bridge.getWebView() != null) {
-            instance.runOnUiThread(() -> {
+            instance.bridge.getWebView().post(() -> {
                 try {
                     instance.bridge.getWebView().evaluateJavascript(
-                            "window.dispatchEvent(new CustomEvent('bank-notification-received'));",
+                            "if (typeof window !== 'undefined') { window.dispatchEvent(new CustomEvent('bank-notification-received')); }",
                             null
                     );
                 } catch (Exception ignored) {
@@ -49,6 +47,11 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         instance = this;
+
+        // Xóa sạch serverBasePath cũ nếu có để WebView luôn tải bộ assets gốc ổn định
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE);
+        prefs.edit().remove(KEY_SERVER_PATH).remove(KEY_OTA_VERSION).apply();
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -58,23 +61,6 @@ public class MainActivity extends BridgeActivity {
 
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().addJavascriptInterface(new AndroidUpdater(), "AndroidUpdater");
-            this.bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(this.bridge) {
-                @Override
-                public void onPermissionRequest(final PermissionRequest request) {
-                    if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
-                            == PackageManager.PERMISSION_GRANTED) {
-                        runOnUiThread(() -> {
-                            try {
-                                request.grant(request.getResources());
-                            } catch (Exception e) {
-                                super.onPermissionRequest(request);
-                            }
-                        });
-                    } else {
-                        super.onPermissionRequest(request);
-                    }
-                }
-            });
         }
     }
 
@@ -83,7 +69,9 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         instance = this;
         if (this.bridge != null && this.bridge.getWebView() != null) {
-            this.bridge.getWebView().clearCache(true);
+            if (BankNotificationListenerService.currentServiceInstance != null) {
+                BankNotificationListenerService.currentServiceInstance.scanActiveNotifications();
+            }
             notifyBankNotificationReceived();
         }
     }
@@ -180,6 +168,37 @@ public class MainActivity extends BridgeActivity {
                     Activity.MODE_PRIVATE
             );
             prefs.edit().putString(BankNotificationListenerService.KEY_PENDING_LIST, "[]").apply();
+        }
+
+        @JavascriptInterface
+        public void triggerActiveNotificationsScan() {
+            if (BankNotificationListenerService.currentServiceInstance != null) {
+                BankNotificationListenerService.currentServiceInstance.scanActiveNotifications();
+            }
+        }
+
+        @JavascriptInterface
+        public void simulateTestNotification() {
+            SharedPreferences prefs = getSharedPreferences(
+                    BankNotificationListenerService.PREFS_NAME,
+                    Activity.MODE_PRIVATE
+            );
+            try {
+                String raw = prefs.getString(BankNotificationListenerService.KEY_PENDING_LIST, "[]");
+                org.json.JSONArray arr = new org.json.JSONArray(raw);
+                org.json.JSONObject testItem = new org.json.JSONObject();
+                long now = System.currentTimeMillis();
+                testItem.put("id", "test-" + now);
+                testItem.put("packageName", "com.mbmobile");
+                testItem.put("appName", "MB Bank");
+                testItem.put("title", "MB Bank - Biến động số dư");
+                testItem.put("text", "TK 1010101010|GD: +50,000VND 13/10/26 15:10|SD: 1,500,000VND|ND: Test thu nghiem chuyen khoan");
+                testItem.put("timestamp", now);
+                arr.put(testItem);
+                prefs.edit().putString(BankNotificationListenerService.KEY_PENDING_LIST, arr.toString()).apply();
+                notifyBankNotificationReceived();
+            } catch (Exception ignored) {
+            }
         }
 
         @JavascriptInterface

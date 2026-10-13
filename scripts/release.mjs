@@ -56,13 +56,19 @@ execSync(
   { stdio: 'inherit' }
 );
 
+console.log('🤖 Đang đồng bộ và biên dịch Android APK...');
+execSync('npx cap sync', { stdio: 'inherit' });
+execSync('.\\gradlew.bat assembleDebug', { cwd: path.join(rootDir, 'android'), stdio: 'inherit' });
+fs.copyFileSync(
+  path.join(rootDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+  path.join(rootDir, 'app-debug.apk')
+);
+
 // 4. Ghi file version.json mới
 const nextConfig = {
   version: nextVersion,
-  updateType: isApkMode ? 'apk' : 'ota',
-  downloadUrl: isApkMode
-    ? 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk'
-    : 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip',
+  updateType: 'apk',
+  downloadUrl: 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk',
   releaseNotes,
   allowSkip: true,
   updatedAt: new Date().toISOString(),
@@ -73,13 +79,14 @@ fs.writeFileSync(versionJsonPath, JSON.stringify(nextConfig, null, 2) + '\n', 'u
 try {
   console.log('☁️ Đang commit và đẩy lên GitHub...');
   execSync('git add -A', { stdio: 'inherit' });
+  execSync('git add -f app-debug.apk', { stdio: 'inherit' });
   execSync(`git commit -m "chore(release): publish update v${nextVersion}"`, {
     stdio: 'inherit',
   });
   execSync('git push origin main', { stdio: 'inherit' });
   console.log(`\n✅ Hoàn tất! Bản cập nhật v${nextVersion} đã được phát hành tự động tới người dùng.`);
 } catch (err) {
-  console.warn('\n⚠️ Đã tạo xong ota-bundle.zip và version.json, nhưng chưa push lên Git:', err.message);
+  console.warn('\n⚠️ Đã tạo xong nhưng gặp lỗi khi push lên Git:', err.message);
 }
 
 // 6. Đồng bộ thông tin bản phát hành lên Firebase Firestore

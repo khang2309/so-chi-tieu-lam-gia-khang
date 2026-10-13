@@ -401,9 +401,12 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNotifPermGranted(isNotificationPermissionGranted())}
+                  onClick={() => {
+                    setNotifPermGranted(isNotificationPermissionGranted());
+                    window.AndroidUpdater?.triggerActiveNotificationsScan?.();
+                  }}
                   className="p-2 rounded-lg border border-[#d8c8b4] bg-[#fbf5eb] text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer"
-                  title="Kiểm tra lại trạng thái quyền"
+                  title="Quét lại thông báo đang có trên máy"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
@@ -424,6 +427,25 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   Tự động lưu thẳng vào Sổ mặc định (Nếu bỏ tích sẽ hiện ở khay "Chờ duyệt" để bạn kiểm tra)
                 </span>
               </label>
+
+              {/* Nút thử nghiệm giả lập biến động số dư */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.AndroidUpdater?.simulateTestNotification) {
+                      window.AndroidUpdater.simulateTestNotification();
+                      onClose();
+                    } else {
+                      alert('Tính năng thử nghiệm hoạt động trên file cài đặt Android APK.');
+                    }
+                  }}
+                  className="w-full py-1.5 px-3 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Bấm vào đây để Test thử thông báo (+50.000đ từ MB Bank)</span>
+                </button>
+              </div>
             </div>
           </div>
 
