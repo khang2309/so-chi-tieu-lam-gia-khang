@@ -9,6 +9,7 @@ import {
   signInWithCredential,
 } from 'firebase/auth';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { Capacitor } from '@capacitor/core';
 import { auth, isFirebaseConfigured } from '../firebase';
 import { deepClearAllStorage } from '../utils/storageCleaner';
 
@@ -67,21 +68,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      // Nếu người dùng đã chủ động đăng xuất, tuyệt đối không tự động phục hồi phiên đăng nhập
-      if (typeof localStorage !== 'undefined' && localStorage.getItem('user_is_logged_out') === 'true') {
-        if (currentUser) {
-          signOut(auth).catch(() => {});
-        }
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
       setUser(currentUser);
       setLoading(false);
       if (currentUser) {
         setIsOfflineMode(false);
-        localStorage.removeItem(STORAGE_OFFLINE_KEY);
+        try {
+          localStorage.removeItem(STORAGE_OFFLINE_KEY);
+          localStorage.removeItem('user_is_logged_out');
+        } catch {}
       }
     });
 
@@ -92,9 +86,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!auth) {
       throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
     }
+    try {
+      localStorage.removeItem('user_is_logged_out');
+    } catch {}
     await signInWithEmailAndPassword(auth, email, pass);
-    localStorage.removeItem('user_is_logged_out');
-    localStorage.setItem('hasSeenLoginPopup', 'true');
+    try {
+      localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem('hasSeenLoginPopup', 'true');
+    } catch {}
     setIsAuthModalOpen(false);
   };
 
@@ -102,9 +101,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!auth) {
       throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
     }
+    try {
+      localStorage.removeItem('user_is_logged_out');
+    } catch {}
     await createUserWithEmailAndPassword(auth, email, pass);
-    localStorage.removeItem('user_is_logged_out');
-    localStorage.setItem('hasSeenLoginPopup', 'true');
+    try {
+      localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem('hasSeenLoginPopup', 'true');
+    } catch {}
     setIsAuthModalOpen(false);
   };
 
@@ -115,6 +119,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(msg);
     }
     try {
+      try {
+        localStorage.removeItem('user_is_logged_out');
+      } catch {}
       await GoogleAuth.initialize({
         clientId: '1049457866930-8p1gu1bmhm5f8q6fs4k14s1meb2h5l6f.apps.googleusercontent.com',
         scopes: ['profile', 'email'],
@@ -129,8 +136,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const credential = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, credential);
-      localStorage.removeItem('user_is_logged_out');
-      localStorage.setItem('hasSeenLoginPopup', 'true');
+      try {
+        localStorage.removeItem('user_is_logged_out');
+        localStorage.setItem('hasSeenLoginPopup', 'true');
+      } catch {}
       setIsAuthModalOpen(false);
     } catch (err: any) {
       console.warn('Lỗi xác thực Google Native:', err);
@@ -146,9 +155,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      localStorage.setItem('user_is_logged_out', 'true');
       localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
     } catch {}
+
+    const isGoogleUser = user?.providerData?.some((p) => p.providerId === 'google.com');
 
     if (auth) {
       try {
@@ -157,14 +167,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Lỗi signOut:', e);
       }
     }
-    try {
-      await GoogleAuth.signOut();
-    } catch {
-      // Bỏ qua nếu chưa đăng nhập qua GoogleAuth
+
+    if (Capacitor.isNativePlatform() && isGoogleUser) {
+      try {
+        await GoogleAuth.initialize({
+          clientId: '1049457866930-8p1gu1bmhm5f8q6fs4k14s1meb2h5l6f.apps.googleusercontent.com',
+          scopes: ['profile', 'email'],
+          grantOfflineAccess: true,
+        });
+        await GoogleAuth.signOut();
+      } catch (e) {
+        console.warn('Bỏ qua GoogleAuth.signOut:', e);
+      }
     }
+
     setUser(null);
     setIsOfflineMode(true);
-    // Xóa sạch 100% bộ nhớ cứng (localStorage, Preferences, IndexedDB, sessionStorage)
+    // Xóa sạch 100% bộ nhớ cứng (localStorage, Preferences, sessionStorage)
     await deepClearAllStorage();
   };
 

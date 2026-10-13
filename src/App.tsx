@@ -16,9 +16,20 @@ import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { DataBackupModal } from './components/DataBackupModal';
 import { AuthModal } from './components/AuthModal';
 import { WalletTab } from './components/WalletTab';
+import { AppUpdateModal } from './components/AppUpdateModal';
+import { AppReleaseConfig, checkAppUpdateFromCloud } from './utils/appUpdater';
+import {
+  pullNewBankNotificationsFromAndroid,
+  getBankNotifConfig,
+  getSavedReviewQueue,
+  saveReviewQueue,
+  convertBankItemToTransaction,
+  ParsedBankNotificationItem,
+} from './utils/bankNotificationService';
 import { exportTransactionsToExcel } from './utils/excelExporter';
 import { Transaction } from './types';
 import { ParsedVoiceResult } from './utils/voiceParser';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   Plus,
   Camera,
@@ -49,6 +60,8 @@ export function App() {
   const [isWalletTransferModalOpen, setIsWalletTransferModalOpen] = useState(false);
   const [isCategoryManagerModalOpen, setIsCategoryManagerModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [cloudRelease, setCloudRelease] = useState<AppReleaseConfig | null>(null);
 
   // Search & Filter & Speed Dial states
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -72,6 +85,30 @@ export function App() {
     return () => window.removeEventListener('show-app-toast', handleToast);
   }, []);
 
+  // Kiểm tra bản cập nhật tự động khi mở ứng dụng (Tôn trọng quyền chọn "Bỏ qua" của người dùng)
+  useEffect(() => {
+    let mounted = true;
+    checkAppUpdateFromCloud().then((res) => {
+      if (!mounted) return;
+      if (res.hasUpdate && res.release) {
+        setCloudRelease(res.release);
+        const skippedVer = localStorage.getItem('sochitieu_skipped_update_version');
+        if (res.release.allowSkip === false || skippedVer !== res.release.version) {
+          setIsUpdateModalOpen(true);
+        }
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleManualCheckUpdate = async () => {
+    const res = await checkAppUpdateFromCloud();
+    setCloudRelease(res.hasUpdate && res.release ? res.release : null);
+    setIsUpdateModalOpen(true);
+  };
+
   // 1. Logic kiểm tra "Lần đầu mở App" (Chỉ mở AuthModal 1 lần duy nhất)
   useEffect(() => {
     if (authLoading) return;
@@ -87,6 +124,102 @@ export function App() {
       manager.fetchAndSyncUserData(user.uid);
     }
   }, [user?.uid]);
+
+  // 3. Tự động kiểm tra và lắng nghe biến động số dư từ thông báo Ngân hàng / Ví điện tử (Android)
+  const [pendingBankItems, setPendingBankItems] = useState<ParsedBankNotificationItem[]>(() =>
+    getSavedReviewQueue()
+  );
+
+  useEffect(() => {
+    const checkAndProcessNotifications = async () => {
+      const cfg = getBankNotifConfig();
+
+      const newParsed = pullNewBankNotificationsFromAndroid({
+        wallets: manager.wallets,
+        ledgers: manager.ledgers,
+        categories: manager.categories,
+      });
+
+      if (newParsed.length === 0) return;
+
+      if (cfg.autoSave) {
+        const txsToSave = newParsed.map(convertBankItemToTransaction);
+        manager.addBatchTransactions(txsToSave);
+        window.dispatchEvent(
+          new CustomEvent('show-app-toast', {
+            detail: `Đã tự động lưu ${txsToSave.length} biến động số dư!`,
+          })
+        );
+      } else {
+        setPendingBankItems((prev) => {
+          const merged = [...newParsed, ...prev];
+          saveReviewQueue(merged);
+          return merged;
+        });
+        window.dispatchEvent(
+          new CustomEvent('show-app-toast', {
+            detail: `Có ${newParsed.length} biến động số dư mới chờ bạn duyệt!`,
+          })
+        );
+      }
+    };
+
+    checkAndProcessNotifications();
+
+    const handleBankNotifEvent = () => {
+      checkAndProcessNotifications();
+    };
+
+    window.addEventListener('bank-notification-received', handleBankNotifEvent);
+    return () => window.removeEventListener('bank-notification-received', handleBankNotifEvent);
+  }, [manager.wallets, manager.ledgers, manager.categories]);
+
+  const handleApproveBankItem = (itemToSave: ParsedBankNotificationItem) => {
+    manager.addTransaction(convertBankItemToTransaction(itemToSave));
+    setPendingBankItems((prev) => {
+      const updated = prev.filter((i) => i.id !== itemToSave.id);
+      saveReviewQueue(updated);
+      return updated;
+    });
+    window.dispatchEvent(
+      new CustomEvent('show-app-toast', { detail: 'Đã lưu giao dịch vào sổ thành công!' })
+    );
+  };
+
+  const handleDismissBankItem = (id: string) => {
+    setPendingBankItems((prev) => {
+      const updated = prev.filter((i) => i.id !== id);
+      saveReviewQueue(updated);
+      return updated;
+    });
+  };
+
+  const handleEditBankItem = (item: ParsedBankNotificationItem) => {
+    setVoiceInitialValues({
+      amount: item.amount,
+      note: item.note,
+      categoryId: item.categoryId,
+      type: item.type,
+      walletId: item.walletId,
+      ledgerId: item.ledgerId,
+    });
+    setEditingTransaction(null);
+    setIsTransactionModalOpen(true);
+    handleDismissBankItem(item.id);
+  };
+
+  const handleApproveAllBankItems = () => {
+    if (pendingBankItems.length === 0) return;
+    const txs = pendingBankItems.map(convertBankItemToTransaction);
+    manager.addBatchTransactions(txs);
+    setPendingBankItems([]);
+    saveReviewQueue([]);
+    window.dispatchEvent(
+      new CustomEvent('show-app-toast', {
+        detail: `Đã lưu tất cả ${txs.length} giao dịch vào sổ!`,
+      })
+    );
+  };
 
   // Quick Open Handlers
   const handleOpenNewTransaction = () => {
@@ -140,6 +273,7 @@ export function App() {
         ledgers={manager.ledgers}
         activeLedgerId={manager.activeLedgerId}
         onSelectLedger={manager.setActiveLedgerId}
+        onSetDefaultLedger={manager.setDefaultLedger}
         onOpenLedgerManager={() => setIsLedgerManagerModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         isSearchOpen={isSearchOpen}
@@ -160,7 +294,9 @@ export function App() {
             <span className="font-serif italic">
               Đang xem sổ:{' '}
               <strong className="text-[#3e332a] not-italic">
-                {manager.activeLedgerId === 'all'
+                {manager.ledgers.length === 0
+                  ? 'Chưa có sổ chi tiêu (0 sổ)'
+                  : manager.activeLedgerId === 'all'
                   ? 'Tất cả các sổ chi tiêu'
                   : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name || 'Cá nhân'}
               </strong>
@@ -174,6 +310,94 @@ export function App() {
             Đổi hoặc tạo sổ mới →
           </button>
         </div>
+
+        {/* Banner Biến Động Số Dư Chờ Duyệt (Chỉ hiển thị ở tab dashboard khi có thông báo chờ duyệt) */}
+        {activeTab === 'dashboard' && pendingBankItems.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                </span>
+                <span className="font-bold text-xs sm:text-sm text-[#3e332a]">
+                  🔔 Biến động số dư mới ({pendingBankItems.length})
+                </span>
+              </div>
+              {pendingBankItems.length > 1 && (
+                <button
+                  onClick={handleApproveAllBankItems}
+                  className="text-xs font-semibold text-[#a25832] hover:underline"
+                >
+                  Lưu tất cả ({pendingBankItems.length})
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {pendingBankItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white/90 border border-amber-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shadow-xs"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-[#a25832] bg-amber-100/60 px-1.5 py-0.5 rounded text-[11px]">
+                        {item.appName}
+                      </span>
+                      <span
+                        className={`font-bold ${
+                          item.type === 'expense'
+                            ? 'text-rose-600'
+                            : item.type === 'income'
+                            ? 'text-emerald-600'
+                            : 'text-blue-600'
+                        }`}
+                      >
+                        {item.type === 'expense'
+                          ? '-'
+                          : item.type === 'income'
+                          ? '+'
+                          : ''}
+                        {new Intl.NumberFormat('vi-VN').format(item.amount)} đ
+                      </span>
+                      <span className="text-[10px] text-[#7a6a58]">
+                        {new Date(item.date).toLocaleTimeString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-[#3e332a] truncate mt-1 text-[11px]" title={item.note}>
+                      {item.note}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                    <button
+                      onClick={() => handleApproveBankItem(item)}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-[11px] shadow-xs cursor-pointer active:scale-95 transition"
+                    >
+                      Lưu ngay
+                    </button>
+                    <button
+                      onClick={() => handleEditBankItem(item)}
+                      className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-[#a25832] rounded-lg font-medium text-[11px] cursor-pointer active:scale-95 transition"
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => handleDismissBankItem(item.id)}
+                      className="px-2 py-1 text-stone-400 hover:text-stone-600 rounded-lg text-[11px] cursor-pointer transition"
+                    >
+                      Bỏ qua
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {activeTab === 'dashboard' && (
           <TransactionList
@@ -444,6 +668,8 @@ export function App() {
         onSelectLedger={manager.setActiveLedgerId}
         onAddLedger={manager.addLedger}
         onUpdateLedger={manager.updateLedger}
+        onSetDefaultLedger={manager.setDefaultLedger}
+        onReorderLedgers={manager.reorderLedgers}
         onDeleteLedger={manager.deleteLedger}
       />
 
@@ -475,24 +701,33 @@ export function App() {
         onDeleteCategory={manager.deleteCategory}
       />
 
-      <DataBackupModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        onExport={manager.exportDataJson}
-        onExportExcel={() => {
-          exportTransactionsToExcel(
-            manager.transactions.filter((tx) => !tx.isDeleted),
-            manager.categories,
-            manager.ledgers,
-            manager.wallets,
-            `Chi_Tieu_Toan_Bo_${new Date().toISOString().slice(0, 10)}.xlsx`
-          );
-        }}
-        onImport={manager.importDataJson}
-        onReset={manager.resetToDefaults}
-        onClearUserData={manager.clearUserData}
-        onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
-        onSyncToCloud={manager.syncToCloud}
+      <ErrorBoundary fallbackTitle="Cài Đặt & Sao Lưu">
+        <DataBackupModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          onExport={manager.exportDataJson}
+          onExportExcel={() => {
+            exportTransactionsToExcel(
+              manager.transactions.filter((tx) => !tx.isDeleted),
+              manager.categories,
+              manager.ledgers,
+              manager.wallets,
+              `Chi_Tieu_Toan_Bo_${new Date().toISOString().slice(0, 10)}.xlsx`
+            );
+          }}
+          onImport={manager.importDataJson}
+          onReset={manager.resetToDefaults}
+          onClearUserData={manager.clearUserData}
+          onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
+          onSyncToCloud={manager.syncToCloud}
+          onCheckUpdate={handleManualCheckUpdate}
+        />
+      </ErrorBoundary>
+
+      <AppUpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        release={cloudRelease}
       />
 
       {/* Duy nhất 1 AuthModal tại Root level điều khiển bằng Global State isAuthModalOpen */}

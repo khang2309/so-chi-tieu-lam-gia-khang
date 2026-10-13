@@ -24,7 +24,7 @@ import {
 } from '../utils/cloudVisionService';
 import { compressImageForOcr } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, toLocalDateKey } from '../utils/formatters';
 
 
 
@@ -119,15 +119,15 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       if (!cfg.apiKey || cfg.apiKey.trim().length === 0) {
         setIsProcessing(false);
         alert(
-          'Chưa có API Key! Vui lòng vào mục Cài đặt -> Cấu hình AI để lưu Google Gemini API Key (miễn phí từ Google AI Studio).'
+          'Chưa có API Key! Vui lòng vào mục Cài đặt -> Cấu hình Trợ lý AI để lưu API Key.'
         );
         return;
       }
 
       setStatusMessage(
         scanMode === 'merge'
-          ? 'Đang gửi ảnh lên Google Gemini Vision (Gộp thành 1 giao dịch)...'
-          : 'Đang gửi ảnh lên Google Gemini Vision (Tách từng món)...'
+          ? 'Đang gửi ảnh lên Trợ lý AI Vision (Gộp thành 1 giao dịch)...'
+          : 'Đang gửi ảnh lên Trợ lý AI Vision (Tách từng món)...'
       );
       const parsedResult = await extractInvoiceDataWithCloudVision(
         enhancedDataUrl,
@@ -229,7 +229,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
   // Thêm thủ công 1 dòng vào danh sách
   const handleAddNewItem = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toLocalDateKey(new Date());
     const newItem: ExtractedBatchItem = {
       id: 'batch-manual-' + Date.now(),
       date: today,
@@ -249,11 +249,16 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       return;
     }
 
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
     // Chuyển đổi thành Transaction array
     const transactionsToSave = batchItems.map((item) => ({
       amount: Number(item.amount) || 0,
       type: 'expense' as const,
-      date: new Date(`${item.date}T12:00:00`).toISOString(),
+      date: new Date(`${item.date}T${hh}:${mm}:${ss}`).toISOString(),
       categoryId: item.categoryId,
       ledgerId: selectedLedgerId,
       walletId: selectedWalletId,

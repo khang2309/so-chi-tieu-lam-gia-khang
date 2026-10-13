@@ -34,7 +34,7 @@ export function useExpenseManager() {
   // 1. Initial State from LocalStorage (được deep sanitize triệt để loại bỏ undefined)
   const [ledgers, setLedgers] = useState<Ledger[]>(() => {
     try {
-      if (localStorage.getItem('user_is_logged_out') === 'true') return DEFAULT_LEDGERS;
+      if (localStorage.getItem('user_is_logged_out') === 'true') return [];
       const saved = localStorage.getItem(STORAGE_KEYS.LEDGERS);
       return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_LEDGERS;
     } catch {
@@ -44,7 +44,7 @@ export function useExpenseManager() {
 
   const [wallets, setWallets] = useState<Wallet[]>(() => {
     try {
-      if (localStorage.getItem('user_is_logged_out') === 'true') return DEFAULT_WALLETS;
+      if (localStorage.getItem('user_is_logged_out') === 'true') return [];
       const saved = localStorage.getItem(STORAGE_KEYS.WALLETS);
       return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_WALLETS;
     } catch {
@@ -81,6 +81,15 @@ export function useExpenseManager() {
   });
 
   const [activeLedgerId, setActiveLedgerId] = useState<string>(() => {
+    try {
+      if (localStorage.getItem('user_is_logged_out') === 'true') return 'all';
+      const savedLedgersRaw = localStorage.getItem(STORAGE_KEYS.LEDGERS);
+      if (savedLedgersRaw) {
+        const parsedLedgers: Ledger[] = JSON.parse(savedLedgersRaw);
+        const defaultL = parsedLedgers.find((l) => l.isDefault);
+        if (defaultL) return defaultL.id;
+      }
+    } catch (_) {}
     return localStorage.getItem(STORAGE_KEYS.ACTIVE_LEDGER) || 'ledger-personal';
   });
 
@@ -136,18 +145,26 @@ export function useExpenseManager() {
 
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
   const autoSyncRunningRef = useRef(false);
+  const activeUidRef = useRef<string | null>(null);
+  const unsubDataRef = useRef<any>(null);
+  const deletedWalletIdsRef = useRef<Set<string>>(new Set());
+  const deletedLedgerIdsRef = useRef<Set<string>>(new Set());
+  const deletedCategoryIdsRef = useRef<Set<string>>(new Set());
 
   // Hàm kéo ngay lập tức toàn bộ dữ liệu từ Cloud về và cập nhật vào State (Không chờ F5 / Tải lại)
   const fetchAndSyncUserData = async (targetUid?: string) => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('user_is_logged_out') === 'true') {
-      return;
-    }
     const uid = targetUid || auth?.currentUser?.uid;
     if (!uid) return;
 
     try {
       setIsAutoSyncing(true);
       const cloudData = await pullUserDataFromFirestore(uid);
+
+      // Nếu user đã đăng xuất hoặc đổi tài khoản trong lúc chờ Cloud phản hồi thì huỷ bỏ ngay lập tức
+      if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) {
+        return;
+      }
+
       if (cloudData) {
         let curTxs: Transaction[] = transactions;
         let curWallets: Wallet[] = wallets;
@@ -164,22 +181,62 @@ export function useExpenseManager() {
           if (rawC) curCategories = JSON.parse(rawC);
         } catch (_) {}
 
-        // Gộp dữ liệu: Cloud + Local
+        // Gộp giao dịch (có cờ xóa mềm isDeleted)
         const mergedTxs = mergeEntitiesById(curTxs, cloudData.transactions || []);
         mergedTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        const mergedWallets = mergeEntitiesById(curWallets, cloudData.wallets || []);
-        const mergedLedgers = mergeEntitiesById(curLedgers, cloudData.ledgers || []);
-        const mergedCategories = mergeEntitiesById(curCategories, cloudData.categories || []);
+
+        // Với Ví, Sổ, Danh mục: Nếu Cloud đã có danh sách (> 0), lấy danh sách từ Cloud làm chuẩn
+        // để không bao giờ khôi phục nhầm Ví/Sổ mặc định đã bị xóa
+        const cloudWallets = (cloudData.wallets || []).filter(
+          (w) => !deletedWalletIdsRef.current.has(w.id)
+        );
+        const mergedWallets =
+          cloudWallets.length > 0
+            ? cloudWallets
+            : curWallets.length > 0
+            ? curWallets
+            : DEFAULT_WALLETS;
+
+        const cloudLedgers = (cloudData.ledgers || []).filter(
+          (l) => !deletedLedgerIdsRef.current.has(l.id)
+        );
+        const mergedLedgers =
+          cloudLedgers.length > 0
+            ? cloudLedgers
+            : curLedgers.length > 0
+            ? curLedgers
+            : DEFAULT_LEDGERS;
+
+        const cloudCategories = (cloudData.categories || []).filter(
+          (c) => !deletedCategoryIdsRef.current.has(c.id)
+        );
+        const mergedCategories =
+          cloudCategories.length > 0
+            ? cloudCategories
+            : curCategories.length > 0
+            ? curCategories
+            : DEFAULT_CATEGORIES;
 
         const cleanTxs = sanitizeData(mergedTxs);
         const cleanWallets = sanitizeData(mergedWallets);
         const cleanLedgers = sanitizeData(mergedLedgers);
         const cleanCategories = sanitizeData(mergedCategories);
 
+        // Kiểm tra lại lần nữa trước khi ghi đè state
+        if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
+
         setTransactions(cleanTxs);
         setWallets(cleanWallets);
         setLedgers(cleanLedgers);
         setCategories(cleanCategories);
+        if (cleanLedgers.length > 0) {
+          const defaultL = cleanLedgers.find((l: Ledger) => l.isDefault) || cleanLedgers[0];
+          setActiveLedgerId((prev) =>
+            prev === 'all' || !cleanLedgers.some((l: Ledger) => l.id === prev)
+              ? defaultL.id
+              : prev
+          );
+        }
 
         localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cleanTxs));
         localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(cleanWallets));
@@ -196,6 +253,7 @@ export function useExpenseManager() {
   // Hàm tự động đồng bộ 2 chiều (Auto-Sync) ngầm khi đăng nhập
   const runAutoSync = async (uid: string) => {
     if (autoSyncRunningRef.current) return;
+    if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
     autoSyncRunningRef.current = true;
     setIsAutoSyncing(true);
 
@@ -222,23 +280,49 @@ export function useExpenseManager() {
       // Sạch hóa dữ liệu tuyệt đối trước khi đồng bộ (xóa sạch mọi undefined)
       const cleanPayload = {
         transactions: sanitizeData(localTxs || []),
-        wallets: sanitizeData(localWallets || []),
-        ledgers: sanitizeData(localLedgers || []),
-        categories: sanitizeData(localCategories || []),
+        wallets: sanitizeData(
+          (localWallets || []).filter((w) => !deletedWalletIdsRef.current.has(w.id))
+        ),
+        ledgers: sanitizeData(
+          (localLedgers || []).filter((l) => !deletedLedgerIdsRef.current.has(l.id))
+        ),
+        categories: sanitizeData(
+          (localCategories || []).filter((c) => !deletedCategoryIdsRef.current.has(c.id))
+        ),
       };
 
-      const res = await performTwoWaySync(uid, cleanPayload);
+      const res = await performTwoWaySync(uid, cleanPayload, { preferCloudLists: true });
+      if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
+
       if (res.success && res.mergedData) {
         const cleanMerged = sanitizeData(res.mergedData);
+        const finalWallets = cleanMerged.wallets.filter(
+          (w: Wallet) => !deletedWalletIdsRef.current.has(w.id)
+        );
+        const finalLedgers = cleanMerged.ledgers.filter(
+          (l: Ledger) => !deletedLedgerIdsRef.current.has(l.id)
+        );
+        const finalCategories = cleanMerged.categories.filter(
+          (c: Category) => !deletedCategoryIdsRef.current.has(c.id)
+        );
+
         setTransactions(cleanMerged.transactions);
-        setWallets(cleanMerged.wallets);
-        setLedgers(cleanMerged.ledgers);
-        setCategories(cleanMerged.categories);
+        setWallets(finalWallets);
+        setLedgers(finalLedgers);
+        setCategories(finalCategories);
+        if (finalLedgers.length > 0) {
+          const defaultL = finalLedgers.find((l: Ledger) => l.isDefault) || finalLedgers[0];
+          setActiveLedgerId((prev) =>
+            prev === 'all' || !finalLedgers.some((l: Ledger) => l.id === prev)
+              ? defaultL.id
+              : prev
+          );
+        }
 
         localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cleanMerged.transactions));
-        localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(cleanMerged.wallets));
-        localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(cleanMerged.ledgers));
-        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cleanMerged.categories));
+        localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(finalWallets));
+        localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(finalLedgers));
+        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(finalCategories));
       }
     } catch (err) {
       console.warn('Lỗi Auto-Sync:', err);
@@ -251,27 +335,28 @@ export function useExpenseManager() {
   // Đồng bộ thời gian thực từ Firestore qua onSnapshot & Tự động đồng bộ khi Đăng nhập
   useEffect(() => {
     if (!auth) return;
-    let unsubData: (() => void) | null = null;
 
     const unsubAuth = auth.onAuthStateChanged(async (currentUser: any) => {
-      if (unsubData) {
-        unsubData();
-        unsubData = null;
-      }
-
-      if (typeof localStorage !== 'undefined' && localStorage.getItem('user_is_logged_out') === 'true') {
-        return;
+      // Huỷ bỏ bộ lắng nghe cũ nếu có
+      if (unsubDataRef.current) {
+        unsubDataRef.current();
+        unsubDataRef.current = null;
       }
 
       if (currentUser?.uid) {
         const uid = currentUser.uid;
+        activeUidRef.current = uid;
+        deletedWalletIdsRef.current.clear();
+        deletedLedgerIdsRef.current.clear();
+        deletedCategoryIdsRef.current.clear();
 
-        // 1. Tải nhanh toàn bộ dữ liệu từ cloud về State ngay lập tức (Không để màn hình trống)
+        // 1. Tải nhanh toàn bộ dữ liệu từ cloud về State ngay lập tức
         fetchAndSyncUserData(uid);
 
         // 2. Gắn bộ lắng nghe thay đổi thời gian thực ngay lập tức
-        unsubData = subscribeToUserFirestoreData(uid, {
+        unsubDataRef.current = subscribeToUserFirestoreData(uid, {
           onTransactions: (fireTxs, isEmpty) => {
+            if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (!isEmpty) {
               setTransactions((prev) => {
                 const merged = mergeEntitiesById(prev, fireTxs);
@@ -281,29 +366,76 @@ export function useExpenseManager() {
             }
           },
           onWallets: (fireWallets, isEmpty) => {
+            if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (!isEmpty) {
-              setWallets((prev) => sanitizeData(mergeEntitiesById(prev, fireWallets)));
+              const filtered = fireWallets.filter(
+                (w) => !deletedWalletIdsRef.current.has(w.id)
+              );
+              if (filtered.length > 0) {
+                setWallets(sanitizeData(filtered));
+              }
             }
           },
           onLedgers: (fireLedgers, isEmpty) => {
+            if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (!isEmpty) {
-              setLedgers((prev) => sanitizeData(mergeEntitiesById(prev, fireLedgers)));
+              const filtered = fireLedgers.filter(
+                (l) => !deletedLedgerIdsRef.current.has(l.id)
+              );
+              if (filtered.length > 0) {
+                setLedgers(sanitizeData(filtered));
+              }
             }
           },
           onCategories: (fireCategories, isEmpty) => {
+            if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (!isEmpty) {
-              setCategories((prev) => sanitizeData(mergeEntitiesById(prev, fireCategories)));
+              const filtered = fireCategories.filter(
+                (c) => !deletedCategoryIdsRef.current.has(c.id)
+              );
+              if (filtered.length > 0) {
+                setCategories(sanitizeData(filtered));
+              }
             }
           },
         });
 
         // 3. Tự động đồng bộ 2 chiều ngầm
         runAutoSync(uid);
+      } else {
+        // NGƯỜI DÙNG ĐÃ ĐĂNG XUẤT (currentUser == null)
+        activeUidRef.current = null;
+        if (unsubDataRef.current) {
+          unsubDataRef.current();
+          unsubDataRef.current = null;
+        }
+
+        // Xóa trắng hoàn toàn Giao dịch (0 giao dịch), Ví (0 ví) và Sổ (0 sổ) khi đã đăng xuất
+        if (localStorage.getItem('user_is_logged_out') === 'true') {
+          setTransactions([]);
+          setWallets([]);
+          setLedgers([]);
+          setCategories(DEFAULT_CATEGORIES);
+          setActiveLedgerId('all');
+          setActiveWalletId('all');
+
+          try {
+            localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, '[]');
+            localStorage.setItem(STORAGE_KEYS.WALLETS, '[]');
+            localStorage.setItem(STORAGE_KEYS.LEDGERS, '[]');
+            localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
+            localStorage.setItem(STORAGE_KEYS.ACTIVE_LEDGER, 'all');
+            localStorage.setItem(STORAGE_KEYS.ACTIVE_WALLET, 'all');
+          } catch (_) {}
+        }
       }
     });
 
     return () => {
-      if (unsubData) unsubData();
+      if (unsubDataRef.current) {
+        unsubDataRef.current();
+        unsubDataRef.current = null;
+      }
       unsubAuth();
     };
   }, []);
@@ -511,15 +643,32 @@ export function useExpenseManager() {
 
   const addLedger = (data: Omit<Ledger, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
+    const shouldBeDefault = Boolean(data.isDefault) || ledgers.length === 0;
     const newLedger: Ledger = sanitizeData({
       ...data,
+      isDefault: shouldBeDefault,
+      order: ledgers.length,
       id: 'ledger-' + Date.now(),
       createdAt: now,
       updatedAt: now,
     });
-    setLedgers((prev) => [...prev, newLedger]);
-    if (auth?.currentUser?.uid) {
-      syncLedgerToFirestore(auth.currentUser.uid, newLedger);
+    setLedgers((prev) => {
+      const base = shouldBeDefault
+        ? prev.map((l) => sanitizeData({ ...l, isDefault: false, updatedAt: now }))
+        : prev;
+      const next = [...base, newLedger];
+      const uid = auth?.currentUser?.uid;
+      if (uid) {
+        if (shouldBeDefault) {
+          next.forEach((l) => syncLedgerToFirestore(uid, l));
+        } else {
+          syncLedgerToFirestore(uid, newLedger);
+        }
+      }
+      return next;
+    });
+    if (shouldBeDefault) {
+      setActiveLedgerId(newLedger.id);
     }
     return newLedger;
   };
@@ -527,13 +676,70 @@ export function useExpenseManager() {
   const updateLedger = (id: string, data: Partial<Ledger>) => {
     const now = new Date().toISOString();
     setLedgers((prev) => {
-      const updated = prev.map((l) => (l.id === id ? sanitizeData({ ...l, ...data, updatedAt: now }) : l));
-      const target = updated.find((l) => l.id === id);
-      if (target && auth?.currentUser?.uid) {
-        syncLedgerToFirestore(auth.currentUser.uid, target);
+      const updated = prev.map((l) => {
+        if (l.id === id) {
+          return sanitizeData({ ...l, ...data, updatedAt: now });
+        }
+        if (data.isDefault) {
+          return sanitizeData({ ...l, isDefault: false, updatedAt: now });
+        }
+        return l;
+      });
+      const uid = auth?.currentUser?.uid;
+      if (uid) {
+        if (data.isDefault) {
+          updated.forEach((l) => syncLedgerToFirestore(uid, l));
+        } else {
+          const target = updated.find((l) => l.id === id);
+          if (target) syncLedgerToFirestore(uid, target);
+        }
       }
       return updated;
     });
+    if (data.isDefault) {
+      setActiveLedgerId(id);
+    }
+  };
+
+  const setDefaultLedger = (id: string) => {
+    const now = new Date().toISOString();
+    setLedgers((prev) => {
+      const updated = prev.map((l) =>
+        sanitizeData({
+          ...l,
+          isDefault: l.id === id,
+          updatedAt: now,
+        })
+      );
+      try {
+        localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(updated));
+      } catch (_) {}
+      const uid = auth?.currentUser?.uid;
+      if (uid) {
+        updated.forEach((l) => syncLedgerToFirestore(uid, l));
+      }
+      return updated;
+    });
+    setActiveLedgerId(id);
+  };
+
+  const reorderLedgers = (reordered: Ledger[]) => {
+    const now = new Date().toISOString();
+    const updated = reordered.map((l, idx) =>
+      sanitizeData({
+        ...l,
+        order: idx,
+        updatedAt: now,
+      })
+    );
+    setLedgers(updated);
+    try {
+      localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(updated));
+    } catch (_) {}
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      updated.forEach((l) => syncLedgerToFirestore(uid, l));
+    }
   };
 
   const deleteLedger = (id: string) => {
@@ -541,13 +747,27 @@ export function useExpenseManager() {
       alert('Bạn phải giữ lại ít nhất một cuốn sổ!');
       return;
     }
-    setLedgers((prev) => prev.filter((l) => l.id !== id));
-    if (auth?.currentUser?.uid) {
-      removeLedgerFromFirestore(auth.currentUser.uid, id);
+    deletedLedgerIdsRef.current.add(id);
+    const now = new Date().toISOString();
+    let remaining = ledgers.filter((l) => l.id !== id);
+    if (remaining.length > 0 && !remaining.some((l) => l.isDefault)) {
+      remaining = remaining.map((l, idx) =>
+        idx === 0 ? sanitizeData({ ...l, isDefault: true, updatedAt: now }) : l
+      );
+    }
+    setLedgers(remaining);
+    try {
+      localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(remaining));
+    } catch (_) {}
+
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      removeLedgerFromFirestore(uid, id);
+      remaining.forEach((l) => syncLedgerToFirestore(uid, l));
     }
     if (activeLedgerId === id) {
-      const remaining = ledgers.filter((l) => l.id !== id);
-      setActiveLedgerId(remaining[0]?.id || 'all');
+      const defaultL = remaining.find((l) => l.isDefault) || remaining[0];
+      setActiveLedgerId(defaultL?.id || 'all');
     }
   };
 
@@ -583,9 +803,17 @@ export function useExpenseManager() {
       alert('Bạn cần giữ lại ít nhất 1 nguồn tiền/ví!');
       return;
     }
-    setWallets((prev) => prev.filter((w) => w.id !== id));
-    if (auth?.currentUser?.uid) {
-      removeWalletFromFirestore(auth.currentUser.uid, id);
+    deletedWalletIdsRef.current.add(id);
+    const remaining = wallets.filter((w) => w.id !== id);
+    setWallets(remaining);
+    try {
+      localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(remaining));
+    } catch (_) {}
+
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      removeWalletFromFirestore(uid, id);
+      remaining.forEach((w) => syncWalletToFirestore(uid, w));
     }
     if (activeWalletId === id) {
       setActiveWalletId('all');
@@ -603,6 +831,7 @@ export function useExpenseManager() {
     const toW = wallets.find((w) => w.id === toWalletId);
     const defaultNote = `Chuyển tiền: ${fromW?.name || ''} ➜ ${toW?.name || ''}${note ? ' (' + note + ')' : ''}`;
     const now = new Date().toISOString();
+    const fallbackLedger = ledgers.find((l) => l.isDefault) || ledgers[0];
 
     const newTx: Transaction = sanitizeData({
       id: 'tx-transfer-' + Date.now(),
@@ -611,7 +840,7 @@ export function useExpenseManager() {
       date,
       categoryId: 'cat-other-expense',
       note: defaultNote,
-      ledgerId: activeLedgerId === 'all' ? (ledgers[0]?.id || 'ledger-personal') : activeLedgerId,
+      ledgerId: activeLedgerId === 'all' ? (fallbackLedger?.id || 'ledger-personal') : activeLedgerId,
       walletId: fromWalletId,
       toWalletId,
       createdAt: now,
@@ -652,9 +881,17 @@ export function useExpenseManager() {
   };
 
   const deleteCategory = (id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-    if (auth?.currentUser?.uid) {
-      removeCategoryFromFirestore(auth.currentUser.uid, id);
+    deletedCategoryIdsRef.current.add(id);
+    const remaining = categories.filter((c) => c.id !== id);
+    setCategories(remaining);
+    try {
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(remaining));
+    } catch (_) {}
+
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      removeCategoryFromFirestore(uid, id);
+      remaining.forEach((c) => syncCategoryToFirestore(uid, c));
     }
   };
 
@@ -663,6 +900,9 @@ export function useExpenseManager() {
       try {
         localStorage.removeItem('user_is_logged_out');
       } catch (_) {}
+      deletedWalletIdsRef.current.clear();
+      deletedLedgerIdsRef.current.clear();
+      deletedCategoryIdsRef.current.clear();
       setLedgers(DEFAULT_LEDGERS);
       setWallets(DEFAULT_WALLETS);
       setCategories(DEFAULT_CATEGORIES);
@@ -675,24 +915,30 @@ export function useExpenseManager() {
   };
 
   const clearUserData = () => {
+    activeUidRef.current = null;
+    if (unsubDataRef.current) {
+      unsubDataRef.current();
+      unsubDataRef.current = null;
+    }
+
     try {
       localStorage.setItem('user_is_logged_out', 'true');
       localStorage.setItem('sochitieu_user_offline_preference', 'true');
       localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, '[]');
-      localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(DEFAULT_WALLETS));
-      localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(DEFAULT_LEDGERS));
+      localStorage.setItem(STORAGE_KEYS.WALLETS, '[]');
+      localStorage.setItem(STORAGE_KEYS.LEDGERS, '[]');
       localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_LEDGER, 'ledger-personal');
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_LEDGER, 'all');
       localStorage.setItem(STORAGE_KEYS.ACTIVE_WALLET, 'all');
       sessionStorage.clear();
     } catch (_) {}
 
-    // Đưa state ứng dụng về trạng thái trắng tinh ban đầu (0 giao dịch)
+    // Đưa toàn bộ Giao dịch (0 giao dịch), Ví (0 ví) và Sổ (0 sổ) về trạng thái trắng tinh khi Đăng xuất
     setTransactions([]);
-    setWallets(DEFAULT_WALLETS);
-    setLedgers(DEFAULT_LEDGERS);
+    setWallets([]);
+    setLedgers([]);
     setCategories(DEFAULT_CATEGORIES);
-    setActiveLedgerId('ledger-personal');
+    setActiveLedgerId('all');
     setActiveWalletId('all');
   };
 
@@ -784,6 +1030,8 @@ export function useExpenseManager() {
     deleteTransaction,
     addLedger,
     updateLedger,
+    setDefaultLedger,
+    reorderLedgers,
     deleteLedger,
     addWallet,
     updateWallet,

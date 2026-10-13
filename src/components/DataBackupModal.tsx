@@ -19,9 +19,19 @@ import {
   ExternalLink,
   Sparkles,
   AlertTriangle,
+  RefreshCw,
+  Landmark,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getSavedVisionConfig, saveVisionConfig } from '../utils/cloudVisionService';
+import { getCurrentRunningVersion } from '../utils/appUpdater';
+import {
+  getBankNotifConfig,
+  saveBankNotifConfig,
+  isNotificationPermissionGranted,
+  openAndroidNotificationSettings,
+  BankNotifConfig,
+} from '../utils/bankNotificationService';
 
 interface DataBackupModalProps {
   isOpen: boolean;
@@ -33,6 +43,7 @@ interface DataBackupModalProps {
   onClearUserData?: () => void;
   onOpenCategoryManager: () => void;
   onSyncToCloud?: () => Promise<{ success: boolean; count?: number; message?: string }>;
+  onCheckUpdate?: () => void;
 }
 
 export const DataBackupModal: React.FC<DataBackupModalProps> = ({
@@ -45,6 +56,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onClearUserData,
   onOpenCategoryManager,
   onSyncToCloud,
+  onCheckUpdate,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, isOnline, logout, openAuthModal } = useAuth();
@@ -54,8 +66,26 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   // Gemini AI Vision & Parser Config
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => getSavedVisionConfig().apiKey || '');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    try {
+      return getSavedVisionConfig().apiKey || '';
+    } catch {
+      return '';
+    }
+  });
   const [geminiSaved, setGeminiSaved] = useState<boolean>(false);
+
+  // Bank Notification Listener Config
+  const [bankNotifConfig, setBankNotifConfig] = useState<BankNotifConfig>(() =>
+    getBankNotifConfig()
+  );
+  const [notifPermGranted, setNotifPermGranted] = useState<boolean>(() =>
+    isNotificationPermissionGranted()
+  );
+
+  // Logout Confirmation state
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleSaveGeminiKey = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,10 +148,6 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     }
   };
 
-  // Logout Confirmation state
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
   const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -131,10 +157,11 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
       await logout();
       setShowLogoutConfirm(false);
       onClose();
-      alert('Đã đăng xuất tài khoản và dọn sạch dữ liệu cá nhân trên thiết bị thành công! Dữ liệu trên Cloud vẫn an toàn.');
     } catch (err: any) {
       console.warn('Lỗi khi đăng xuất:', err);
-      alert('Lỗi đăng xuất: ' + (err?.message || String(err)));
+      if (onClearUserData) onClearUserData();
+      setShowLogoutConfirm(false);
+      onClose();
     } finally {
       setIsLoggingOut(false);
     }
@@ -260,7 +287,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             )}
           </div>
 
-          {/* SECTION: CẤU HÌNH AI (GOOGLE GEMINI) */}
+          {/* SECTION: CẤU HÌNH TRỢ LÝ AI */}
           <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] space-y-2.5 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -269,7 +296,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5">
-                    <span>Cấu hình AI (Google Gemini)</span>
+                    <span>Cấu hình Trợ lý AI</span>
                     {getSavedVisionConfig().apiKey ? (
                       <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
                         Đã kích hoạt
@@ -292,7 +319,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 <div className="flex items-center justify-between text-[11px] font-semibold text-[#5a4c3f] mb-1">
                   <span className="flex items-center gap-1">
                     <Key className="w-3 h-3 text-[#a25832]" />
-                    <span>Gemini API Key:</span>
+                    <span>Khóa API (API Key):</span>
                   </span>
                   <a
                     href="https://aistudio.google.com/app/apikey"
@@ -300,7 +327,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     rel="noreferrer"
                     className="text-[10px] text-[#a25832] hover:underline flex items-center gap-0.5 font-medium"
                   >
-                    <span>Lấy key miễn phí (Google AI Studio)</span>
+                    <span>Lấy key miễn phí</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                   </a>
                 </div>
@@ -308,7 +335,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   type="password"
                   value={geminiApiKey}
                   onChange={(e) => setGeminiApiKey(e.target.value)}
-                  placeholder="Dán Gemini API Key (AIzaSy...)"
+                  placeholder="Dán API Key (AIzaSy...)"
                   className="w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-[#ebdcc9] bg-[#fbf5eb] focus:bg-white focus:outline-none focus:border-[#a25832] text-[#3e332a]"
                 />
               </div>
@@ -326,6 +353,78 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* SECTION: TỰ ĐỘNG ĐỌC BIẾN ĐỘNG SỐ DƯ NGÂN HÀNG & VÍ ĐIỆN TỬ */}
+          <div className="p-3.5 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] space-y-2.5 shadow-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#0284c7]/10 text-[#0284c7] flex items-center justify-center shrink-0">
+                  <Landmark className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5 flex-wrap">
+                    <span>Đọc Biến Động Số Dư (Ngân hàng & Ví)</span>
+                    {notifPermGranted ? (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
+                        Đã bật quyền
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fef3c7] text-[#b45309] font-semibold border border-[#fde68a]">
+                        Chưa cấp quyền
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-[#7a6a58]">
+                    Tự động bắt thông báo từ MB Bank, VCB, TCB, BIDV, MoMo, ZaloPay...
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 pt-2 border-t border-[#f0e4d5]">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    openAndroidNotificationSettings();
+                    setTimeout(() => setNotifPermGranted(isNotificationPermissionGranted()), 2000);
+                  }}
+                  className="flex-1 py-2 px-3 rounded-lg bg-[#0284c7] hover:bg-[#0369a1] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                >
+                  <Landmark className="w-3.5 h-3.5" />
+                  <span>
+                    {notifPermGranted
+                      ? 'Cài đặt Quyền đọc thông báo'
+                      : 'Bật Quyền đọc thông báo trên máy'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNotifPermGranted(isNotificationPermissionGranted())}
+                  className="p-2 rounded-lg border border-[#d8c8b4] bg-[#fbf5eb] text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer"
+                  title="Kiểm tra lại trạng thái quyền"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={bankNotifConfig.autoSave}
+                  onChange={(e) => {
+                    const next = { autoSave: e.target.checked };
+                    setBankNotifConfig(next);
+                    saveBankNotifConfig(next);
+                  }}
+                  className="w-4 h-4 rounded accent-[#a25832]"
+                />
+                <span className="text-xs font-semibold text-[#3e332a]">
+                  Tự động lưu thẳng vào Sổ mặc định (Nếu bỏ tích sẽ hiện ở khay "Chờ duyệt" để bạn kiểm tra)
+                </span>
+              </label>
+            </div>
           </div>
 
           {/* SECTION 2: CATEGORY MANAGER */}
@@ -460,13 +559,35 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             </button>
           </div>
 
-          {/* SECTION 7: APP INFO */}
-          <div className="p-2.5 rounded-xl bg-[#f5ebe0] text-center text-[11px] text-[#7a6a58]">
-            <p className="font-semibold text-[#3e332a] flex items-center justify-center gap-1">
-              <Smartphone className="w-3.5 h-3.5 text-[#a25832]" />
-              Sổ Chi Tiêu - Kyouma 2.0
-            </p>
-            <p className="mt-0.5">Dành cho Web, Android APK (Capacitor)</p>
+          {/* SECTION 7: APP INFO & SMART 2-IN-1 UPDATER */}
+          <div className="p-3.5 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-[#a25832]/15 text-[#a25832] flex items-center justify-center shrink-0">
+                <Smartphone className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-[#3e332a]">
+                  Sổ Chi Tiêu — v{getCurrentRunningVersion()}
+                </div>
+                <div className="text-[11px] text-[#7a6a58] truncate">
+                  Cập nhật thông minh 2 trong 1
+                </div>
+              </div>
+            </div>
+
+            {onCheckUpdate && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onCheckUpdate();
+                }}
+                className="py-2 px-3 rounded-lg bg-[#fffdfa] border border-[#d8c8b4] hover:bg-[#fbf5eb] text-xs font-bold text-[#3e332a] flex items-center gap-1.5 transition cursor-pointer shadow-2xs shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#a25832]" />
+                <span>Kiểm tra cập nhật</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -491,7 +612,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
 
             <div>
               <h4 className="text-base font-bold text-[#3e332a]">
-                Xác nhận Đăng xuất & Xóa dữ liệu?
+                Xác nhận Đăng xuất?
               </h4>
               <p className="text-xs text-[#7a6a58] mt-1.5 leading-relaxed">
                 Bạn có chắc muốn đăng xuất khỏi tài khoản{' '}
@@ -525,12 +646,12 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 {isLoggingOut ? (
                   <span className="flex items-center gap-1.5">
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Đang dọn sạch...</span>
+                    <span>Đang đăng xuất...</span>
                   </span>
                 ) : (
                   <>
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>Đăng xuất & Xóa</span>
+                    <span>Đăng xuất</span>
                   </>
                 )}
               </button>

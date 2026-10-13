@@ -56,7 +56,7 @@ export function isTransactionWithinSmartFilter(
 
   const now = referenceDate;
   const currentYear = now.getFullYear();
-  const txDateOnly = txDateString.slice(0, 10);
+  const txDateOnly = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}-${String(txDate.getDate()).padStart(2, '0')}`;
 
   switch (filter.type) {
     case 'specific_date': {

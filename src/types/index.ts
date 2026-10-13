@@ -9,6 +9,7 @@ export interface Ledger {
   icon: string;
   color: string;
   isDefault?: boolean;
+  order?: number;
   createdAt: string;
   updatedAt?: string;
 }

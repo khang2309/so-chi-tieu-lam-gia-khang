@@ -12,7 +12,13 @@ import {
   X,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
-import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
+import {
+  formatCurrency,
+  formatDateTimeDisplay,
+  toLocalDateKey,
+  toLocalMonthKey,
+  parseLocalDateKey,
+} from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
 
 export type FilterMode = 'month' | 'day' | 'week' | 'quarter' | 'year' | 'custom';
@@ -96,12 +102,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
   // Khóa mốc thời gian đang chọn cho từng chế độ
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return toLocalMonthKey(new Date());
   });
 
   const [selectedDayKey, setSelectedDayKey] = useState<string>(() => {
-    return new Date().toISOString().slice(0, 10);
+    return toLocalDateKey(new Date());
   });
 
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>('week_0');
@@ -118,7 +123,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
   // Cho chế độ Ngày cụ thể hoặc Tùy chỉnh khoảng thời gian
   const [specificDate, setSpecificDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+    toLocalDateKey(new Date())
   );
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -286,17 +291,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const dayTabs = useMemo(() => {
     const baseDate =
       selectedDayKey && selectedDayKey !== 'picker'
-        ? new Date(selectedDayKey)
+        ? parseLocalDateKey(selectedDayKey)
         : new Date();
     const safeBase = isNaN(baseDate.getTime()) ? new Date() : baseDate;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalDateKey(new Date());
     const tabs: Array<{ key: string; label: string; dateStr: string }> = [];
 
     // Sinh 10 ngày trượt động xoay quanh ngày đang chọn (-5 đến +4)
     for (let i = -5; i <= 4; i++) {
       const d = new Date(safeBase);
       d.setDate(d.getDate() + i);
-      const isoDate = d.toISOString().slice(0, 10);
+      const isoDate = toLocalDateKey(d);
       const dayNum = String(d.getDate()).padStart(2, '0');
       const monthNum = String(d.getMonth() + 1).padStart(2, '0');
 
@@ -322,12 +327,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
   // 6. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
   const isTxInSelectedTimeline = (tx: Transaction): boolean => {
-    const txDateStr = tx.date.slice(0, 10);
+    const txDateStr = toLocalDateKey(tx.date);
     const txDate = new Date(tx.date);
 
     switch (filterMode) {
       case 'month': {
-        const txMonthKey = tx.date.slice(0, 7);
+        const txMonthKey = toLocalMonthKey(tx.date);
         return txMonthKey === selectedMonthKey;
       }
       case 'day': {
@@ -445,10 +450,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     };
   }, [filteredList]);
 
-  // Gom nhóm giao dịch theo từng ngày (Daily Grouping)
+  // Gom nhóm giao dịch theo từng ngày (Daily Grouping) theo Múi giờ địa phương
   const groupedDays = useMemo(() => {
     const groups = filteredList.reduce<Record<string, Transaction[]>>((acc, tx) => {
-      const dKey = tx.date.slice(0, 10);
+      const dKey = toLocalDateKey(tx.date);
       if (!acc[dKey]) {
         acc[dKey] = [];
       }
@@ -458,10 +463,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
     const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
+    const todayStr = toLocalDateKey(today);
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    const yesterdayStr = toLocalDateKey(yesterday);
 
     const daysOfWeekVi = [
       'Chủ Nhật',
@@ -474,7 +479,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     ];
 
     return sortedDates.map((dKey) => {
-      const d = new Date(dKey);
+      const d = parseLocalDateKey(dKey);
       const isToday = dKey === todayStr;
       const isYesterday = dKey === yesterdayStr;
       const dayOfWeek = daysOfWeekVi[d.getDay()] || 'Thứ...';
@@ -518,7 +523,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         modeText = `${d}/${m}/${y}`;
       } else {
         const [y, m, d] = selectedDayKey.split('-');
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = toLocalDateKey(new Date());
         modeText = selectedDayKey === todayStr ? 'Hôm nay' : `${d}/${m}/${y}`;
       }
     } else if (filterMode === 'week') {
@@ -997,10 +1002,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     {selectedDayKey === 'picker' && (
                       <input
                         type="date"
-                        value={specificDate || new Date().toISOString().slice(0, 10)}
+                        value={specificDate || toLocalDateKey(new Date())}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setSpecificDate(val && val.trim() ? val : new Date().toISOString().slice(0, 10));
+                          setSpecificDate(val && val.trim() ? val : toLocalDateKey(new Date()));
                         }}
                         className="w-full px-3 py-2 rounded-xl bg-white border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
                       />

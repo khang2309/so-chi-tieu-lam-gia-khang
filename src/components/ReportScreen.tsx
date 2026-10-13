@@ -63,6 +63,10 @@ type PeriodType = 'day' | 'week' | 'month' | 'quarter' | 'year';
 // Helper hàm xử lý Date an toàn tuyệt đối, chống Null Pointer Exception & Invalid Date
 const getSafeDate = (val?: string | null | Date): Date => {
   if (!val) return new Date();
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val.trim())) {
+    const [y, m, d] = val.trim().split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0);
+  }
   const d = new Date(val);
   return isNaN(d.getTime()) ? new Date() : d;
 };
@@ -302,7 +306,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       if (periodType === 'day') {
         const safeD = getSafeDate(selectedDate);
         const targetStr = formatDateToYMD(safeD);
-        if (tx.date.slice(0, 10) !== targetStr) return false;
+        if (formatDateToYMD(txDate) !== targetStr) return false;
       } else if (periodType === 'week') {
         const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset);
         if (txDate < startOfWeek || txDate > endOfWeek) return false;
@@ -352,7 +356,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
         const prevD = new Date(safeD);
         prevD.setDate((prevD?.getDate?.() ?? 1) - 1);
         const prevDateStr = formatDateToYMD(prevD);
-        if (tx.date.slice(0, 10) !== prevDateStr) return false;
+        if (formatDateToYMD(txDate) !== prevDateStr) return false;
       } else if (periodType === 'week') {
         const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset + 1);
         if (txDate < startOfWeek || txDate > endOfWeek) return false;

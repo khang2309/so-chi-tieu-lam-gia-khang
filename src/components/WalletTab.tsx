@@ -283,66 +283,78 @@ export const WalletTab: React.FC<WalletTabProps> = ({
       </div>
 
       {/* 2. Wallets List Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {wallets.map((wallet) => {
-          const currentBalance = walletBalances[wallet.id] || 0;
-          return (
-            <div
-              key={wallet.id}
-              className="p-4 rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper hover:bg-[#fbf5eb]/60 transition flex items-center justify-between gap-3 group"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-xs"
-                  style={{ backgroundColor: wallet.color }}
-                >
-                  <DynamicIcon name={wallet.icon} className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-sm text-[#3e332a] truncate">
-                    {wallet.name}
+      {wallets.length === 0 ? (
+        <div className="p-8 rounded-2xl border border-dashed border-[#d8c8b4] bg-[#fffdfa] text-center space-y-2 shadow-xs">
+          <div className="w-10 h-10 rounded-full bg-[#f5ebe0] text-[#a25832] flex items-center justify-center mx-auto">
+            <WalletIcon className="w-5 h-5" />
+          </div>
+          <div className="text-sm font-bold text-[#3e332a]">Chưa có ví / nguồn tiền nào (0 ví)</div>
+          <p className="text-xs text-[#7a6a58]">
+            Bấm "Thêm ví mới" ở trên hoặc đăng nhập tài khoản để đồng bộ danh sách ví của bạn.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {wallets.map((wallet) => {
+            const currentBalance = walletBalances[wallet.id] || 0;
+            return (
+              <div
+                key={wallet.id}
+                className="p-4 rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper hover:bg-[#fbf5eb]/60 transition flex items-center justify-between gap-3 group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-xs"
+                    style={{ backgroundColor: wallet.color }}
+                  >
+                    <DynamicIcon name={wallet.icon} className="w-5 h-5" />
                   </div>
-                  <div className="text-xs text-[#7a6a58] mt-0.5">
-                    Số dư:{' '}
-                    <strong className="text-sm text-[#3e332a] font-bold">
-                      {formatCurrency(currentBalance)}
-                    </strong>
-                  </div>
-                  {wallet.accountNumber && (
-                    <div className="text-[11px] text-[#a89886] truncate mt-0.5">
-                      STK/Thẻ: {wallet.accountNumber}
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-[#3e332a] truncate">
+                      {wallet.name}
                     </div>
+                    <div className="text-xs text-[#7a6a58] mt-0.5">
+                      Số dư:{' '}
+                      <strong className="text-sm text-[#3e332a] font-bold">
+                        {formatCurrency(currentBalance)}
+                      </strong>
+                    </div>
+                    {wallet.accountNumber && (
+                      <div className="text-[11px] text-[#a89886] truncate mt-0.5">
+                        STK/Thẻ: {wallet.accountNumber}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handleStartEdit(wallet)}
+                    className="p-2 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition"
+                    title="Chỉnh sửa ví"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  {wallets.length > 1 && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
+                          onDeleteWallet(wallet.id);
+                        }
+                      }}
+                      className="p-2 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#fee2e2]/60 transition"
+                      title="Xóa ví"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   )}
                 </div>
               </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => handleStartEdit(wallet)}
-                  className="p-2 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition"
-                  title="Chỉnh sửa ví"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                {wallets.length > 1 && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
-                        onDeleteWallet(wallet.id);
-                      }
-                    }}
-                    className="p-2 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#fee2e2]/60 transition"
-                    title="Xóa ví"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 };

@@ -6,6 +6,7 @@ import {
   Search,
   BookOpen,
   Filter,
+  Star,
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
@@ -14,6 +15,7 @@ interface HeaderProps {
   ledgers: Ledger[];
   activeLedgerId: string;
   onSelectLedger: (id: string) => void;
+  onSetDefaultLedger?: (id: string) => void;
   onOpenLedgerManager: () => void;
   onOpenSettings: () => void;
   // Cụm công cụ Kính Lúp & Cài đặt
@@ -31,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   ledgers,
   activeLedgerId,
   onSelectLedger,
+  onSetDefaultLedger,
   onOpenLedgerManager,
   onOpenSettings,
   isSearchOpen = false,
@@ -71,9 +74,11 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <span className="text-[#7a6a58] font-medium hidden sm:inline">Sổ:</span>
               <span className="font-bold text-[#3e332a] truncate max-w-[130px] sm:max-w-[200px]">
-                {activeLedgerId === 'all'
+                {ledgers.length === 0
+                  ? 'Chưa có sổ (0 sổ)'
+                  : activeLedgerId === 'all'
                   ? 'Tất cả các sổ'
-                  : activeLedger?.name || 'Chi tiêu cá nhân'}
+                  : activeLedger?.name || ledgers[0]?.name || 'Chi tiêu cá nhân'}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-[#7a6a58] shrink-0" />
             </button>
@@ -85,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="fixed inset-0 z-40"
                   onClick={() => setDropdownOpen(false)}
                 />
-                <div className="absolute left-0 mt-1 w-64 rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute left-0 mt-1 w-72 rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-3 py-1.5 text-[11px] font-semibold text-[#a89886] uppercase tracking-wider">
                     Chọn Sổ ghi chép
                   </div>
@@ -113,31 +118,58 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="my-1 border-t border-[#f0e4d5]" />
 
                   {ledgers.map((ledger) => (
-                    <button
+                    <div
                       key={ledger.id}
-                      onClick={() => {
-                        onSelectLedger(ledger.id);
-                        setDropdownOpen(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2.5 transition cursor-pointer ${
+                      className={`w-full px-3 py-2 text-left text-xs sm:text-sm flex items-center justify-between gap-2 transition ${
                         activeLedgerId === ledger.id
                           ? 'bg-[#f5ebe0] font-semibold text-[#3e332a]'
                           : 'text-[#3e332a] hover:bg-[#faf4ec]'
                       }`}
                     >
-                      <div
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-white shrink-0"
-                        style={{ backgroundColor: ledger.color }}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectLedger(ledger.id);
+                          setDropdownOpen(false);
+                        }}
+                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
                       >
-                        <DynamicIcon name={ledger.icon} className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 truncate">
-                        <div className="font-medium truncate">{ledger.name}</div>
-                        <div className="text-[10px] text-[#7a6a58] truncate">
-                          {ledger.description}
+                        <div
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-white shrink-0"
+                          style={{ backgroundColor: ledger.color }}
+                        >
+                          <DynamicIcon name={ledger.icon} className="w-3.5 h-3.5" />
                         </div>
-                      </div>
-                    </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium truncate">{ledger.name}</span>
+                            {ledger.isDefault && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
+                                <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
+                                <span>Mặc định</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-[#7a6a58] truncate">
+                            {ledger.description}
+                          </div>
+                        </div>
+                      </button>
+
+                      {!ledger.isDefault && onSetDefaultLedger && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSetDefaultLedger(ledger.id);
+                          }}
+                          className="p-1.5 rounded-lg text-[#a89886] hover:text-amber-600 hover:bg-amber-50 transition shrink-0 cursor-pointer"
+                          title="Đặt làm sổ mặc định"
+                        >
+                          <Star className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   ))}
 
                   <div className="my-1 border-t border-[#f0e4d5]" />
@@ -150,7 +182,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="w-full px-3 py-2 text-left text-xs text-[#a25832] font-semibold hover:bg-[#f5ebe0] flex items-center gap-2 transition cursor-pointer"
                   >
                     <FolderPlus className="w-4 h-4" />
-                    <span>Quản lý & Thêm sổ mới...</span>
+                    <span>Quản lý & Chọn sổ mặc định...</span>
                   </button>
                 </div>
               </>

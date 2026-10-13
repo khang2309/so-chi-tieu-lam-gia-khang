@@ -12,7 +12,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
 import { sanitizeData } from '../utils/firestoreSync';
 
 interface DuplicateTransactionModalProps {
@@ -34,10 +34,8 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   categories,
   onConfirm,
 }) => {
-  const todayStr = new Date().toISOString().slice(0, 10);
-
   const [amount, setAmount] = useState<number | ''>('');
-  const [date, setDate] = useState<string>(todayStr);
+  const [date, setDate] = useState<string>(() => toLocalDateTimeInput(new Date()));
   const [note, setNote] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [ledgerId, setLedgerId] = useState<string>('');
@@ -48,7 +46,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   useEffect(() => {
     if (isOpen && sourceTransaction) {
       setAmount(sourceTransaction.amount);
-      setDate(todayStr); // Nổi bật: Mặc định lấy ngày hôm nay
+      setDate(toLocalDateTimeInput(new Date())); // Mặc định lấy đúng ngày & giờ hiện tại
       setNote(sourceTransaction.note || '');
       setCategoryId(sourceTransaction.categoryId);
       setLedgerId(sourceTransaction.ledgerId);
@@ -56,7 +54,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
       setToWalletId(sourceTransaction.toWalletId || '');
       setType(sourceTransaction.type);
     }
-  }, [isOpen, sourceTransaction, todayStr]);
+  }, [isOpen, sourceTransaction]);
 
   if (!isOpen || !sourceTransaction) return null;
 
@@ -68,11 +66,13 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
       return;
     }
 
+    const safeDate = date && !isNaN(new Date(date).getTime()) ? new Date(date) : new Date();
+
     onConfirm(
       sanitizeData({
         amount: finalAmount,
         type,
-        date: new Date(`${date}T12:00:00`).toISOString(),
+        date: safeDate.toISOString(),
         categoryId: type === 'transfer' ? '' : categoryId,
         ledgerId,
         walletId,
@@ -121,20 +121,20 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-[#9a3412] flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-[#ea580c]" />
-                <span>★ Ngày ghi nhận (Mặc định: Hôm nay)</span>
+                <span>★ Ngày & Giờ ghi nhận (Mặc định: Hiện tại)</span>
               </label>
               <button
                 type="button"
-                onClick={() => setDate(todayStr)}
+                onClick={() => setDate(toLocalDateTimeInput(new Date()))}
                 className="text-[10px] font-semibold text-[#c2410c] px-2 py-0.5 rounded-full bg-[#ffedd5] hover:bg-[#fed7aa] transition"
               >
-                Đặt về hôm nay
+                Đặt về hiện tại
               </button>
             </div>
             <input
-              type="date"
+              type="datetime-local"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => setDate(e.target.value || toLocalDateTimeInput(new Date()))}
               className="w-full px-3 py-2 rounded-lg bg-white border border-[#fdba74] text-sm font-bold text-[#7c2d12] focus:outline-none focus:ring-2 focus:ring-[#ea580c]"
               required
             />

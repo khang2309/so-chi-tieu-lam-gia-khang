@@ -6,8 +6,6 @@ import {
   persistentMultipleTabManager,
   getFirestore,
   Firestore,
-  terminate,
-  clearIndexedDbPersistence,
 } from 'firebase/firestore';
 
 /**
@@ -66,14 +64,6 @@ export async function shutdownAndClearFirebase(): Promise<void> {
       await auth.signOut();
     } catch (e) {
       console.warn('auth.signOut error:', e);
-    }
-  }
-  if (db) {
-    try {
-      await terminate(db);
-      await clearIndexedDbPersistence(db);
-    } catch (e) {
-      console.warn('Firestore terminate/clear error:', e);
     }
   }
 }

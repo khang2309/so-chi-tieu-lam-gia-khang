@@ -1,5 +1,7 @@
 import { Ledger, Wallet, Category, Transaction } from '../types';
 
+const DEFAULT_CREATED_AT = '2025-01-01T00:00:00.000Z';
+
 export const DEFAULT_LEDGERS: Ledger[] = [
   {
     id: 'ledger-personal',
@@ -8,7 +10,7 @@ export const DEFAULT_LEDGERS: Ledger[] = [
     icon: 'User',
     color: '#a25832', // Da bò ấm
     isDefault: true,
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'ledger-room',
@@ -17,7 +19,7 @@ export const DEFAULT_LEDGERS: Ledger[] = [
     icon: 'Home',
     color: '#3d7a5a', // Xanh lá ấm
     isDefault: false,
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'ledger-hometown',
@@ -26,7 +28,7 @@ export const DEFAULT_LEDGERS: Ledger[] = [
     icon: 'Trees',
     color: '#3b6e8c', // Xanh xám nhạt
     isDefault: false,
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
 ];
 
@@ -38,7 +40,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'Banknote',
     color: '#2e7d32',
     accountNumber: 'Ví tiền mặt',
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'wallet-mbbank',
@@ -47,7 +49,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'Building2',
     color: '#1565c0',
     accountNumber: 'MB Bank',
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'wallet-timo',
@@ -56,7 +58,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'CreditCard',
     color: '#7b1fa2',
     accountNumber: 'Timo Digital Bank',
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'wallet-bidv',
@@ -65,7 +67,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'Landmark',
     color: '#00897b',
     accountNumber: 'BIDV',
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'wallet-sacombank',
@@ -74,7 +76,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'Landmark',
     color: '#c62828',
     accountNumber: 'Sacombank',
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
   {
     id: 'wallet-momo',
@@ -83,7 +85,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'Smartphone',
     color: '#ad1457',
     accountNumber: 'Ví điện tử MoMo',
-    createdAt: new Date().toISOString(),
+    createdAt: DEFAULT_CREATED_AT,
   },
 ];
 

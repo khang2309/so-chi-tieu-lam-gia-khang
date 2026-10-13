@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Check } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -104,11 +104,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     if (editingTransaction) {
       setType(editingTransaction.type);
       setAmount(editingTransaction.amount.toString());
-      setDate(
-        editingTransaction.date.includes('T')
-          ? editingTransaction.date.slice(0, 16)
-          : editingTransaction.date + 'T12:00'
-      );
+      setDate(toLocalDateTimeInput(editingTransaction.date));
       setCategoryId(editingTransaction.categoryId);
       setLedgerId(editingTransaction.ledgerId);
       setWalletId(editingTransaction.walletId);
@@ -118,16 +114,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       const defaultType = initialValues?.type || 'expense';
       setType(defaultType);
       setAmount(initialValues?.amount ? initialValues.amount.toString() : '');
-      const now = new Date();
-      const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16);
-      setDate(localIso);
+      setDate(toLocalDateTimeInput(new Date()));
 
+      const fallbackDefaultLedger = ledgers.find((l) => l.isDefault) || ledgers[0];
       const defaultLedger =
         initialLedgerId && initialLedgerId !== 'all'
           ? initialLedgerId
-          : ledgers[0]?.id || 'ledger-personal';
+          : fallbackDefaultLedger?.id || 'ledger-personal';
       setLedgerId(defaultLedger);
 
       const defaultWallet =
@@ -467,7 +460,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <input
               type="datetime-local"
               value={date}
-              onChange={(e) => setDate(e.target.value || new Date().toISOString().slice(0, 16))}
+              onChange={(e) => setDate(e.target.value || toLocalDateTimeInput(new Date()))}
               className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
             />
           </div>

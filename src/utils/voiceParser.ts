@@ -424,12 +424,26 @@ export function detectCategory(
 /**
  * Làm sạch chuỗi ghi chú sau khi đã bóc tách số tiền
  */
-export function cleanNote(rawText: string, matchedAmountStr: string): string {
+export function cleanNote(rawText: string, matchedAmountStr: string, walletName?: string): string {
   let note = rawText;
   if (matchedAmountStr) {
-    // Thay thế cụm số tiền bằng khoảng trắng
     const regex = new RegExp(matchedAmountStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     note = note.replace(regex, ' ');
+  }
+
+  // Xóa số tiền và từ lóng: 25ca, 25 ka, 25k, 50 cành, 2 củ, 500k, 25000, 25.000đ, 25000 vnd
+  note = note
+    .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp|đ|vnd|đồng)\b/gi, ' ')
+    .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, ' ');
+
+  // Xóa các cụm ví / thanh toán
+  note = note
+    .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|trả bằng|chuyển khoản|ck|bằng|qua)\s*(?:momo|mb\s*bank|mb|timo|bidv|tiền\s*mặt|vietcombank|techcombank|zalopay|ngân\s*hàng|ví)[\w\s]*$/gi, ' ')
+    .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|trả bằng|chuyển khoản|ck)\b[\w\s]*/gi, ' ');
+
+  if (walletName) {
+    const wRegex = new RegExp(`\\b(?:ví\\s*)?${walletName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    note = note.replace(wRegex, ' ');
   }
 
   // Loại bỏ các từ thừa phổ biến trong câu nói giao dịch
@@ -491,13 +505,35 @@ export function parseVoiceInput(text: string, categories: Category[]): ParsedVoi
  * Bóc tách giao dịch tiếng Việt kèm từ lóng tiền tệ và đối chiếu danh sách ví hợp lệ
  */
 export function buildVoiceSystemPrompt(walletNames: string): string {
-  return `Bạn là trợ lý tài chính tiếng Việt. Hãy bóc tách câu của người dùng ra chuẩn JSON.
+  return `Bạn là trợ lý tài chính tiếng Việt thông minh. Hãy bóc tách câu của người dùng ra chuẩn JSON.
 
-CHÚ Ý TỪ LÓNG TIỀN TỆ: Nếu người dùng nói số đi kèm 'k', 'ca', 'cành' (VD: '25ca', '30 cành', '50k'), BẮT BUỘC chuyển thành số nguyên nhân với 1000 (VD: 25ca = 25000). Nếu dùng 'lít' (x100,000), 'củ' (x1,000,000).
+CHÚ Ý TỪ LÓNG TIỀN TỆ:
+- Nếu người dùng nói số đi kèm 'k', 'ca', 'ka', 'cành' (VD: '25ca', '25 ca', '30 cành', '50k'), BẮT BUỘC chuyển thành số nguyên nhân với 1000 (Ví dụ: '25ca' = 25000, '30 cành' = 30000, '50k' = 50000).
+- Nếu dùng 'lít'/'xị' (x100,000, VD: '2 lít' = 200000).
+- Nếu dùng 'củ'/'chai'/'triệu'/'tr' (x1,000,000, VD: '2 củ' = 2000000, '1tr5' = 1500000).
 
-VÍ TIỀN: Dưới đây là danh sách ví hợp lệ của người dùng: ${walletNames}. Chỉ được phép dò tìm và trả về tên ví khớp với danh sách này. Nếu không nhắc đến, mặc định là 'Tiền mặt'.
+VÍ TIỀN (wallet):
+- DANH SÁCH VÍ HỢP LỆ CỦA NGƯỜI DÙNG: [${walletNames}].
+- BẮT BUỘC CHỈ ĐƯỢC CHỌN TỪ DANH SÁCH VÍ NÀY. Tuyệt đối không tự bịa ví mới.
+- Khi người dùng nói ví hoặc phương thức thanh toán (VD: 'thanh toán bằng momo', 'qua momo', 'ví momo', 'bằng ví mb'...), tìm ví khớp nhất trong danh sách ví trên (VD: 'momo' -> 'MoMo').
+- Nếu câu nói không nhắc đến ví hoặc không khớp ví nào, mặc định là 'Tiền mặt' (hoặc ví đầu tiên).
 
-VÍ DỤ CHUẨN: Nếu người dùng nói: 'ăn cơm thịt kho mắm ruốc 25ca thanh toán bằng momo' -> Trả về JSON: { "note": "ăn cơm thịt kho mắm ruốc", "amount": 25000, "wallet": "MoMo" }.`;
+GHI CHÚ (note):
+- Chỉ giữ lại tên món ăn, dịch vụ hoặc mục đích chi tiêu thực tế.
+- BẮT BUỘC LOẠI BỎ hoàn toàn số tiền, đơn vị tiền tệ (như '25ca', '50k') và các cụm từ thanh toán/ví (như 'thanh toán bằng momo', 'qua momo', 'bằng ví momo', 'bằng tiền mặt') khỏi 'note'.
+- Ví dụ: 'ăn cơm tấm 25ca thanh toán bằng momo' -> note: 'ăn cơm tấm'.
+
+VÍ DỤ CHUẨN:
+Nếu người dùng nói: 'ăn cơm tấm 25ca thanh toán bằng momo'
+Trả về JSON chính xác:
+{
+  "transcript": "ăn cơm tấm 25ca thanh toán bằng momo",
+  "note": "ăn cơm tấm",
+  "amount": 25000,
+  "wallet": "MoMo",
+  "category": "Ăn",
+  "transactionType": "expense"
+}`;
 }
 
 export const VOICE_CHAIN_OF_THOUGHT_PROMPT = buildVoiceSystemPrompt('Tiền mặt, MoMo, MB Bank, Timo, BIDV, Sacombank');
@@ -573,15 +609,29 @@ Câu nói của người dùng: "${cleanInput}"`;
 
     const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
     let note = rawNote
-      .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
-      .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
-      .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|ví)\s+[a-zA-Z0-9à-ỹÀ-Ỹ\s]+$/gi, '')
+      .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp|đ|vnd|đồng)\b/gi, ' ')
+      .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, ' ')
+      .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|trả bằng|chuyển khoản|ck|bằng|qua)\s*(?:momo|mb\s*bank|mb|timo|bidv|tiền\s*mặt|vietcombank|techcombank|zalopay|ngân\s*hàng|ví)[\w\s]*$/gi, ' ')
+      .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|trả bằng|chuyển khoản|ck)\b[\w\s]*/gi, ' ')
+      .replace(/[,\-–—:;]/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
+
+    for (const w of walletList) {
+      if (w.name.trim()) {
+        const wReg = new RegExp(`\\b(?:ví\\s*)?${w.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        note = note.replace(wReg, ' ');
+      }
+    }
+    note = note.replace(/\s+/g, ' ').trim();
+    if (note.length > 0) {
+      note = note.charAt(0).toUpperCase() + note.slice(1);
+    }
     if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
-      note = rawNote || transcript || cleanInput;
+      note = cleanNote(rawNote || transcript || cleanInput, '', '');
     }
 
-    // Nhận diện Ví tiền
+    // Nhận diện Ví tiền: Bắt buộc chọn từ danh sách ví có sẵn của tài khoản
     const parsedWalletStr = String(parsed.wallet || '').trim().toLowerCase();
     let matchedWallet = walletList.find((w) => w.name.toLowerCase() === parsedWalletStr);
     if (!matchedWallet && parsedWalletStr) {
@@ -589,6 +639,24 @@ Câu nói của người dùng: "${cleanInput}"`;
         w.name.toLowerCase().includes(parsedWalletStr) ||
         parsedWalletStr.includes(w.name.toLowerCase())
       );
+    }
+    if (!matchedWallet) {
+      const fullText = (cleanInput + ' ' + transcript).toLowerCase();
+      for (const w of walletList) {
+        if (fullText.includes(w.name.toLowerCase())) {
+          matchedWallet = w;
+          break;
+        }
+      }
+      if (!matchedWallet) {
+        if (fullText.includes('momo')) {
+          matchedWallet = walletList.find((w) => w.name.toLowerCase().includes('momo'));
+        } else if (fullText.includes('mb') || fullText.includes('mbbank')) {
+          matchedWallet = walletList.find((w) => w.name.toLowerCase().includes('mb'));
+        } else if (fullText.includes('timo')) {
+          matchedWallet = walletList.find((w) => w.name.toLowerCase().includes('timo'));
+        }
+      }
     }
     if (!matchedWallet) {
       matchedWallet =
@@ -708,7 +776,7 @@ Danh sách danh mục có sẵn: ${categoryNames}.`;
       parsed = JSON.parse(escapeNewlinesInJsonStrings(cleanJson));
     } catch {
       console.error('Không thể parse JSON từ Gemini Audio:', cleanJson, err);
-      throw new Error(`Phản hồi từ Gemini không phải JSON hợp lệ: ${cleanJson.slice(0, 100)}`);
+      throw new Error(`Phản hồi từ Trợ lý AI không phải JSON hợp lệ: ${cleanJson.slice(0, 100)}`);
     }
   }
 
@@ -717,12 +785,26 @@ Danh sách danh mục có sẵn: ${categoryNames}.`;
 
   const rawNote = String(parsed.note || '').trim().replace(/\\n/g, '\n');
   let note = rawNote
-    .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp)\b/gi, '')
-    .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, '')
-    .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|ví)\s+[a-zA-Z0-9à-ỹÀ-Ỹ\s]+$/gi, '')
+    .replace(/\s*\b(?:hết\s*)?\d+(?:[.,]\d+)?\s*(?:k|ca|ka|cành|c|nghìn|ngàn|củ|triệu|tr|lít|lốp|đ|vnd|đồng)\b/gi, ' ')
+    .replace(/\s*\b(?:hết\s*)?\d{4,}\b/g, ' ')
+    .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|trả bằng|chuyển khoản|ck|bằng|qua)\s*(?:momo|mb\s*bank|mb|timo|bidv|tiền\s*mặt|vietcombank|techcombank|zalopay|ngân\s*hàng|ví)[\w\s]*$/gi, ' ')
+    .replace(/\s*\b(?:thanh toán\s*(?:bằng|qua|ví)?|qua ví|bằng ví|trả bằng|chuyển khoản|ck)\b[\w\s]*/gi, ' ')
+    .replace(/[,\-–—:;]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
+
+  for (const w of walletList) {
+    if (w.name.trim()) {
+      const wReg = new RegExp(`\\b(?:ví\\s*)?${w.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      note = note.replace(wReg, ' ');
+    }
+  }
+  note = note.replace(/\s+/g, ' ').trim();
+  if (note.length > 0) {
+    note = note.charAt(0).toUpperCase() + note.slice(1);
+  }
   if (!note || note.toLowerCase() === 'chưa rõ' || note.toLowerCase() === 'chưa rõ mục đích') {
-    note = transcript || rawNote || 'Giao dịch giọng nói';
+    note = cleanNote(rawNote || transcript || 'Giao dịch giọng nói', '', '');
   }
 
   // Nếu amount = 0, thử bóc tách từ transcript hoặc rawNote
@@ -733,7 +815,7 @@ Danh sách danh mục có sẵn: ${categoryNames}.`;
     }
   }
 
-  // Nhận diện Ví tiền
+  // Nhận diện Ví tiền: Bắt buộc chọn từ danh sách ví có sẵn của tài khoản
   const parsedWalletStr = String(parsed.wallet || '').trim().toLowerCase();
   let matchedWallet = walletList.find((w) => w.name.toLowerCase() === parsedWalletStr);
   if (!matchedWallet && parsedWalletStr) {
@@ -741,6 +823,24 @@ Danh sách danh mục có sẵn: ${categoryNames}.`;
       w.name.toLowerCase().includes(parsedWalletStr) ||
       parsedWalletStr.includes(w.name.toLowerCase())
     );
+  }
+  if (!matchedWallet) {
+    const fullText = (transcript + ' ' + rawNote).toLowerCase();
+    for (const w of walletList) {
+      if (fullText.includes(w.name.toLowerCase())) {
+        matchedWallet = w;
+        break;
+      }
+    }
+    if (!matchedWallet) {
+      if (fullText.includes('momo')) {
+        matchedWallet = walletList.find((w) => w.name.toLowerCase().includes('momo'));
+      } else if (fullText.includes('mb') || fullText.includes('mbbank')) {
+        matchedWallet = walletList.find((w) => w.name.toLowerCase().includes('mb'));
+      } else if (fullText.includes('timo')) {
+        matchedWallet = walletList.find((w) => w.name.toLowerCase().includes('timo'));
+      }
+    }
   }
   if (!matchedWallet) {
     matchedWallet =

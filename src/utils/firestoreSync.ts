@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Transaction, Wallet, Ledger, Category } from '../types';
+import { DEFAULT_WALLETS, DEFAULT_LEDGERS, DEFAULT_CATEGORIES } from '../data/initialData';
 
 /**
  * Sạch hóa dữ liệu tuyệt đối (Deep Sanitize):
@@ -104,13 +105,16 @@ export interface TwoWaySyncResult {
  */
 export async function performTwoWaySync(
   uid: string,
-  localData: TwoWaySyncPayload
+  localData: TwoWaySyncPayload,
+  options?: { preferCloudLists?: boolean }
 ): Promise<TwoWaySyncResult> {
   if (!db || !uid) {
     const err = 'Chưa đăng nhập tài khoản hoặc chưa kết nối Firebase.';
     alert('Lỗi Firebase: ' + err);
     return { success: false, message: err };
   }
+
+  const preferCloudLists = options?.preferCloudLists ?? false;
 
   try {
     // Sạch hóa dữ liệu đầu vào triệt để
@@ -135,6 +139,7 @@ export async function performTwoWaySync(
 
     const cloudLedgers: Ledger[] = [];
     ledgerSnap.forEach((d) => cloudLedgers.push(sanitizeData(d.data() as Ledger)));
+    cloudLedgers.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
     const cloudCategories: Category[] = [];
     catSnap.forEach((d) => cloudCategories.push(sanitizeData(d.data() as Category)));
@@ -143,9 +148,37 @@ export async function performTwoWaySync(
     const mergedTransactions = mergeEntitiesById(cleanLocalData.transactions, cloudTransactions);
     mergedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const mergedWallets = mergeEntitiesById(cleanLocalData.wallets, cloudWallets);
-    const mergedLedgers = mergeEntitiesById(cleanLocalData.ledgers, cloudLedgers);
-    const mergedCategories = mergeEntitiesById(cleanLocalData.categories, cloudCategories);
+    // Đối với Ví, Sổ, Danh mục:
+    // - Khi vừa đăng nhập (preferCloudLists = true): Nếu Cloud đã có dữ liệu (> 0), ưu tiên danh sách trên Cloud
+    //   để không bao giờ khôi phục nhầm các Ví/Sổ mặc định đã bị người dùng xóa trước đó.
+    // - Khi đang đăng nhập và bấm Đồng bộ thủ công (preferCloudLists = false): Lấy danh sách hiện tại trên máy làm chuẩn
+    //   và xóa các Ví/Sổ thừa trên Cloud.
+    const mergedWallets =
+      preferCloudLists && cloudWallets.length > 0
+        ? cloudWallets
+        : cleanLocalData.wallets.length > 0
+        ? cleanLocalData.wallets
+        : cloudWallets.length > 0
+        ? cloudWallets
+        : DEFAULT_WALLETS;
+
+    const mergedLedgers =
+      preferCloudLists && cloudLedgers.length > 0
+        ? cloudLedgers
+        : cleanLocalData.ledgers.length > 0
+        ? cleanLocalData.ledgers
+        : cloudLedgers.length > 0
+        ? cloudLedgers
+        : DEFAULT_LEDGERS;
+
+    const mergedCategories =
+      preferCloudLists && cloudCategories.length > 0
+        ? cloudCategories
+        : cleanLocalData.categories.length > 0
+        ? cleanLocalData.categories
+        : cloudCategories.length > 0
+        ? cloudCategories
+        : DEFAULT_CATEGORIES;
 
     const mergedData: TwoWaySyncPayload = {
       transactions: mergedTransactions,
@@ -162,13 +195,34 @@ export async function performTwoWaySync(
       });
       await setDoc(doc(db, 'users', uid, 'transactions', tx.id), cleanTx, { merge: true });
     }
+
+    const activeWalletIds = new Set(mergedWallets.map((w) => w.id));
+    for (const cw of cloudWallets) {
+      if (!activeWalletIds.has(cw.id)) {
+        await deleteDoc(doc(db, 'users', uid, 'wallets', cw.id));
+      }
+    }
     for (const w of mergedWallets) {
       const cleanW = sanitizeData(w);
       await setDoc(doc(db, 'users', uid, 'wallets', w.id), cleanW, { merge: true });
     }
+
+    const activeLedgerIds = new Set(mergedLedgers.map((l) => l.id));
+    for (const cl of cloudLedgers) {
+      if (!activeLedgerIds.has(cl.id)) {
+        await deleteDoc(doc(db, 'users', uid, 'ledgers', cl.id));
+      }
+    }
     for (const l of mergedLedgers) {
       const cleanL = sanitizeData(l);
       await setDoc(doc(db, 'users', uid, 'ledgers', l.id), cleanL, { merge: true });
+    }
+
+    const activeCatIds = new Set(mergedCategories.map((c) => c.id));
+    for (const cc of cloudCategories) {
+      if (!activeCatIds.has(cc.id)) {
+        await deleteDoc(doc(db, 'users', uid, 'categories', cc.id));
+      }
     }
     for (const c of mergedCategories) {
       const cleanC = sanitizeData(c);
@@ -371,6 +425,7 @@ export function subscribeToUserFirestoreData(
       (snapshot) => {
         const list: Ledger[] = [];
         snapshot.forEach((d) => list.push(sanitizeData(d.data() as Ledger)));
+        list.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
         callbacks.onLedgers?.(list, snapshot.empty);
       },
       (error: any) => {
@@ -429,6 +484,7 @@ export async function pullUserDataFromFirestore(uid: string): Promise<{
 
     const ledgers: Ledger[] = [];
     ledgerSnap.forEach((d) => ledgers.push(sanitizeData(d.data() as Ledger)));
+    ledgers.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
     const categories: Category[] = [];
     catSnap.forEach((d) => categories.push(sanitizeData(d.data() as Category)));
