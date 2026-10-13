@@ -81,3 +81,28 @@ try {
 } catch (err) {
   console.warn('\n⚠️ Đã tạo xong ota-bundle.zip và version.json, nhưng chưa push lên Git:', err.message);
 }
+
+// 6. Đồng bộ thông tin bản phát hành lên Firebase Firestore
+try {
+  console.log('🔥 Đang đồng bộ cấu hình cập nhật lên Firebase Firestore...');
+  const { initializeApp } = await import('firebase/app');
+  const { getFirestore, doc, setDoc } = await import('firebase/firestore');
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyBSwAvAYzffjqdTtMaB-9K1asxdK-b2yX8',
+    authDomain: 'sochitieu-khanglam.firebaseapp.com',
+    projectId: 'sochitieu-khanglam',
+    storageBucket: 'sochitieu-khanglam.firebasestorage.app',
+    messagingSenderId: '1049457866930',
+    appId: '1:1049457866930:web:df621c7298b0e4e14d71ab',
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  await setDoc(doc(db, 'app_config', 'release'), nextConfig);
+  console.log('✅ Đã đồng bộ lên Firebase Cloud thành công!');
+  process.exit(0);
+} catch (err) {
+  console.warn('⚠️ Lỗi đồng bộ lên Firestore:', err.message);
+  process.exit(0);
+}
