@@ -1,7 +1,7 @@
 {
   "name": "so-chi-tieu-lam-gia-khang",
   "private": true,
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "Kyouma 2.0",
   "type": "module",
   "scripts": {

@@ -179,6 +179,20 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public boolean isListenerConnected() {
+            return BankNotificationListenerService.currentServiceInstance != null;
+        }
+
+        @JavascriptInterface
+        public String getRawNotificationLog() {
+            SharedPreferences prefs = getSharedPreferences(
+                    BankNotificationListenerService.PREFS_NAME,
+                    Activity.MODE_PRIVATE
+            );
+            return prefs.getString(BankNotificationListenerService.KEY_RAW_LOG, "[]");
+        }
+
+        @JavascriptInterface
         public void triggerActiveNotificationsScan() {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                 try {
@@ -196,6 +210,16 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void simulateTestNotification() {
+            simulateTestNotificationWithData(
+                    "com.mbmobile",
+                    "MB Bank",
+                    "MB Bank - Biến động số dư",
+                    "TK 1010101010|GD: +50,000VND 13/10/26 15:10|SD: 1,500,000VND|ND: Test thu nghiem chuyen khoan"
+            );
+        }
+
+        @JavascriptInterface
+        public void simulateTestNotificationWithData(String pkg, String appName, String title, String text) {
             SharedPreferences prefs = getSharedPreferences(
                     BankNotificationListenerService.PREFS_NAME,
                     Activity.MODE_PRIVATE
@@ -206,10 +230,10 @@ public class MainActivity extends BridgeActivity {
                 org.json.JSONObject testItem = new org.json.JSONObject();
                 long now = System.currentTimeMillis();
                 testItem.put("id", "test-" + now);
-                testItem.put("packageName", "com.mbmobile");
-                testItem.put("appName", "MB Bank");
-                testItem.put("title", "MB Bank - Biến động số dư");
-                testItem.put("text", "TK 1010101010|GD: +50,000VND 13/10/26 15:10|SD: 1,500,000VND|ND: Test thu nghiem chuyen khoan");
+                testItem.put("packageName", pkg != null && !pkg.isEmpty() ? pkg : "com.mbmobile");
+                testItem.put("appName", appName != null && !appName.isEmpty() ? appName : "MB Bank");
+                testItem.put("title", title != null && !title.isEmpty() ? title : "Biến động số dư");
+                testItem.put("text", text != null && !text.isEmpty() ? text : "GD: +50,000VND");
                 testItem.put("timestamp", now);
                 arr.put(testItem);
                 prefs.edit().putString(BankNotificationListenerService.KEY_PENDING_LIST, arr.toString()).apply();

@@ -87,6 +87,21 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   const [notifHistory, setNotifHistory] = useState<BankNotifHistoryItem[]>(() =>
     getBankNotifHistoryLog()
   );
+  const [isListenerConnected, setIsListenerConnected] = useState<boolean>(() => {
+    try {
+      return Boolean(window.AndroidUpdater?.isListenerConnected?.());
+    } catch {
+      return false;
+    }
+  });
+  const [rawSystemLogs, setRawSystemLogs] = useState<any[]>(() => {
+    try {
+      const raw = window.AndroidUpdater?.getRawNotificationLog?.() || '[]';
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  });
 
   // Logout Confirmation state
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -371,17 +386,23 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   <div className="text-xs font-bold text-[#3e332a] flex items-center gap-1.5 flex-wrap">
                     <span>Đọc Biến Động Số Dư (Ngân hàng & Ví)</span>
                     {notifPermGranted ? (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
-                        Đã bật quyền
-                      </span>
+                      isListenerConnected ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#15803d] font-semibold border border-[#bbf7d0]">
+                          Đang kết nối ngầm ✅
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fef3c7] text-[#b45309] font-semibold border border-[#fde68a]">
+                          Chờ kích hoạt lại ⚠️
+                        </span>
+                      )
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fef3c7] text-[#b45309] font-semibold border border-[#fde68a]">
-                        Chưa cấp quyền
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-red-100 text-red-700 font-semibold border border-red-200">
+                        Chưa cấp quyền ❌
                       </span>
                     )}
                   </div>
                   <div className="text-[11px] text-[#7a6a58]">
-                    Tự động bắt thông báo từ MB Bank, VCB, TCB, BIDV, MoMo, ZaloPay...
+                    Tự động bắt thông báo từ Timo, MB Bank, VCB, MoMo, ZaloPay...
                   </div>
                 </div>
               </div>
@@ -393,7 +414,11 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   type="button"
                   onClick={() => {
                     openAndroidNotificationSettings();
-                    setTimeout(() => setNotifPermGranted(isNotificationPermissionGranted()), 2000);
+                    setTimeout(() => {
+                      const perm = isNotificationPermissionGranted();
+                      setNotifPermGranted(perm);
+                      setIsListenerConnected(Boolean(window.AndroidUpdater?.isListenerConnected?.()));
+                    }, 2000);
                   }}
                   className="flex-1 py-2 px-3 rounded-lg bg-[#0284c7] hover:bg-[#0369a1] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
                 >
@@ -407,9 +432,15 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setNotifPermGranted(isNotificationPermissionGranted());
+                    const perm = isNotificationPermissionGranted();
+                    setNotifPermGranted(perm);
                     window.AndroidUpdater?.triggerActiveNotificationsScan?.();
-                    setTimeout(() => setNotifHistory(getBankNotifHistoryLog()), 1000);
+                    setTimeout(() => {
+                      setIsListenerConnected(Boolean(window.AndroidUpdater?.isListenerConnected?.()));
+                      setNotifHistory(getBankNotifHistoryLog());
+                      const raw = window.AndroidUpdater?.getRawNotificationLog?.() || '[]';
+                      try { setRawSystemLogs(JSON.parse(raw)); } catch (_) {}
+                    }, 500);
                   }}
                   className="p-2 rounded-lg border border-[#d8c8b4] bg-[#fbf5eb] text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer"
                   title="Quét lại thông báo đang có trên máy"
@@ -417,6 +448,19 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+              {/* Cảnh báo khi quyền đã bật nhưng Android/Xiaomi chưa bind lại Service */}
+              {notifPermGranted && !isListenerConnected && (
+                <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1 text-amber-800">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Hệ thống Android đang tạm ngắt kết nối dịch vụ</span>
+                  </div>
+                  <div className="text-[10.5px] leading-relaxed text-amber-800">
+                    👉 <b>Cách kích hoạt trong 5 giây:</b> Bấm nút <b>"Cài đặt Quyền đọc thông báo"</b> ở trên ➔ Gạt <b>TẮT</b> quyền của Sổ Chi Tiêu rồi gạt <b>BẬT LẠI</b> ➔ Quay lại đây bấm nút 🔄 là trạng thái sẽ chuyển sang <b>"Đang kết nối ngầm ✅"</b> ngay lập tức!
+                  </div>
+                </div>
+              )}
 
               {/* Hướng dẫn quan trọng cho điện thoại Xiaomi / Redmi / POCO */}
               <div className="p-2.5 rounded-lg bg-[#fefce8] border border-[#fef08a] text-[11px] text-[#854d0e] space-y-1">
@@ -446,23 +490,55 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
               </label>
 
               {/* Nút thử nghiệm giả lập biến động số dư */}
-              <div className="pt-1 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.AndroidUpdater?.simulateTestNotification) {
-                      window.AndroidUpdater.simulateTestNotification();
-                      setTimeout(() => setNotifHistory(getBankNotifHistoryLog()), 600);
-                      onClose();
-                    } else {
-                      alert('Tính năng thử nghiệm hoạt động trên file cài đặt Android APK.');
-                    }
-                  }}
-                  className="flex-1 py-1.5 px-3 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Bấm vào đây để Test thử thông báo (+50.000đ từ MB Bank)</span>
-                </button>
+              <div className="pt-1 space-y-1.5">
+                <div className="text-[11px] font-bold text-[#5c4d3c] flex items-center justify-between">
+                  <span>⚡ Thử nghiệm giả lập biến động số dư:</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.AndroidUpdater?.simulateTestNotification) {
+                        window.AndroidUpdater.simulateTestNotification();
+                        setTimeout(() => {
+                          setNotifHistory(getBankNotifHistoryLog());
+                          const raw = window.AndroidUpdater?.getRawNotificationLog?.() || '[]';
+                          try { setRawSystemLogs(JSON.parse(raw)); } catch (_) {}
+                        }, 400);
+                      } else {
+                        alert('Tính năng thử nghiệm hoạt động trên file cài đặt Android APK.');
+                      }
+                    }}
+                    className="flex-1 py-1.5 px-2 rounded-lg border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-sky-600" />
+                    <span>Test MB (+50.000đ)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.AndroidUpdater?.simulateTestNotificationWithData) {
+                        window.AndroidUpdater.simulateTestNotificationWithData(
+                          'io.lifestyle.plus',
+                          'Timo',
+                          'Timo by BVBank',
+                          'Bạn vừa nhận được 100.000đ từ NGUYEN VAN A. ND: Chuyen tien thu nghiem Timo'
+                        );
+                        setTimeout(() => {
+                          setNotifHistory(getBankNotifHistoryLog());
+                          const raw = window.AndroidUpdater?.getRawNotificationLog?.() || '[]';
+                          try { setRawSystemLogs(JSON.parse(raw)); } catch (_) {}
+                        }, 400);
+                      } else {
+                        alert('Tính năng thử nghiệm hoạt động trên file cài đặt Android APK.');
+                      }
+                    }}
+                    className="flex-1 py-1.5 px-2 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Test Timo (+100.000đ)</span>
+                  </button>
+                </div>
               </div>
 
               {/* Nhật ký đọc thông báo gần nhất (Debug Log) */}
@@ -524,6 +600,21 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {rawSystemLogs.length > 0 && (
+                  <div className="pt-2 border-t border-[#f0e4d5]/60 mt-2">
+                    <span className="text-[10.5px] font-bold text-stone-600 block mb-1">
+                      📱 Log nhận diện từ hệ thống ({rawSystemLogs.length}):
+                    </span>
+                    <div className="space-y-1 max-h-28 overflow-y-auto font-mono text-[9.5px]">
+                      {rawSystemLogs.slice(0, 5).map((r, i) => (
+                        <div key={i} className="p-1.5 rounded bg-stone-100 text-stone-700">
+                          <span className="font-bold">[{r.matchedApp || r.pkg}]</span> {r.title}: {r.text}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

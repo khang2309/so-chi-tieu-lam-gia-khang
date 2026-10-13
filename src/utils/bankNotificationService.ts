@@ -230,6 +230,8 @@ function matchWalletByAppName(appName: string, rawText: string, wallets: Wallet[
     if (lowerApp.includes('acb') && wName.includes('acb')) return w.id;
     if (lowerApp.includes('tpbank') && wName.includes('tpb')) return w.id;
     if (lowerApp.includes('vpbank') && wName.includes('vpb')) return w.id;
+    if (lowerApp.includes('timo') && wName.includes('timo')) return w.id;
+    if (lowerApp.includes('cake') && wName.includes('cake')) return w.id;
   }
 
   // 3. Nếu là ngân hàng nói chung -> tìm ví có chữ "Ngân hàng" hoặc "Bank"

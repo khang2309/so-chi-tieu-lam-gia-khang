@@ -30,6 +30,7 @@ public class BankNotificationListenerService extends NotificationListenerService
         SUPPORTED_PACKAGES.put("com.vnpay.vpbankonline", "VPBank");
         SUPPORTED_PACKAGES.put("com.tpb.mb.gprsandroid", "TPBank");
         SUPPORTED_PACKAGES.put("vn.timo.app", "Timo");
+        SUPPORTED_PACKAGES.put("io.lifestyle.plus", "Timo");
         SUPPORTED_PACKAGES.put("xyz.be.cake", "Cake");
         SUPPORTED_PACKAGES.put("com.ocb.omni.app", "OCB");
         SUPPORTED_PACKAGES.put("com.vnpay.Agribank3g", "Agribank");
@@ -49,6 +50,8 @@ public class BankNotificationListenerService extends NotificationListenerService
         SUPPORTED_PACKAGES.put("com.vnpay.wallet", "VNPay");
         SUPPORTED_PACKAGES.put("com.airpay.vn", "ShopeePay");
     }
+
+    public static final String KEY_RAW_LOG = "raw_system_notifications_log";
 
     public static BankNotificationListenerService currentServiceInstance = null;
 
@@ -155,7 +158,7 @@ public class BankNotificationListenerService extends NotificationListenerService
                 else if (lowerPkg.contains("seabank")) appName = "SeABank";
                 else if (lowerPkg.contains("ocb")) appName = "OCB";
                 else if (lowerPkg.contains("cake")) appName = "Cake";
-                else if (lowerPkg.contains("timo")) appName = "Timo";
+                else if (lowerPkg.contains("timo") || lowerPkg.contains("lifestyle")) appName = "Timo";
                 else if (lowerPkg.contains("vtpay") || lowerPkg.contains("viettelmoney")) appName = "Viettel Money";
 
                 // 2. Nhận diện từ nội dung (SMS Banking hoặc ứng dụng tài chính khác)
@@ -172,14 +175,20 @@ public class BankNotificationListenerService extends NotificationListenerService
                 else if (upperFull.contains("VIB")) appName = "VIB";
                 else if (upperFull.contains("MOMO")) appName = "MoMo";
                 else if (upperFull.contains("ZALOPAY")) appName = "ZaloPay";
+                else if (upperFull.contains("TIMO")) appName = "Timo";
+                else if (upperFull.contains("CAKE")) appName = "Cake";
                 else if (upperFull.contains("VIETTEL MONEY") || upperFull.contains("VIETTELPAY")) appName = "Viettel Money";
-                else if (upperFull.contains("BIẾN ĐỘNG SỐ DƯ") || upperFull.contains("BIEN DONG SO DU") || upperFull.contains("SỐ DƯ TK") || upperFull.contains("SO DU TK") || upperFull.contains("GD: +") || upperFull.contains("GD: -")) {
-                    appName = "Ngân hàng";
+                else if (upperFull.contains("BIẾN ĐỘNG SỐ DƯ") || upperFull.contains("BIEN DONG SO DU") || upperFull.contains("SỐ DƯ TK") || upperFull.contains("SO DU TK") || upperFull.contains("GD: +") || upperFull.contains("GD: -") || upperFull.contains("NHẬN ĐƯỢC") || upperFull.contains("CHUYỂN TIỀN") || upperFull.contains("THANH TOÁN") || upperFull.contains("TIỀN VỀ") || upperFull.contains("CỘNG TIỀN") || upperFull.contains("TRỪ TIỀN") || upperFull.contains("GIAO DỊCH THÀNH CÔNG") || upperFull.contains("NHẬN TIỀN")) {
+                    appName = "Ví / Ngân hàng";
                 }
+
+                appendRawLog(pkg, title, body, appName != null, appName != null ? appName : "Bỏ qua");
 
                 if (appName == null) {
                     return; // Bỏ qua nếu không phải ngân hàng/ví
                 }
+            } else {
+                appendRawLog(pkg, title, body, true, appName);
             }
 
             long postTime = sbn.getPostTime() > 0 ? sbn.getPostTime() : System.currentTimeMillis();
@@ -223,6 +232,31 @@ public class BankNotificationListenerService extends NotificationListenerService
 
             // Báo ngay cho giao diện WebView nếu ứng dụng đang mở
             MainActivity.notifyBankNotificationReceived();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void appendRawLog(String pkg, String title, String text, boolean accepted, String matchedApp) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            String raw = prefs.getString(KEY_RAW_LOG, "[]");
+            JSONArray arr = new JSONArray(raw);
+            JSONObject item = new JSONObject();
+            item.put("timestamp", System.currentTimeMillis());
+            item.put("pkg", pkg != null ? pkg : "");
+            item.put("title", title != null ? title : "");
+            item.put("text", text != null ? text : "");
+            item.put("accepted", accepted);
+            item.put("matchedApp", matchedApp != null ? matchedApp : "");
+            arr.put(item);
+            if (arr.length() > 30) {
+                JSONArray trimmed = new JSONArray();
+                for (int i = arr.length() - 30; i < arr.length(); i++) {
+                    trimmed.put(arr.get(i));
+                }
+                arr = trimmed;
+            }
+            prefs.edit().putString(KEY_RAW_LOG, arr.toString()).apply();
         } catch (Exception ignored) {
         }
     }
