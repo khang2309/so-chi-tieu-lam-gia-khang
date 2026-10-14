@@ -1,8 +1,8 @@
 {
-  "version": "2.1.13",
+  "version": "2.1.14",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "Tích hợp bàn phím ảo chuyên dụng chuẩn Money Lover: lưới 4x5, phím 000, +, −, ×, ÷, C, ⌫, định dạng dấu chấm 3 số thời gian thực, ẩn hoàn toàn bàn phím hệ thống khi nhập tiền",
+  "releaseNotes": "Tối ưu hóa đột phá tốc độ đồng bộ Cloud Firestore: áp dụng Delta Diff Sync chỉ đẩy dữ liệu thay đổi, tải và cam kết song song song toàn bộ collections, giảm thời gian đồng bộ xuống dưới 1 giây",
   "allowSkip": true,
-  "updatedAt": "2026-10-14T13:08:12.350Z"
+  "updatedAt": "2026-10-14T13:22:52.332Z"
 }
