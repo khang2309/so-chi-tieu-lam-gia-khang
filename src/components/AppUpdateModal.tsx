@@ -147,25 +147,28 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
                     v{release.version}
                   </div>
                 </div>
-                <span
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 ${
+                <button
+                  type="button"
+                  onClick={handleStartUpdate}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs ${
                     release.updateType === 'ota'
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500 ring-2 ring-emerald-200'
+                      : 'bg-amber-500 hover:bg-amber-600 text-white border border-amber-400'
                   }`}
+                  title={release.updateType === 'ota' ? 'Bấm để cập nhật nhanh ngay' : 'Bấm để tải APK'}
                 >
                   {release.updateType === 'ota' ? (
                     <>
-                      <Zap className="w-3 h-3" />
-                      <span>Tự cài nhanh trong App</span>
+                      <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                      <span>Cập nhật nhanh ⚡</span>
                     </>
                   ) : (
                     <>
-                      <Package className="w-3 h-3" />
-                      <span>Cập nhật bộ cài APK</span>
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Cài APK 📦</span>
                     </>
                   )}
-                </span>
+                </button>
               </div>
 
               {/* Release Notes */}
@@ -214,15 +217,29 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
                   <button
                     type="button"
                     onClick={handleStartUpdate}
-                    className="w-full py-2.5 px-4 rounded-xl bg-[#a25832] hover:bg-[#8c4623] text-white font-bold text-xs sm:text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] ${
+                      release.updateType === 'ota'
+                        ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                        : 'bg-[#a25832] hover:bg-[#8c4623] text-white'
+                    }`}
                   >
-                    <Download className="w-4 h-4" />
-                    <span>
-                      {release.updateType === 'ota'
-                        ? 'Cập nhật ngay (Tự áp dụng trong 2 giây)'
-                        : 'Tải & Cập nhật APK ngay'}
-                    </span>
+                    {release.updateType === 'ota' ? (
+                      <>
+                        <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
+                        <span>Cập nhật nhanh ngay (Áp dụng trong 2 giây)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>Tải & Cài đặt APK mới</span>
+                      </>
+                    )}
                   </button>
+                  {release.updateType === 'ota' && (
+                    <p className="text-[11px] text-center text-emerald-700 font-medium">
+                      ✓ Nạp trực tiếp trong ứng dụng, không cần tải file APK về máy.
+                    </p>
+                  )}
 
                   {canSkip && (
                     <div className="grid grid-cols-2 gap-2">

@@ -50,11 +50,10 @@ fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 console.log('📦 Đang biên dịch giao diện (npm run build)...');
 execSync('npm run build', { stdio: 'inherit' });
 
-console.log('🗜️ Đang đóng gói ota-bundle.zip...');
-execSync(
-  `powershell -Command "Compress-Archive -Path 'dist\\*' -DestinationPath '.\\ota-bundle.zip' -Force"`,
-  { stdio: 'inherit' }
-);
+console.log('🗜️ Đang đóng gói ota-bundle.zip (đường dẫn chuẩn forward slash)...');
+execSync(`powershell -ExecutionPolicy Bypass -File .\\scripts\\pack-ota.ps1`, {
+  stdio: 'inherit',
+});
 
 if (isApkMode) {
   console.log('🤖 Đang đồng bộ và biên dịch Android APK (Cách 2: APK)...');

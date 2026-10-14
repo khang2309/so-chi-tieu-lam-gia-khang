@@ -303,11 +303,12 @@ public class MainActivity extends BridgeActivity {
                         byte[] buffer = new byte[8192];
                         String canonicalRoot = targetDir.getCanonicalPath();
                         while ((entry = zis.getNextEntry()) != null) {
-                            File outFile = new File(targetDir, entry.getName());
+                            String entryName = entry.getName().replace('\\', '/');
+                            File outFile = new File(targetDir, entryName);
                             if (!outFile.getCanonicalPath().startsWith(canonicalRoot)) {
                                 throw new SecurityException("Zip Slip detected");
                             }
-                            if (entry.isDirectory()) {
+                            if (entry.isDirectory() || entryName.endsWith("/")) {
                                 outFile.mkdirs();
                             } else {
                                 File parent = outFile.getParentFile();
@@ -340,9 +341,9 @@ public class MainActivity extends BridgeActivity {
                         }
                     }
 
-                    if (!new File(webRoot, "index.html").exists()) {
+                    if (!new File(webRoot, "index.html").exists() || !new File(webRoot, "assets").exists()) {
                         deleteRecursive(targetDir);
-                        emitUpdateEvent(0, "error", "Gói cập nhật không hợp lệ (thiếu index.html)");
+                        emitUpdateEvent(0, "error", "Gói cập nhật không hợp lệ (thiếu index.html hoặc assets)");
                         return;
                     }
 
