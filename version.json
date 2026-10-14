@@ -1,8 +1,8 @@
 {
-  "version": "2.1.12",
+  "version": "2.1.13",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Bật bàn phím số (Numeric Keypad) của thiết bị ngay khi chạm vào ô nhập tiền&#10;- Bổ sung 4 nút phép tính (+, -, ×, ÷) nhỏ gọn để tính trực tiếp khi mở bàn phím số&#10;- Tối ưu tốc độ đồng bộ Firebase Cloud siêu tốc (giảm từ 30s xuống 1s bằng writeBatch)&#10;- Đồng bộ versionName Android build.gradle",
+  "releaseNotes": "Tích hợp bàn phím ảo chuyên dụng chuẩn Money Lover: lưới 4x5, phím 000, +, −, ×, ÷, C, ⌫, định dạng dấu chấm 3 số thời gian thực, ẩn hoàn toàn bàn phím hệ thống khi nhập tiền",
   "allowSkip": true,
-  "updatedAt": "2026-10-14T12:34:44.087Z"
+  "updatedAt": "2026-10-14T13:08:12.350Z"
 }

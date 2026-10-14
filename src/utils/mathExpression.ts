@@ -12,10 +12,11 @@ export function preprocessMathExpression(raw: string): string {
   if (!raw) return '';
   let text = raw.trim().toLowerCase();
 
-  // 1. Normalize multiplication and division symbols
+  // 1. Normalize multiplication, division, and minus symbols
   text = text
     .replace(/[×xX]/g, '*')
-    .replace(/[÷:]/g, '/');
+    .replace(/[÷:]/g, '/')
+    .replace(/[−–—]/g, '-');
 
   // 2. Thousand separators for pure numbers: e.g. "50.000", "1,000,000"
   // Match groups of 3 digits preceded by dot or comma where it's a thousand separator
@@ -79,8 +80,8 @@ export function formatExpressionWithDots(raw: string): string {
   if (!raw) return '';
   // 1. Strip all alphabet letters (a-z, A-Z, Vietnamese text)
   let clean = raw.replace(/[a-zA-Zà-ỹÀ-Ỹ]/g, '');
-  // Keep only digits, operators (+, -, *, /, x, X, :, ÷, (, )), and dots, commas, spaces
-  clean = clean.replace(/[^0-9+\-*\/xX:÷().,\s]/g, '');
+  // Keep only digits, operators (+, -, *, /, x, X, :, ÷, −, –, —, (, )), and dots, commas, spaces
+  clean = clean.replace(/[^0-9+\-*\/xX:÷−–—().,\s]/g, '');
 
   // 2. Format every number group with thousand separator dots
   return clean.replace(/([0-9][0-9.,]*)/g, (match) => {
@@ -95,7 +96,7 @@ export function formatExpressionWithDots(raw: string): string {
  */
 export function isMathExpression(str: string): boolean {
   if (!str) return false;
-  return /[+\-*\/()xX:÷]/.test(str);
+  return /[+\-*\/()xX:÷−–—]/.test(str);
 }
 
 /**

@@ -5,7 +5,8 @@ import {
   formatExpressionWithDots,
 } from '../utils/mathExpression';
 import { formatCurrency } from '../utils/formatters';
-import { Calculator } from 'lucide-react';
+import { Calculator, X } from 'lucide-react';
+import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
 
 interface SmartAmountInputProps {
   value: string;
@@ -17,6 +18,8 @@ interface SmartAmountInputProps {
   size?: 'large' | 'normal' | 'compact';
   currencySymbol?: string;
   id?: string;
+  disableKeypadModal?: boolean;
+  onClick?: () => void;
 }
 
 export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
@@ -29,10 +32,13 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
   size = 'normal',
   currencySymbol = '₫',
   id,
+  disableKeypadModal = false,
+  onClick,
 }) => {
   const [internalValue, setInternalValue] = useState(() =>
     formatExpressionWithDots(value || '')
   );
+  const [showKeypadModal, setShowKeypadModal] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Sync external value
@@ -53,7 +59,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
 
     // Count how many allowed meaningful characters were before the cursor
     const rawBeforeCursor = rawVal.slice(0, cursorPos);
-    const nonFormatCharsBefore = (rawBeforeCursor.match(/[0-9+\-*\/xX:÷()]/g) || []).length;
+    const nonFormatCharsBefore = (rawBeforeCursor.match(/[0-9+\-*\/xX:÷−–—()]/g) || []).length;
 
     // Format with dots every 3 digits and strictly strip all letters
     const formatted = formatExpressionWithDots(rawVal);
@@ -71,7 +77,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
         let count = 0;
         let newPos = formatted.length;
         for (let i = 0; i < formatted.length; i++) {
-          if (/[0-9+\-*\/xX:÷()]/.test(formatted[i])) {
+          if (/[0-9+\-*\/xX:÷−–—()]/.test(formatted[i])) {
             count++;
             if (count === nonFormatCharsBefore) {
               newPos = i + 1;
@@ -108,20 +114,33 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
     }
   };
 
-  const handleAppendOperator = (op: string) => {
-    const current = internalValue.trim();
-    if (!current) return;
-    // Don't duplicate operators if one already at the end
-    if (/[+\-*\/xX:÷]\s*$/.test(current)) {
-      const replaced = current.replace(/[+\-*\/xX:÷]\s*$/, op);
-      setInternalValue(replaced);
-      onChange(replaced);
-      return;
+  const handleClickInput = () => {
+    if (onClick) {
+      onClick();
     }
-    const next = `${current}${op}`;
-    setInternalValue(next);
-    onChange(next);
-    inputRef.current?.focus();
+    if (!disableKeypadModal) {
+      setShowKeypadModal(true);
+    }
+  };
+
+  const handleKeypadChange = (newVal: string) => {
+    setInternalValue(newVal);
+    onChange(newVal);
+    const ev = evaluateMathExpression(newVal);
+    if (ev !== null && onEvaluated) {
+      onEvaluated(ev);
+    }
+  };
+
+  const handleKeypadDone = () => {
+    const ev = evaluateMathExpression(internalValue);
+    if (ev !== null) {
+      const resolved = formatExpressionWithDots(Math.round(ev).toString());
+      setInternalValue(resolved);
+      onChange(resolved);
+      if (onEvaluated) onEvaluated(ev);
+    }
+    setShowKeypadModal(false);
   };
 
   const baseInputStyle =
@@ -132,50 +151,44 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
       : 'text-sm font-semibold px-3 py-2 rounded-xl';
 
   return (
-    <div className="space-y-1 w-full">
+    <div className="space-y-1 w-full relative">
       <div className="relative flex items-center">
         <input
           ref={inputRef}
           id={id}
           type="text"
-          inputMode="decimal"
+          inputMode="none"
           value={internalValue}
           onChange={handleInputChange}
+          onClick={handleClickInput}
+          onFocus={handleClickInput}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoFocus={autoFocus}
           autoComplete="off"
-          className={`w-full bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition ${baseInputStyle} ${
-            currencySymbol ? 'pr-8' : ''
+          className={`w-full bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition cursor-pointer ${baseInputStyle} ${
+            currencySymbol ? 'pr-16' : 'pr-9'
           } ${className}`}
         />
 
-        {currencySymbol && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#7a6a58] pointer-events-none select-none">
-            {currencySymbol}
-          </span>
-        )}
-      </div>
-
-      {/* 4 nút phép tính cơ bản cực kỳ nhỏ gọn để tiện tính toán khi bàn phím số đang mở */}
-      <div className="flex items-center gap-1.5 pt-0.5">
-        <span className="text-[10px] text-[#7a6a58] font-medium mr-0.5">Phép tính:</span>
-        {[
-          { label: '+', op: ' + ' },
-          { label: '−', op: ' - ' },
-          { label: '×', op: ' * ' },
-          { label: '÷', op: ' / ' },
-        ].map(({ label, op }) => (
-          <button
-            type="button"
-            key={label}
-            onClick={() => handleAppendOperator(op)}
-            className="w-7 h-6 rounded-md bg-[#f5ebe0] hover:bg-[#ebdcc9] text-xs font-bold text-[#3e332a] border border-[#ebdcc9] active:scale-95 transition flex items-center justify-center cursor-pointer shadow-2xs"
-          >
-            {label}
-          </button>
-        ))}
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 select-none">
+          {currencySymbol && (
+            <span className="text-xs font-semibold text-[#7a6a58] pointer-events-none">
+              {currencySymbol}
+            </span>
+          )}
+          {!disableKeypadModal && (
+            <button
+              type="button"
+              onClick={() => setShowKeypadModal(true)}
+              className="p-1 rounded-md text-[#a25832] hover:bg-[#ebdcc9] active:scale-95 transition"
+              title="Mở bàn phím số & máy tính"
+            >
+              <Calculator className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Live evaluated preview badge when an expression is entered */}
@@ -183,9 +196,43 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#2e7d32]/10 border border-[#2e7d32]/20 text-[#2e7d32] text-xs font-semibold animate-in fade-in duration-100">
           <Calculator className="w-3.5 h-3.5 shrink-0" />
           <span>= {formatCurrency(Math.round(evaluated))}</span>
-          <span className="text-[10px] text-[#7a6a58] ml-auto font-normal">
-            (Bấm Enter hoặc chạm ra ngoài để tính)
-          </span>
+        </div>
+      )}
+
+      {/* Modal/Bottom Sheet for Calculator Keypad */}
+      {showKeypadModal && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="fixed inset-0"
+            onClick={() => handleKeypadDone()}
+          />
+          <div className="relative z-10 w-full max-w-lg mx-auto bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200">
+            {/* Keypad Sheet Header: Amount Display */}
+            <div className="px-4 py-3 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wide">
+                  VND
+                </span>
+                <span className="text-2xl font-bold text-emerald-600 truncate max-w-[240px]">
+                  {internalValue || '0'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleKeypadDone()}
+                className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Custom Calculator Keypad */}
+            <CustomCalculatorKeyboard
+              value={internalValue}
+              onChange={handleKeypadChange}
+              onDone={handleKeypadDone}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, Calculator, ChevronDown } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
-import { SmartAmountInput } from './SmartAmountInput';
-import { parseAmountOrExpression } from '../utils/mathExpression';
+import {
+  formatExpressionWithDots,
+  evaluateMathExpression,
+  isMathExpression,
+  parseAmountOrExpression,
+} from '../utils/mathExpression';
+import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -42,6 +47,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [walletId, setWalletId] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [showKeypad, setShowKeypad] = useState<boolean>(true);
 
   // Lấy các gợi ý từ lịch sử giao dịch (loại trừ đã xóa mềm) kèm giao dịch gốc tương ứng
   const noteSuggestions = useMemo(() => {
@@ -90,7 +96,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     const orig = item.sourceTransaction;
     if (orig) {
       if (orig.amount && orig.amount > 0) {
-        setAmount(orig.amount.toString());
+        setAmount(formatExpressionWithDots(orig.amount.toString()));
       }
       if (orig.categoryId) {
         setCategoryId(orig.categoryId);
@@ -103,9 +109,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   };
 
   useEffect(() => {
+    if (isOpen) {
+      setShowKeypad(true);
+    }
     if (editingTransaction) {
       setType(editingTransaction.type);
-      setAmount(editingTransaction.amount.toString());
+      setAmount(formatExpressionWithDots(editingTransaction.amount.toString()));
       setDate(toLocalDateTimeInput(editingTransaction.date));
       setCategoryId(editingTransaction.categoryId);
       setLedgerId(editingTransaction.ledgerId);
@@ -115,7 +124,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       // Defaults for new transaction (hỗ trợ điền từ giọng nói hoặc mẫu)
       const defaultType = initialValues?.type || 'expense';
       setType(defaultType);
-      setAmount(initialValues?.amount ? initialValues.amount.toString() : '');
+      setAmount(initialValues?.amount ? formatExpressionWithDots(initialValues.amount.toString()) : '');
       setDate(toLocalDateTimeInput(new Date()));
 
       const fallbackDefaultLedger = ledgers.find((l) => l.isDefault) || ledgers[0];
@@ -164,6 +173,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     type === 'expense' ? c.type === 'expense' || c.type === 'both' : c.type === 'income' || c.type === 'both'
   );
 
+  const evaluatedAmount = evaluateMathExpression(amount);
+  const hasExpression = isMathExpression(amount);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const numAmount = parseAmountOrExpression(amount, 0);
@@ -194,31 +206,35 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     onClose();
   };
 
-  const handleQuickAddAmount = (addValue: number) => {
-    const current = parseAmountOrExpression(amount, 0);
-    setAmount((current + addValue).toString());
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[96vh]">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
-          <h3 className="text-base font-bold text-[#3e332a]">
-            {editingTransaction ? 'Chỉnh Sửa Giao Dịch' : 'Thêm Giao Dịch Mới'}
-          </h3>
-          <div className="flex items-center gap-1.5">
+        <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onClose}
-              className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
+              className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
             >
               <X className="w-5 h-5" />
             </button>
+            <h3 className="text-base font-bold text-[#3e332a]">
+              {editingTransaction ? 'Chỉnh Sửa Giao Dịch' : 'Thêm Giao Dịch'}
+            </h3>
           </div>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="px-4 py-1.5 rounded-xl bg-[#2e7d32] text-white text-xs font-bold hover:bg-[#256629] active:scale-95 transition shadow-xs flex items-center gap-1"
+          >
+            <Check className="w-4 h-4" />
+            <span>Lưu</span>
+          </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 flex-1">
+        {/* Form Body (Scrollable) */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
           {/* Type Toggle: Chi tiêu / Thu nhập */}
           <div className="grid grid-cols-2 p-1 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] text-xs font-semibold">
             <button
@@ -253,44 +269,51 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </button>
           </div>
 
-          {/* Amount Input */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#7a6a58]">
-              Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
-            </label>
-            <SmartAmountInput
-              value={amount}
-              onChange={setAmount}
-              size="large"
-              placeholder="0"
-              autoFocus
-            />
-
-            {/* Quick Amount Suggestion Buttons */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {[20000, 50000, 100000, 200000, 500000, 1000000].map((val) => (
+          {/* Amount Input (Money Lover Style) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[#7a6a58]">
+                Số tiền <span className="text-[#b94a3b]">*</span>
+              </label>
+              {!showKeypad && (
                 <button
                   type="button"
-                  key={val}
-                  onClick={() => handleQuickAddAmount(val)}
-                  className="px-2 py-0.5 rounded-md bg-[#f5ebe0] hover:bg-[#ebdcc9] text-[11px] font-medium text-[#7a6a58] transition"
+                  onClick={() => setShowKeypad(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition"
                 >
-                  +{val >= 1000000 ? `${val / 1000000}M` : `${val / 1000}k`}
-                </button>
-              ))}
-              {amount && (
-                <button
-                  type="button"
-                  onClick={() => setAmount('')}
-                  className="px-2 py-0.5 rounded-md bg-[#f5ebe0] hover:bg-[#ebdcc9] text-[11px] text-[#b94a3b] font-medium transition"
-                >
-                  Xóa
+                  <Calculator className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Mở bàn phím số</span>
                 </button>
               )}
             </div>
+
+            {/* Money Lover Amount Bar with green underline */}
+            <div
+              onClick={() => setShowKeypad(true)}
+              className={`flex items-center gap-3 py-2 px-3 rounded-xl border-2 transition cursor-pointer select-none ${
+                showKeypad
+                  ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20'
+                  : 'border-[#ebdcc9] bg-[#fbf5eb] hover:bg-[#fffdfa]'
+              }`}
+            >
+              <span className="px-2.5 py-1 rounded-md bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
+                VND
+              </span>
+              <div className="flex-1 min-w-0 flex items-baseline gap-2">
+                <span className="text-2xl sm:text-3xl font-extrabold text-emerald-600 tracking-tight truncate">
+                  {amount || '0'}
+                </span>
+                {hasExpression && evaluatedAmount !== null && (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded shrink-0">
+                    = {formatCurrency(Math.round(evaluatedAmount))}
+                  </span>
+                )}
+              </div>
+              <Calculator className="w-5 h-5 text-emerald-600 shrink-0" />
+            </div>
           </div>
 
-          {/* Note Input with Autocomplete (Đặt ngay bên dưới ô Số tiền) */}
+          {/* Note Input with Autocomplete */}
           <div className="space-y-1.5 relative">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-[#7a6a58]">
@@ -308,18 +331,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
             <div className="relative">
               <textarea
-                rows={3}
+                rows={2}
                 value={note}
                 onChange={(e) => {
                   setNote(e.target.value);
                   setShowSuggestions(true);
                 }}
-                onFocus={() => setShowSuggestions(true)}
+                onFocus={() => {
+                  setShowKeypad(false);
+                  setShowSuggestions(true);
+                }}
                 onBlur={() => {
                   setTimeout(() => setShowSuggestions(false), 200);
                 }}
                 placeholder="VD: Cơm trưa, Xăng xe, Tiền phòng..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition shadow-2xs resize-y min-h-[72px]"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition shadow-2xs resize-y min-h-[60px]"
               />
             </div>
 
@@ -368,9 +394,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span className="text-xs font-bold text-[#a25832] bg-[#fbf5eb] px-2 py-0.5 rounded-lg border border-[#ebdcc9] shadow-2xs group-hover:bg-[#fffdfa] group-hover:border-[#a25832] transition">
                           {formattedAmt}
-                        </span>
-                        <span className="text-[10px] text-[#7a6a58] font-medium opacity-0 group-hover:opacity-100 transition hidden sm:inline">
-                          chọn
                         </span>
                       </div>
                     </button>
@@ -461,25 +484,39 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
             />
           </div>
-
-          {/* Submit Actions */}
-          <div className="pt-2 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-[#ebdcc9] text-xs font-medium text-[#7a6a58] hover:bg-[#f5ebe0] transition"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] active:scale-95 transition shadow-xs flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4" />
-              <span>{editingTransaction ? 'Lưu thay đổi' : 'Ghi vào sổ'}</span>
-            </button>
-          </div>
         </form>
+
+        {/* Custom Calculator Keypad Docked at Bottom (Exact Money Lover style) */}
+        {showKeypad && (
+          <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-center justify-between px-3 py-1 bg-[#f3f4f6] text-[11px] text-gray-500 font-medium border-b border-[#e5e7eb]">
+              <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                <Calculator className="w-3.5 h-3.5 text-emerald-600" />
+                Bàn phím máy tính
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowKeypad(false)}
+                className="flex items-center gap-0.5 text-gray-500 hover:text-gray-800 transition py-0.5 px-1.5 rounded hover:bg-gray-200"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>Thu gọn</span>
+              </button>
+            </div>
+            <CustomCalculatorKeyboard
+              value={amount}
+              onChange={setAmount}
+              onDone={() => {
+                const ev = evaluateMathExpression(amount);
+                if (ev !== null && isMathExpression(amount)) {
+                  setAmount(formatExpressionWithDots(Math.round(ev).toString()));
+                } else {
+                  setShowKeypad(false);
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
