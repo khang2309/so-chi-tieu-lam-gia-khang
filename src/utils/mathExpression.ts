@@ -71,12 +71,31 @@ export function preprocessMathExpression(raw: string): string {
 }
 
 /**
- * Checks if the string contains any mathematical operator or shorthand notation.
+ * Formats numbers within an expression or raw input with dot thousand separators (e.g. 1.204.310).
+ * Strictly strips all alphabet characters (a-z, A-Z, Vietnamese characters) so only digits
+ * and math operators are allowed.
+ */
+export function formatExpressionWithDots(raw: string): string {
+  if (!raw) return '';
+  // 1. Strip all alphabet letters (a-z, A-Z, Vietnamese text)
+  let clean = raw.replace(/[a-zA-Zà-ỹÀ-Ỹ]/g, '');
+  // Keep only digits, operators (+, -, *, /, x, X, :, ÷, (, )), and dots, commas, spaces
+  clean = clean.replace(/[^0-9+\-*\/xX:÷().,\s]/g, '');
+
+  // 2. Format every number group with thousand separator dots
+  return clean.replace(/([0-9][0-9.,]*)/g, (match) => {
+    const pureDigits = match.replace(/[.,]/g, '');
+    if (!pureDigits) return match;
+    return pureDigits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  });
+}
+
+/**
+ * Checks if the string contains any mathematical operator.
  */
 export function isMathExpression(str: string): boolean {
   if (!str) return false;
-  // Contains +, -, *, /, (, ), x, :, or shorthand characters k, tr, m, b, etc.
-  return /[+\-*\/()xX:÷kKmMrRbB]|triệu|nghìn|ngàn|tỷ/i.test(str);
+  return /[+\-*\/()xX:÷]/.test(str);
 }
 
 /**
@@ -219,7 +238,7 @@ export function parseAmountOrExpression(input: string, fallback = 0): number {
   if (evalResult !== null && !isNaN(evalResult) && isFinite(evalResult)) {
     return evalResult;
   }
-  const cleanStr = input.replace(/[^0-9.-]/g, '');
+  const cleanStr = input.replace(/\./g, '').replace(/[^0-9-]/g, '');
   const parsed = parseFloat(cleanStr);
   return !isNaN(parsed) && isFinite(parsed) ? parsed : fallback;
 }

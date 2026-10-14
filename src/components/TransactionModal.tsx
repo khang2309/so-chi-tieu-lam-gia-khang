@@ -255,18 +255,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
           {/* Amount Input */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#7a6a58] flex items-center justify-between">
-              <span>
-                Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
-              </span>
-              <span className="text-[11px] text-[#7a6a58] font-normal">
-                Hỗ trợ phép tính: +, -, ×, ÷, k, M
-              </span>
+            <label className="text-xs font-semibold text-[#7a6a58]">
+              Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
             </label>
             <SmartAmountInput
               value={amount}
               onChange={setAmount}
-              showQuickOperators={true}
               size="large"
               placeholder="0"
               autoFocus

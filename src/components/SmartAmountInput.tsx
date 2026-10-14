@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { evaluateMathExpression, isMathExpression } from '../utils/mathExpression';
+import {
+  evaluateMathExpression,
+  isMathExpression,
+  formatExpressionWithDots,
+} from '../utils/mathExpression';
 import { formatCurrency } from '../utils/formatters';
 import { Calculator } from 'lucide-react';
 
@@ -10,7 +14,6 @@ interface SmartAmountInputProps {
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
-  showQuickOperators?: boolean;
   size?: 'large' | 'normal' | 'compact';
   currencySymbol?: string;
   id?: string;
@@ -23,17 +26,21 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
   placeholder = '0',
   className = '',
   autoFocus = false,
-  showQuickOperators = false,
   size = 'normal',
   currencySymbol = '₫',
   id,
 }) => {
-  const [internalValue, setInternalValue] = useState(value);
+  const [internalValue, setInternalValue] = useState(() =>
+    formatExpressionWithDots(value || '')
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Sync external value
   useEffect(() => {
-    setInternalValue(value);
+    if (value !== undefined) {
+      const formatted = formatExpressionWithDots(value.toString());
+      setInternalValue(formatted);
+    }
   }, [value]);
 
   // Compute live evaluated result
@@ -41,21 +48,50 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
   const hasExpression = isMathExpression(internalValue);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setInternalValue(val);
-    onChange(val);
+    const rawVal = e.target.value;
+    const cursorPos = e.target.selectionStart || rawVal.length;
 
-    const ev = evaluateMathExpression(val);
+    // Count how many allowed meaningful characters were before the cursor
+    const rawBeforeCursor = rawVal.slice(0, cursorPos);
+    const nonFormatCharsBefore = (rawBeforeCursor.match(/[0-9+\-*\/xX:÷()]/g) || []).length;
+
+    // Format with dots every 3 digits and strictly strip all letters
+    const formatted = formatExpressionWithDots(rawVal);
+    setInternalValue(formatted);
+    onChange(formatted);
+
+    const ev = evaluateMathExpression(formatted);
     if (ev !== null && onEvaluated) {
       onEvaluated(ev);
     }
+
+    // Preserve cursor position naturally
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        let count = 0;
+        let newPos = formatted.length;
+        for (let i = 0; i < formatted.length; i++) {
+          if (/[0-9+\-*\/xX:÷()]/.test(formatted[i])) {
+            count++;
+            if (count === nonFormatCharsBefore) {
+              newPos = i + 1;
+              break;
+            }
+          }
+        }
+        if (nonFormatCharsBefore === 0) {
+          newPos = 0;
+        }
+        inputRef.current.setSelectionRange(newPos, newPos);
+      }
+    });
   };
 
   const handleBlur = () => {
     if (evaluated !== null && hasExpression) {
-      const resolvedStr = evaluated.toString();
-      setInternalValue(resolvedStr);
-      onChange(resolvedStr);
+      const resolvedFormatted = formatExpressionWithDots(Math.round(evaluated).toString());
+      setInternalValue(resolvedFormatted);
+      onChange(resolvedFormatted);
       if (onEvaluated) onEvaluated(evaluated);
     }
   };
@@ -64,29 +100,12 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
     if (e.key === 'Enter') {
       if (evaluated !== null && hasExpression) {
         e.preventDefault();
-        const resolvedStr = evaluated.toString();
-        setInternalValue(resolvedStr);
-        onChange(resolvedStr);
+        const resolvedFormatted = formatExpressionWithDots(Math.round(evaluated).toString());
+        setInternalValue(resolvedFormatted);
+        onChange(resolvedFormatted);
         if (onEvaluated) onEvaluated(evaluated);
       }
     }
-  };
-
-  const appendOperator = (op: string) => {
-    const current = internalValue.trim();
-    let next = '';
-    if (['+', '-', '*', '/'].includes(op)) {
-      next = current ? `${current} ${op} ` : op;
-    } else {
-      next = `${current}${op}`;
-    }
-    setInternalValue(next);
-    onChange(next);
-    const ev = evaluateMathExpression(next);
-    if (ev !== null && onEvaluated) {
-      onEvaluated(ev);
-    }
-    inputRef.current?.focus();
   };
 
   const baseInputStyle =
@@ -103,13 +122,13 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
           ref={inputRef}
           id={id}
           type="text"
-          inputMode="text"
           value={internalValue}
           onChange={handleInputChange}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoFocus={autoFocus}
+          autoComplete="off"
           className={`w-full bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition ${baseInputStyle} ${
             currencySymbol ? 'pr-8' : ''
           } ${className}`}
@@ -126,39 +145,10 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
       {hasExpression && evaluated !== null && (
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#2e7d32]/10 border border-[#2e7d32]/20 text-[#2e7d32] text-xs font-semibold animate-in fade-in duration-100">
           <Calculator className="w-3.5 h-3.5 shrink-0" />
-          <span>= {formatCurrency(evaluated)}</span>
+          <span>= {formatCurrency(Math.round(evaluated))}</span>
           <span className="text-[10px] text-[#7a6a58] ml-auto font-normal">
             (Bấm Enter hoặc chạm ra ngoài để tính)
           </span>
-        </div>
-      )}
-
-      {/* Quick math operator buttons on mobile/desktop */}
-      {showQuickOperators && (
-        <div className="flex items-center gap-1 pt-0.5 overflow-x-auto pb-0.5 no-scrollbar">
-          <span className="text-[10px] text-[#7a6a58] font-medium mr-1 shrink-0 flex items-center gap-0.5">
-            <Calculator className="w-3 h-3 text-[#a25832]" />
-            Tính:
-          </span>
-          {[
-            { label: '+', val: '+' },
-            { label: '-', val: '-' },
-            { label: '×', val: '*' },
-            { label: '÷', val: '/' },
-            { label: 'k (nghìn)', val: 'k' },
-            { label: 'M (triệu)', val: 'M' },
-            { label: '(', val: '(' },
-            { label: ')', val: ')' },
-          ].map((op) => (
-            <button
-              type="button"
-              key={op.label}
-              onClick={() => appendOperator(op.val)}
-              className="px-2 py-0.5 rounded-md bg-[#f5ebe0] hover:bg-[#ebdcc9] text-xs font-bold text-[#3e332a] border border-[#ebdcc9] active:scale-95 transition shrink-0"
-            >
-              {op.label}
-            </button>
-          ))}
         </div>
       )}
     </div>

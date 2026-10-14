@@ -244,7 +244,6 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                     <SmartAmountInput
                       value={initialBalance}
                       onChange={setInitialBalance}
-                      showQuickOperators={true}
                       size="compact"
                       placeholder="0"
                     />

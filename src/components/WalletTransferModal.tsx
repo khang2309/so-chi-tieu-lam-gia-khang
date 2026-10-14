@@ -121,16 +121,12 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
 
           {/* Amount */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#7a6a58] flex items-center justify-between">
-              <span>Số tiền chuyển (VNĐ):</span>
-              <span className="text-[11px] text-[#7a6a58] font-normal">
-                Hỗ trợ phép tính (+, -, ×, k, M...)
-              </span>
+            <label className="text-xs font-semibold text-[#7a6a58]">
+              Số tiền chuyển (VNĐ):
             </label>
             <SmartAmountInput
               value={amount}
               onChange={setAmount}
-              showQuickOperators={true}
               size="normal"
               placeholder="0"
               autoFocus

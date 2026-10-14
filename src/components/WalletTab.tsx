@@ -236,7 +236,6 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   <SmartAmountInput
                     value={initialBalance}
                     onChange={setInitialBalance}
-                    showQuickOperators={true}
                     size="compact"
                     placeholder="0"
                   />
