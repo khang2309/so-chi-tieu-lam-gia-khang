@@ -40,6 +40,7 @@ export const DEFAULT_WALLETS: Wallet[] = [
     icon: 'Banknote',
     color: '#2e7d32',
     accountNumber: 'Ví tiền mặt',
+    isDefault: true,
     createdAt: DEFAULT_CREATED_AT,
   },
   {

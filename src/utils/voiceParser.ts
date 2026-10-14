@@ -660,6 +660,7 @@ Câu nói của người dùng: "${cleanInput}"`;
     }
     if (!matchedWallet) {
       matchedWallet =
+        walletList.find((w) => w.isDefault) ||
         walletList.find((w) => w.id === 'wallet-cash' || w.name.toLowerCase().includes('tiền mặt')) ||
         walletList[0];
     }
@@ -844,6 +845,7 @@ Danh sách danh mục có sẵn: ${categoryNames}.`;
   }
   if (!matchedWallet) {
     matchedWallet =
+      walletList.find((w) => w.isDefault) ||
       walletList.find((w) => w.id === 'wallet-cash' || w.name.toLowerCase().includes('tiền mặt')) ||
       walletList[0];
   }

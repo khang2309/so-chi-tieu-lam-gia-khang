@@ -22,14 +22,14 @@ parts[2] += 1;
 const nextVersion = parts.join('.');
 
 const defaultNotes =
-  '- Tự động đọc biến động số dư ngân hàng & ví điện tử (MB, VCB, MoMo, ZaloPay...)\n' +
-  '- Khay chờ duyệt biến động số dư thông minh trên trang chủ\n' +
-  '- Tự động nhận diện chuyển tiền nội bộ giữa các ví\n' +
-  '- Kéo thả và đổi thứ tự các sổ chi tiêu';
+  '- Thêm tính năng chọn và đổi ví mặc định khi ghi chép giao dịch\n' +
+  '- Tự động ưu tiên ví mặc định khi thêm giao dịch, quét hóa đơn và nhập giọng nói\n' +
+  '- Tối ưu thuật toán nhận diện biến động số dư MoMo Túi Thần Tài & Timo\n' +
+  '- Khay chờ duyệt biến động số dư thông minh trên trang chủ';
 
 const releaseNotes = customNotesArg || defaultNotes;
 
-console.log(`\n🚀 Bắt đầu đóng gói bản cập nhật v${nextVersion} (${isApkMode ? 'APK' : 'OTA Nhanh'})...`);
+console.log(`\n🚀 Bắt đầu đóng gói bản cập nhật v${nextVersion} (${isApkMode ? 'APK' : 'Cách 1: OTA Nhanh'})...`);
 
 // 2. Cập nhật số phiên bản vào src/utils/appUpdater.ts & package.json
 const updaterContent = fs.readFileSync(appUpdaterPath, 'utf8');
@@ -56,19 +56,26 @@ execSync(
   { stdio: 'inherit' }
 );
 
-console.log('🤖 Đang đồng bộ và biên dịch Android APK...');
-execSync('npx cap sync', { stdio: 'inherit' });
-execSync('.\\gradlew.bat assembleDebug', { cwd: path.join(rootDir, 'android'), stdio: 'inherit' });
-fs.copyFileSync(
-  path.join(rootDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
-  path.join(rootDir, 'app-debug.apk')
-);
+if (isApkMode) {
+  console.log('🤖 Đang đồng bộ và biên dịch Android APK (Cách 2: APK)...');
+  execSync('npx cap sync', { stdio: 'inherit' });
+  execSync('.\\gradlew.bat assembleDebug', { cwd: path.join(rootDir, 'android'), stdio: 'inherit' });
+  fs.copyFileSync(
+    path.join(rootDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+    path.join(rootDir, 'app-debug.apk')
+  );
+} else {
+  console.log('⚡ Đang đồng bộ tài nguyên giao diện cho Android (Cách 1: OTA Nhanh)...');
+  execSync('npx cap copy web', { stdio: 'inherit' });
+}
 
 // 4. Ghi file version.json mới
 const nextConfig = {
   version: nextVersion,
-  updateType: 'apk',
-  downloadUrl: 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk',
+  updateType: isApkMode ? 'apk' : 'ota',
+  downloadUrl: isApkMode
+    ? 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk'
+    : 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip',
   releaseNotes,
   allowSkip: true,
   updatedAt: new Date().toISOString(),
@@ -79,12 +86,15 @@ fs.writeFileSync(versionJsonPath, JSON.stringify(nextConfig, null, 2) + '\n', 'u
 try {
   console.log('☁️ Đang commit và đẩy lên GitHub...');
   execSync('git add -A', { stdio: 'inherit' });
-  execSync('git add -f app-debug.apk', { stdio: 'inherit' });
-  execSync(`git commit -m "chore(release): publish update v${nextVersion}"`, {
+  execSync('git add -f ota-bundle.zip', { stdio: 'inherit' });
+  if (isApkMode) {
+    execSync('git add -f app-debug.apk', { stdio: 'inherit' });
+  }
+  execSync(`git commit -m "chore(release): publish update v${nextVersion} (${isApkMode ? 'APK' : 'OTA'})"`, {
     stdio: 'inherit',
   });
   execSync('git push origin main', { stdio: 'inherit' });
-  console.log(`\n✅ Hoàn tất! Bản cập nhật v${nextVersion} đã được phát hành tự động tới người dùng.`);
+  console.log(`\n✅ Hoàn tất! Bản cập nhật v${nextVersion} (${isApkMode ? 'APK' : 'OTA'}) đã được phát hành tự động tới người dùng.`);
 } catch (err) {
   console.warn('\n⚠️ Đã tạo xong nhưng gặp lỗi khi push lên Git:', err.message);
 }

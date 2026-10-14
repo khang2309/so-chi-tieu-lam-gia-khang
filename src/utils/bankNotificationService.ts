@@ -254,7 +254,8 @@ function matchWalletByAppName(appName: string, rawText: string, wallets: Wallet[
     return eWallet.id;
   }
 
-  return wallets[0].id;
+  const defaultWallet = wallets.find((w) => w.isDefault) || wallets[0];
+  return defaultWallet.id;
 }
 
 /**

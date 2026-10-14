@@ -6,6 +6,7 @@ import {
   Edit3,
   Trash2,
   Check,
+  Star,
 } from 'lucide-react';
 import { Wallet } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -17,6 +18,7 @@ interface WalletTabProps {
   totalBalance: number;
   onAddWallet: (data: Omit<Wallet, 'id' | 'createdAt'>) => void;
   onUpdateWallet: (id: string, data: Partial<Wallet>) => void;
+  onSetDefaultWallet?: (id: string) => void;
   onDeleteWallet: (id: string) => void;
   onOpenTransferModal: () => void;
 }
@@ -27,6 +29,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   totalBalance,
   onAddWallet,
   onUpdateWallet,
+  onSetDefaultWallet,
   onDeleteWallet,
   onOpenTransferModal,
 }) => {
@@ -39,6 +42,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [icon, setIcon] = useState<string>('Landmark');
   const [color, setColor] = useState<string>('#1565c0');
+  const [isDefault, setIsDefault] = useState<boolean>(false);
 
   const handleStartAdd = () => {
     setEditingWallet(null);
@@ -47,6 +51,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     setAccountNumber('');
     setIcon('Landmark');
     setColor('#1565c0');
+    setIsDefault(wallets.length === 0);
     setIsAdding(true);
   };
 
@@ -58,6 +63,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     setAccountNumber(w.accountNumber || '');
     setIcon(w.icon);
     setColor(w.color);
+    setIsDefault(Boolean(w.isDefault));
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -75,6 +81,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         accountNumber: accountNumber.trim(),
         icon,
         color,
+        isDefault,
       });
       setEditingWallet(null);
     } else {
@@ -84,6 +91,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         accountNumber: accountNumber.trim(),
         icon,
         color,
+        isDefault,
       });
       setIsAdding(false);
     }
@@ -269,6 +277,19 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               </div>
             </div>
 
+            <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+                className="w-4 h-4 rounded accent-[#a25832]"
+              />
+              <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
+                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span>Đặt làm ví mặc định khi ghi chép giao dịch</span>
+              </span>
+            </label>
+
             <div className="pt-1 flex justify-end">
               <button
                 type="submit"
@@ -310,8 +331,16 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     <DynamicIcon name={wallet.icon} className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-bold text-sm text-[#3e332a] truncate">
-                      {wallet.name}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-sm text-[#3e332a] truncate">
+                        {wallet.name}
+                      </span>
+                      {wallet.isDefault && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                          <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
+                          <span>Mặc định</span>
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-[#7a6a58] mt-0.5">
                       Số dư:{' '}
@@ -329,6 +358,17 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 shrink-0">
+                  {!wallet.isDefault && onSetDefaultWallet && (
+                    <button
+                      type="button"
+                      onClick={() => onSetDefaultWallet(wallet.id)}
+                      className="px-2 py-1.5 rounded-lg border border-[#ebdcc9] bg-[#fffdfa] hover:bg-amber-50 hover:border-amber-300 text-[11px] font-semibold text-[#7a6a58] hover:text-amber-800 transition flex items-center gap-1 cursor-pointer"
+                      title="Đặt làm ví mặc định"
+                    >
+                      <Star className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="hidden sm:inline">Đặt mặc định</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleStartEdit(wallet)}
                     className="p-2 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition"

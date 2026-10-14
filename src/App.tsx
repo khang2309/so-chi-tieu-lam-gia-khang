@@ -465,6 +465,7 @@ export function App() {
             totalBalance={manager.totalAllWalletsBalance}
             onAddWallet={manager.addWallet}
             onUpdateWallet={manager.updateWallet}
+            onSetDefaultWallet={manager.setDefaultWallet}
             onDeleteWallet={manager.deleteWallet}
             onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
           />
@@ -690,6 +691,7 @@ export function App() {
         walletBalances={manager.walletBalances}
         onAddWallet={manager.addWallet}
         onUpdateWallet={manager.updateWallet}
+        onSetDefaultWallet={manager.setDefaultWallet}
         onDeleteWallet={manager.deleteWallet}
         onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
       />

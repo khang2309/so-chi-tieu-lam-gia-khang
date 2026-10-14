@@ -154,7 +154,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       const defaultLedger =
         activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
       setSelectedLedgerId(defaultLedger);
-      setSelectedWalletId(wallets[0]?.id || 'wallet-cash');
+      setSelectedWalletId(wallets.find((w) => w.isDefault)?.id || wallets[0]?.id || 'wallet-cash');
 
       setStep('verify');
     } catch (err: any) {

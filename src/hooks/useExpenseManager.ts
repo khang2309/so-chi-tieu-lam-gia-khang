@@ -46,7 +46,14 @@ export function useExpenseManager() {
     try {
       if (localStorage.getItem('user_is_logged_out') === 'true') return [];
       const saved = localStorage.getItem(STORAGE_KEYS.WALLETS);
-      return saved ? sanitizeData(JSON.parse(saved)) : DEFAULT_WALLETS;
+      if (saved) {
+        const parsed: Wallet[] = sanitizeData(JSON.parse(saved));
+        if (parsed.length > 0 && !parsed.some((w) => w.isDefault)) {
+          parsed[0].isDefault = true;
+        }
+        return parsed;
+      }
+      return DEFAULT_WALLETS;
     } catch {
       return DEFAULT_WALLETS;
     }
@@ -773,15 +780,26 @@ export function useExpenseManager() {
 
   const addWallet = (data: Omit<Wallet, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
+    const shouldBeDefault = Boolean(data.isDefault) || wallets.length === 0;
     const newWallet: Wallet = sanitizeData({
       ...data,
+      isDefault: shouldBeDefault,
       id: 'wallet-' + Date.now(),
       createdAt: now,
       updatedAt: now,
     });
-    setWallets((prev) => [...prev, newWallet]);
-    if (auth?.currentUser?.uid) {
-      syncWalletToFirestore(auth.currentUser.uid, newWallet);
+    setWallets((prev) => {
+      const updated = shouldBeDefault
+        ? prev.map((w) => sanitizeData({ ...w, isDefault: false, updatedAt: now }))
+        : prev;
+      return [...updated, newWallet];
+    });
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      if (shouldBeDefault) {
+        wallets.forEach((w) => syncWalletToFirestore(uid, { ...w, isDefault: false }));
+      }
+      syncWalletToFirestore(uid, newWallet);
     }
     return newWallet;
   };
@@ -789,10 +807,44 @@ export function useExpenseManager() {
   const updateWallet = (id: string, data: Partial<Wallet>) => {
     const now = new Date().toISOString();
     setWallets((prev) => {
-      const updated = prev.map((w) => (w.id === id ? sanitizeData({ ...w, ...data, updatedAt: now }) : w));
-      const target = updated.find((w) => w.id === id);
-      if (target && auth?.currentUser?.uid) {
-        syncWalletToFirestore(auth.currentUser.uid, target);
+      const updated = prev.map((w) => {
+        if (w.id === id) {
+          return sanitizeData({ ...w, ...data, updatedAt: now });
+        }
+        if (data.isDefault) {
+          return sanitizeData({ ...w, isDefault: false, updatedAt: now });
+        }
+        return w;
+      });
+      const uid = auth?.currentUser?.uid;
+      if (uid) {
+        if (data.isDefault) {
+          updated.forEach((w) => syncWalletToFirestore(uid, w));
+        } else {
+          const target = updated.find((w) => w.id === id);
+          if (target) syncWalletToFirestore(uid, target);
+        }
+      }
+      return updated;
+    });
+  };
+
+  const setDefaultWallet = (id: string) => {
+    const now = new Date().toISOString();
+    setWallets((prev) => {
+      const updated = prev.map((w) =>
+        sanitizeData({
+          ...w,
+          isDefault: w.id === id,
+          updatedAt: now,
+        })
+      );
+      try {
+        localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(updated));
+      } catch (_) {}
+      const uid = auth?.currentUser?.uid;
+      if (uid) {
+        updated.forEach((w) => syncWalletToFirestore(uid, w));
       }
       return updated;
     });
@@ -803,8 +855,14 @@ export function useExpenseManager() {
       alert('Bạn cần giữ lại ít nhất 1 nguồn tiền/ví!');
       return;
     }
+    const now = new Date().toISOString();
     deletedWalletIdsRef.current.add(id);
-    const remaining = wallets.filter((w) => w.id !== id);
+    let remaining = wallets.filter((w) => w.id !== id);
+    if (remaining.length > 0 && !remaining.some((w) => w.isDefault)) {
+      remaining = remaining.map((w, idx) =>
+        idx === 0 ? sanitizeData({ ...w, isDefault: true, updatedAt: now }) : w
+      );
+    }
     setWallets(remaining);
     try {
       localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(remaining));
@@ -1035,6 +1093,7 @@ export function useExpenseManager() {
     deleteLedger,
     addWallet,
     updateWallet,
+    setDefaultWallet,
     deleteWallet,
     transferMoney,
     addCategory,
