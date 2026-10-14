@@ -108,6 +108,22 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
     }
   };
 
+  const handleAppendOperator = (op: string) => {
+    const current = internalValue.trim();
+    if (!current) return;
+    // Don't duplicate operators if one already at the end
+    if (/[+\-*\/xX:÷]\s*$/.test(current)) {
+      const replaced = current.replace(/[+\-*\/xX:÷]\s*$/, op);
+      setInternalValue(replaced);
+      onChange(replaced);
+      return;
+    }
+    const next = `${current}${op}`;
+    setInternalValue(next);
+    onChange(next);
+    inputRef.current?.focus();
+  };
+
   const baseInputStyle =
     size === 'large'
       ? 'text-2xl font-bold font-sans px-4 py-2.5 rounded-xl'
@@ -122,6 +138,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
           ref={inputRef}
           id={id}
           type="text"
+          inputMode="decimal"
           value={internalValue}
           onChange={handleInputChange}
           onBlur={handleBlur}
@@ -139,6 +156,26 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
             {currencySymbol}
           </span>
         )}
+      </div>
+
+      {/* 4 nút phép tính cơ bản cực kỳ nhỏ gọn để tiện tính toán khi bàn phím số đang mở */}
+      <div className="flex items-center gap-1.5 pt-0.5">
+        <span className="text-[10px] text-[#7a6a58] font-medium mr-0.5">Phép tính:</span>
+        {[
+          { label: '+', op: ' + ' },
+          { label: '−', op: ' - ' },
+          { label: '×', op: ' * ' },
+          { label: '÷', op: ' / ' },
+        ].map(({ label, op }) => (
+          <button
+            type="button"
+            key={label}
+            onClick={() => handleAppendOperator(op)}
+            className="w-7 h-6 rounded-md bg-[#f5ebe0] hover:bg-[#ebdcc9] text-xs font-bold text-[#3e332a] border border-[#ebdcc9] active:scale-95 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Live evaluated preview badge when an expression is entered */}

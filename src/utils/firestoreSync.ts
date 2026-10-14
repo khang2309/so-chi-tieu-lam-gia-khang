@@ -5,6 +5,7 @@ import {
   deleteDoc,
   onSnapshot,
   getDocs,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Transaction, Wallet, Ledger, Category } from '../types';
@@ -125,11 +126,13 @@ export async function performTwoWaySync(
       categories: sanitizeData(localData.categories || []),
     };
 
-    // Bước 1: Fetch (tải) dữ liệu mới nhất từ Firestore Cloud về
-    const txSnap = await getDocs(collection(db, 'users', uid, 'transactions'));
-    const walletSnap = await getDocs(collection(db, 'users', uid, 'wallets'));
-    const ledgerSnap = await getDocs(collection(db, 'users', uid, 'ledgers'));
-    const catSnap = await getDocs(collection(db, 'users', uid, 'categories'));
+    // Bước 1: Fetch (tải) dữ liệu mới nhất từ Firestore Cloud về đồng thời bằng Promise.all
+    const [txSnap, walletSnap, ledgerSnap, catSnap] = await Promise.all([
+      getDocs(collection(db, 'users', uid, 'transactions')),
+      getDocs(collection(db, 'users', uid, 'wallets')),
+      getDocs(collection(db, 'users', uid, 'ledgers')),
+      getDocs(collection(db, 'users', uid, 'categories')),
+    ]);
 
     const cloudTransactions: Transaction[] = [];
     txSnap.forEach((d) => cloudTransactions.push(sanitizeData(d.data() as Transaction)));
@@ -187,47 +190,54 @@ export async function performTwoWaySync(
       categories: mergedCategories,
     };
 
-    // Bước 4: Đẩy (Upload) mảng đã gộp hoàn chỉnh ngược lên lại Firestore Cloud (bọc sanitizeData)
-    for (const tx of mergedTransactions) {
-      const cleanTx = sanitizeData({
-        ...tx,
-        toWalletId: tx.type === 'transfer' ? (tx.toWalletId ?? null) : null,
-      });
-      await setDoc(doc(db, 'users', uid, 'transactions', tx.id), cleanTx, { merge: true });
+    // Bước 4: Đẩy (Upload) mảng đã gộp hoàn chỉnh ngược lên lại Firestore Cloud siêu tốc bằng writeBatch()
+    // Mỗi batch Firestore hỗ trợ tối đa 500 thao tác, chia khối 450 để đảm bảo an toàn tuyệt đối
+    const BATCH_LIMIT = 450;
+    for (let i = 0; i < mergedTransactions.length; i += BATCH_LIMIT) {
+      const batch = writeBatch(db);
+      const chunk = mergedTransactions.slice(i, i + BATCH_LIMIT);
+      for (const tx of chunk) {
+        const cleanTx = sanitizeData({
+          ...tx,
+          toWalletId: tx.type === 'transfer' ? (tx.toWalletId ?? null) : null,
+        });
+        batch.set(doc(db, 'users', uid, 'transactions', tx.id), cleanTx, { merge: true });
+      }
+      await batch.commit();
     }
 
+    // Đẩy Wallets, Ledgers, Categories trong 1 batch duy nhất
+    const metaBatch = writeBatch(db);
     const activeWalletIds = new Set(mergedWallets.map((w) => w.id));
     for (const cw of cloudWallets) {
       if (!activeWalletIds.has(cw.id)) {
-        await deleteDoc(doc(db, 'users', uid, 'wallets', cw.id));
+        metaBatch.delete(doc(db, 'users', uid, 'wallets', cw.id));
       }
     }
     for (const w of mergedWallets) {
-      const cleanW = sanitizeData(w);
-      await setDoc(doc(db, 'users', uid, 'wallets', w.id), cleanW, { merge: true });
+      metaBatch.set(doc(db, 'users', uid, 'wallets', w.id), sanitizeData(w), { merge: true });
     }
 
     const activeLedgerIds = new Set(mergedLedgers.map((l) => l.id));
     for (const cl of cloudLedgers) {
       if (!activeLedgerIds.has(cl.id)) {
-        await deleteDoc(doc(db, 'users', uid, 'ledgers', cl.id));
+        metaBatch.delete(doc(db, 'users', uid, 'ledgers', cl.id));
       }
     }
     for (const l of mergedLedgers) {
-      const cleanL = sanitizeData(l);
-      await setDoc(doc(db, 'users', uid, 'ledgers', l.id), cleanL, { merge: true });
+      metaBatch.set(doc(db, 'users', uid, 'ledgers', l.id), sanitizeData(l), { merge: true });
     }
 
     const activeCatIds = new Set(mergedCategories.map((c) => c.id));
     for (const cc of cloudCategories) {
       if (!activeCatIds.has(cc.id)) {
-        await deleteDoc(doc(db, 'users', uid, 'categories', cc.id));
+        metaBatch.delete(doc(db, 'users', uid, 'categories', cc.id));
       }
     }
     for (const c of mergedCategories) {
-      const cleanC = sanitizeData(c);
-      await setDoc(doc(db, 'users', uid, 'categories', c.id), cleanC, { merge: true });
+      metaBatch.set(doc(db, 'users', uid, 'categories', c.id), sanitizeData(c), { merge: true });
     }
+    await metaBatch.commit();
 
     return {
       success: true,

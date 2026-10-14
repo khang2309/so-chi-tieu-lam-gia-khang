@@ -46,6 +46,16 @@ const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
 pkg.version = nextVersion;
 fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
+// 2b. Cập nhật số phiên bản vào android/app/build.gradle
+const gradlePath = path.join(rootDir, 'android', 'app', 'build.gradle');
+if (fs.existsSync(gradlePath)) {
+  let gradleContent = fs.readFileSync(gradlePath, 'utf8');
+  gradleContent = gradleContent.replace(/versionName\s+"[^"]+"/, `versionName "${nextVersion}"`);
+  gradleContent = gradleContent.replace(/versionCode\s+(\d+)/, (_, code) => `versionCode ${parseInt(code, 10) + 1}`);
+  fs.writeFileSync(gradlePath, gradleContent, 'utf8');
+  console.log(`📱 Đã đồng bộ Android build.gradle -> versionName "${nextVersion}"`);
+}
+
 // 3. Build giao diện Web và nén thành ota-bundle.zip
 console.log('📦 Đang biên dịch giao diện (npm run build)...');
 execSync('npm run build', { stdio: 'inherit' });
