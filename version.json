@@ -1,8 +1,8 @@
 {
-  "version": "2.1.9",
+  "version": "2.1.10",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Thêm tính năng chọn và đổi ví mặc định khi ghi chép giao dịch\n- Tự động ưu tiên ví mặc định khi thêm giao dịch, quét hóa đơn và nhập giọng nói\n- Tối ưu thuật toán nhận diện biến động số dư MoMo Túi Thần Tài & Timo\n- Khay chờ duyệt biến động số dư thông minh trên trang chủ",
+  "releaseNotes": "- Đổi 'Số dư ban đầu' thành 'Số dư hiện tại' khi chỉnh sửa ví (tự động cân đối số dư ban đầu để khớp thực tế mà không làm mất lịch sử thu chi)&#10;- Hỗ trợ nhập phép tính trực tiếp (+, -, ×, ÷, k, M, tỷ) tại ô số tiền ở Ví, Giao dịch và Hóa đơn",
   "allowSkip": true,
-  "updatedAt": "2026-10-14T06:19:38.110Z"
+  "updatedAt": "2026-10-14T11:47:02.592Z"
 }

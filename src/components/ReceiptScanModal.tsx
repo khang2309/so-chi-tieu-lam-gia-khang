@@ -25,6 +25,7 @@ import {
 import { compressImageForOcr } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency, toLocalDateKey } from '../utils/formatters';
+import { SmartAmountInput } from './SmartAmountInput';
 
 
 
@@ -39,6 +40,28 @@ interface ReceiptScanModalProps {
     items: Array<Omit<Transaction, 'id' | 'createdAt'>>
   ) => void;
 }
+
+const BatchItemAmountInput: React.FC<{
+  initialAmount: number;
+  onCommit: (val: number) => void;
+}> = ({ initialAmount, onCommit }) => {
+  const [val, setVal] = useState(initialAmount.toString());
+
+  useEffect(() => {
+    setVal(initialAmount.toString());
+  }, [initialAmount]);
+
+  return (
+    <SmartAmountInput
+      value={val}
+      onChange={setVal}
+      onEvaluated={onCommit}
+      size="compact"
+      placeholder="0"
+      className="text-right font-bold text-[#b94a3b]"
+    />
+  );
+};
 
 export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   isOpen,
@@ -593,18 +616,9 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
 
                         {/* Số tiền */}
                         <div>
-                          <input
-                            type="number"
-                            value={item.amount}
-                            onChange={(e) =>
-                              handleUpdateItem(
-                                item.id,
-                                'amount',
-                                Number(e.target.value) || 0
-                              )
-                            }
-                            placeholder="Số tiền..."
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-bold text-[#b94a3b] text-right focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                          <BatchItemAmountInput
+                            initialAmount={item.amount}
+                            onCommit={(val) => handleUpdateItem(item.id, 'amount', val)}
                           />
                         </div>
                       </div>

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, ArrowRightLeft, Check } from 'lucide-react';
 import { Wallet } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { SmartAmountInput } from './SmartAmountInput';
+import { parseAmountOrExpression } from '../utils/mathExpression';
 
 interface WalletTransferModalProps {
   isOpen: boolean;
@@ -33,9 +35,9 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount.replace(/[^0-9]/g, ''));
+    const numAmount = parseAmountOrExpression(amount, 0);
     if (!numAmount || numAmount <= 0) {
-      alert('Vui lòng nhập số tiền cần chuyển!');
+      alert('Vui lòng nhập số tiền hợp lệ cần chuyển!');
       return;
     }
     if (fromWalletId === toWalletId) {
@@ -119,16 +121,19 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
 
           {/* Amount */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#7a6a58]">
-              Số tiền chuyển (VNĐ):
+            <label className="text-xs font-semibold text-[#7a6a58] flex items-center justify-between">
+              <span>Số tiền chuyển (VNĐ):</span>
+              <span className="text-[11px] text-[#7a6a58] font-normal">
+                Hỗ trợ phép tính (+, -, ×, k, M...)
+              </span>
             </label>
-            <input
-              type="number"
+            <SmartAmountInput
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={setAmount}
+              showQuickOperators={true}
+              size="normal"
               placeholder="0"
-              required
-              className="w-full text-xl font-bold font-sans px-4 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+              autoFocus
             />
           </div>
 

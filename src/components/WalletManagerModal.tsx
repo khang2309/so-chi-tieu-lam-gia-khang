@@ -12,6 +12,8 @@ import {
 import { Wallet } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
+import { SmartAmountInput } from './SmartAmountInput';
+import { parseAmountOrExpression } from '../utils/mathExpression';
 
 interface WalletManagerModalProps {
   isOpen: boolean;
@@ -64,7 +66,9 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
     setIsAdding(false);
     setEditingWallet(w);
     setName(w.name);
-    setInitialBalance(w.initialBalance.toString());
+    // Hiển thị số dư hiện tại thực tế để người dùng dễ dàng điều chỉnh khớp với tài khoản
+    const currentBal = walletBalances[w.id] !== undefined ? walletBalances[w.id] : w.initialBalance;
+    setInitialBalance(currentBal.toString());
     setAccountNumber(w.accountNumber || '');
     setIcon(w.icon);
     setColor(w.color);
@@ -77,12 +81,23 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
       alert('Vui lòng nhập tên ví / ngân hàng!');
       return;
     }
-    const numBalance = parseFloat(initialBalance.replace(/[^0-9]/g, '')) || 0;
+    const numBalance = parseAmountOrExpression(initialBalance, 0);
 
     if (editingWallet) {
+      // Số dư hiện tại = Số dư ban đầu + Tổng biến động từ giao dịch
+      // => Tổng biến động = Số dư hiện tại cũ - Số dư ban đầu cũ
+      // Khi người dùng nhập Số dư hiện tại mới (numBalance):
+      // Số dư ban đầu mới = Số dư hiện tại mới - Tổng biến động
+      const currentOldBalance =
+        walletBalances[editingWallet.id] !== undefined
+          ? walletBalances[editingWallet.id]
+          : editingWallet.initialBalance;
+      const netTransactions = currentOldBalance - editingWallet.initialBalance;
+      const newInitialBalance = Math.round(numBalance - netTransactions);
+
       onUpdateWallet(editingWallet.id, {
         name: name.trim(),
-        initialBalance: numBalance,
+        initialBalance: newInitialBalance,
         accountNumber: accountNumber.trim(),
         icon,
         color,
@@ -92,7 +107,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
     } else {
       onAddWallet({
         name: name.trim(),
-        initialBalance: numBalance,
+        initialBalance: Math.round(numBalance),
         accountNumber: accountNumber.trim(),
         icon,
         color,
@@ -215,16 +230,30 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
-                    Số dư ban đầu:
+                  <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
+                    <span>
+                      {editingWallet ? 'Số dư hiện tại:' : 'Số dư ban đầu:'}
+                    </span>
+                    {editingWallet && (
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        (Tự khớp giao dịch cũ)
+                      </span>
+                    )}
                   </label>
-                  <input
-                    type="number"
-                    value={initialBalance}
-                    onChange={(e) => setInitialBalance(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                  />
+                  <div className="mt-0.5">
+                    <SmartAmountInput
+                      value={initialBalance}
+                      onChange={setInitialBalance}
+                      showQuickOperators={true}
+                      size="compact"
+                      placeholder="0"
+                    />
+                  </div>
+                  {editingWallet && (
+                    <p className="text-[10px] text-[#7a6a58] mt-1 leading-tight">
+                      💡 Nhập số tiền hiện có. Ứng dụng tự động cân đối số dư ban đầu để khớp thực tế mà không làm mất lịch sử thu chi.
+                    </p>
+                  )}
                 </div>
               </div>
 

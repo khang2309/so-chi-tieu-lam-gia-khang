@@ -3,6 +3,8 @@ import { X, Check } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
+import { SmartAmountInput } from './SmartAmountInput';
+import { parseAmountOrExpression } from '../utils/mathExpression';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -164,7 +166,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount.replace(/[^0-9]/g, ''));
+    const numAmount = parseAmountOrExpression(amount, 0);
     if (!numAmount || numAmount <= 0) {
       alert('Vui lòng nhập số tiền hợp lệ lớn hơn 0!');
       return;
@@ -193,7 +195,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   };
 
   const handleQuickAddAmount = (addValue: number) => {
-    const current = parseFloat(amount.replace(/[^0-9]/g, '')) || 0;
+    const current = parseAmountOrExpression(amount, 0);
     setAmount((current + addValue).toString());
   };
 
@@ -253,22 +255,22 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
           {/* Amount Input */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#7a6a58]">
-              Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
-                autoFocus
-                className="w-full text-2xl font-bold font-sans px-4 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#7a6a58]">
-                ₫
+            <label className="text-xs font-semibold text-[#7a6a58] flex items-center justify-between">
+              <span>
+                Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
               </span>
-            </div>
+              <span className="text-[11px] text-[#7a6a58] font-normal">
+                Hỗ trợ phép tính: +, -, ×, ÷, k, M
+              </span>
+            </label>
+            <SmartAmountInput
+              value={amount}
+              onChange={setAmount}
+              showQuickOperators={true}
+              size="large"
+              placeholder="0"
+              autoFocus
+            />
 
             {/* Quick Amount Suggestion Buttons */}
             <div className="flex flex-wrap gap-1.5 pt-1">
