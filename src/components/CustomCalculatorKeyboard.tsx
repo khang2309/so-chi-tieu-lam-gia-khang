@@ -108,19 +108,10 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
 
   return (
     <div className={`w-full bg-[#f3f4f6] select-none ${className}`}>
-      {/* Quick Amount Suggestion Chips (with clear-to-zero quick button) */}
-      <div className="flex items-center gap-1.5 px-2.5 py-1.5 overflow-x-auto no-scrollbar border-b border-[#e5e7eb] bg-[#f9fafb]">
-        <button
-          type="button"
-          onClick={() => onChange('0')}
-          className="px-3 py-1.5 rounded bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-300 text-xs font-bold text-rose-600 shrink-0 flex items-center gap-1 active:scale-95 transition"
-          title="Xóa nhanh về 0đ"
-        >
-          <Delete className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Xóa (0đ)</span>
-        </button>
-        {quickAmounts && quickAmounts.length > 0 &&
-          quickAmounts.map((amt) => (
+      {/* Quick Amount Suggestion Chips (Money Lover style bar) */}
+      {quickAmounts && quickAmounts.length > 0 && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 overflow-x-auto no-scrollbar border-b border-[#e5e7eb] bg-[#f9fafb]">
+          {quickAmounts.map((amt) => (
             <button
               type="button"
               key={amt}
@@ -130,15 +121,16 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
               {formatExpressionWithDots(amt.toString())}
             </button>
           ))}
-      </div>
+        </div>
+      )}
 
       {/* Calculator Grid (4 Columns x 5 Rows matching Money Lover) */}
       <div className="grid grid-cols-4 grid-rows-5 gap-px bg-[#d1d5db] touch-manipulation">
-        {/* Row 1: Delete cluster (C, Backspace) + Operators */}
+        {/* Row 1: C, Operators, Backspace */}
         <button
           type="button"
           onClick={() => handlePress('C')}
-          className="h-12 sm:h-14 bg-rose-50/70 hover:bg-rose-100 active:bg-rose-200 text-rose-600 font-black text-2xl flex items-center justify-center transition active:scale-95"
+          className="h-12 sm:h-14 bg-white text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 font-bold text-2xl flex items-center justify-center transition active:scale-95"
           title="Xóa tất cả (Về 0)"
         >
           C
@@ -160,10 +152,10 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         <button
           type="button"
           onClick={() => handlePress('BACKSPACE')}
-          className="h-12 sm:h-14 bg-rose-50/70 hover:bg-rose-100 active:bg-rose-200 text-rose-600 flex items-center justify-center transition active:scale-95"
+          className="h-12 sm:h-14 bg-white text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 flex items-center justify-center transition active:scale-95"
           title="Xóa lùi từng số"
         >
-          <Delete className="w-7 h-7 sm:w-8 sm:h-8 text-rose-600 stroke-[2.3]" />
+          <Delete className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-600 stroke-[2.2]" />
         </button>
 
         {/* Row 2 */}

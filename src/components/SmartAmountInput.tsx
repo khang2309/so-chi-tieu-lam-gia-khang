@@ -6,7 +6,7 @@ import {
   formatExpressionWithDots,
 } from '../utils/mathExpression';
 import { formatCurrency } from '../utils/formatters';
-import { Calculator, X, Delete } from 'lucide-react';
+import { Calculator, X } from 'lucide-react';
 import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
 
 interface SmartAmountInputProps {
@@ -212,16 +212,16 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
       {/* Modal/Bottom Sheet for Calculator Keypad using React Portal */}
       {showKeypadModal &&
         createPortal(
-          <div className="fixed inset-0 z-[99999] flex flex-col justify-end bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-            {/* Backdrop click closes keypad immediately */}
+          <div className="fixed inset-0 z-[99999] flex flex-col justify-end pointer-events-none animate-in fade-in duration-150">
+            {/* Transparent backdrop to catch clicks outside the keypad and close it, without dimming the screen */}
             <div
-              className="absolute inset-0 cursor-pointer"
+              className="absolute inset-0 pointer-events-auto bg-transparent cursor-pointer"
               onClick={handleKeypadDone}
             />
 
-            <div className="relative z-10 w-full max-w-lg mx-auto bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200">
+            <div className="relative z-10 pointer-events-auto w-full max-w-lg mx-auto bg-white rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.18)] border-t border-gray-300 overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200">
               {/* Header: Clean Money Lover style */}
-              <div className="px-4 py-2.5 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between">
+              <div className="px-4 py-2 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
                   <span className="px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wide shrink-0">
                     VND
@@ -230,27 +230,14 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
                     {internalValue || '0'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {internalValue && internalValue !== '0' && (
-                    <button
-                      type="button"
-                      onClick={() => handleKeypadChange('0')}
-                      className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-bold active:scale-95 transition flex items-center gap-1"
-                      title="Xóa số về 0"
-                    >
-                      <Delete className="w-3.5 h-3.5 stroke-[2.3]" />
-                      <span>Xóa số</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleKeypadDone}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 active:scale-95 transition"
-                    title="Đóng bàn phím"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleKeypadDone}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 active:scale-95 transition shrink-0"
+                  title="Đóng bàn phím"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
               {/* Custom Calculator Keypad */}
