@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, Calculator, ChevronDown } from 'lucide-react';
+import { X, Check, Calculator } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
@@ -207,8 +207,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[96vh]">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
           <div className="flex items-center gap-2">
@@ -270,16 +270,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
 
           {/* Amount Input (Money Lover Style) */}
-          <div className="space-y-1">
+          <div className="pt-1 pb-1">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-[#7a6a58]">
-                Số tiền <span className="text-[#b94a3b]">*</span>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
+                Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
               </label>
               {!showKeypad && (
                 <button
                   type="button"
                   onClick={() => setShowKeypad(true)}
-                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition"
+                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 transition"
                 >
                   <Calculator className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Mở bàn phím số</span>
@@ -287,20 +287,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               )}
             </div>
 
-            {/* Money Lover Amount Bar with green underline */}
+            {/* Money Lover Amount Bar with clean green underline */}
             <div
               onClick={() => setShowKeypad(true)}
-              className={`flex items-center gap-3 py-2 px-3 rounded-xl border-2 transition cursor-pointer select-none ${
-                showKeypad
-                  ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20'
-                  : 'border-[#ebdcc9] bg-[#fbf5eb] hover:bg-[#fffdfa]'
-              }`}
+              className="mt-1.5 flex items-center gap-3 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
             >
-              <span className="px-2.5 py-1 rounded-md bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
+              <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
                 VND
               </span>
               <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-extrabold text-emerald-600 tracking-tight truncate">
+                <span className="text-3xl sm:text-4xl font-extrabold text-[#16a34a] tracking-tight truncate">
                   {amount || '0'}
                 </span>
                 {hasExpression && evaluatedAmount !== null && (
@@ -309,7 +305,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   </span>
                 )}
               </div>
-              <Calculator className="w-5 h-5 text-emerald-600 shrink-0" />
             </div>
           </div>
 
@@ -408,14 +403,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <label className="text-xs font-semibold text-[#7a6a58]">
               Danh mục <span className="text-[#b94a3b]">*</span>
             </label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-36 overflow-y-auto p-1 border border-[#ebdcc9] rounded-xl bg-[#fbf5eb]/60">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1 border border-[#ebdcc9] rounded-xl bg-[#fbf5eb]/60">
               {filteredCategories.map((cat) => {
                 const isSelected = categoryId === cat.id;
                 return (
                   <button
                     type="button"
                     key={cat.id}
-                    onClick={() => setCategoryId(cat.id)}
+                    onClick={() => {
+                      setCategoryId(cat.id);
+                      setShowKeypad(false);
+                    }}
                     className={`p-2 rounded-xl border text-center transition flex flex-col items-center gap-1 ${
                       isSelected
                         ? 'border-[#a25832] bg-[#fffdfa] ring-2 ring-[#a25832]'
@@ -486,23 +484,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         </form>
 
-        {/* Custom Calculator Keypad Docked at Bottom (Exact Money Lover style) */}
+        {/* Custom Calculator Keypad Docked at Bottom */}
         {showKeypad && (
           <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
-            <div className="flex items-center justify-between px-3 py-1 bg-[#f3f4f6] text-[11px] text-gray-500 font-medium border-b border-[#e5e7eb]">
-              <span className="flex items-center gap-1 font-semibold text-emerald-700">
-                <Calculator className="w-3.5 h-3.5 text-emerald-600" />
-                Bàn phím máy tính
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowKeypad(false)}
-                className="flex items-center gap-0.5 text-gray-500 hover:text-gray-800 transition py-0.5 px-1.5 rounded hover:bg-gray-200"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-                <span>Thu gọn</span>
-              </button>
-            </div>
             <CustomCalculatorKeyboard
               value={amount}
               onChange={setAmount}
@@ -510,9 +494,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 const ev = evaluateMathExpression(amount);
                 if (ev !== null && isMathExpression(amount)) {
                   setAmount(formatExpressionWithDots(Math.round(ev).toString()));
-                } else {
-                  setShowKeypad(false);
                 }
+                setShowKeypad(false);
               }}
             />
           </div>

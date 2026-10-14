@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   evaluateMathExpression,
   isMathExpression,
@@ -40,6 +41,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
   );
   const [showKeypadModal, setShowKeypadModal] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const closingRef = useRef<boolean>(false);
 
   // Sync external value
   useEffect(() => {
@@ -111,10 +113,13 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
         onChange(resolvedFormatted);
         if (onEvaluated) onEvaluated(evaluated);
       }
+      setShowKeypadModal(false);
+      inputRef.current?.blur();
     }
   };
 
   const handleClickInput = () => {
+    if (closingRef.current) return;
     if (onClick) {
       onClick();
     }
@@ -133,6 +138,11 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
   };
 
   const handleKeypadDone = () => {
+    closingRef.current = true;
+    setTimeout(() => {
+      closingRef.current = false;
+    }, 350);
+
     const ev = evaluateMathExpression(internalValue);
     if (ev !== null) {
       const resolved = formatExpressionWithDots(Math.round(ev).toString());
@@ -141,6 +151,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
       if (onEvaluated) onEvaluated(ev);
     }
     setShowKeypadModal(false);
+    inputRef.current?.blur();
   };
 
   const baseInputStyle =
@@ -161,13 +172,12 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
           value={internalValue}
           onChange={handleInputChange}
           onClick={handleClickInput}
-          onFocus={handleClickInput}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoFocus={autoFocus}
           autoComplete="off"
-          className={`w-full bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition cursor-pointer ${baseInputStyle} ${
+          className={`w-full bg-[#fbf5eb] border border-[#ebdcc9] text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none transition cursor-pointer select-none ${baseInputStyle} ${
             currencySymbol ? 'pr-16' : 'pr-9'
           } ${className}`}
         />
@@ -181,7 +191,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
           {!disableKeypadModal && (
             <button
               type="button"
-              onClick={() => setShowKeypadModal(true)}
+              onClick={handleClickInput}
               className="p-1 rounded-md text-[#a25832] hover:bg-[#ebdcc9] active:scale-95 transition"
               title="Mở bàn phím số & máy tính"
             >
@@ -199,42 +209,47 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
         </div>
       )}
 
-      {/* Modal/Bottom Sheet for Calculator Keypad */}
-      {showKeypadModal && (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div
-            className="fixed inset-0"
-            onClick={() => handleKeypadDone()}
-          />
-          <div className="relative z-10 w-full max-w-lg mx-auto bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200">
-            {/* Keypad Sheet Header: Amount Display */}
-            <div className="px-4 py-3 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wide">
-                  VND
-                </span>
-                <span className="text-2xl font-bold text-emerald-600 truncate max-w-[240px]">
-                  {internalValue || '0'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleKeypadDone()}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Custom Calculator Keypad */}
-            <CustomCalculatorKeyboard
-              value={internalValue}
-              onChange={handleKeypadChange}
-              onDone={handleKeypadDone}
+      {/* Modal/Bottom Sheet for Calculator Keypad using React Portal */}
+      {showKeypadModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[99999] flex flex-col justify-end bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
+            {/* Backdrop click closes keypad immediately */}
+            <div
+              className="absolute inset-0 cursor-pointer"
+              onClick={handleKeypadDone}
             />
-          </div>
-        </div>
-      )}
+
+            <div className="relative z-10 w-full max-w-lg mx-auto bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200">
+              {/* Header: Clean Money Lover style */}
+              <div className="px-4 py-2.5 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                  <span className="px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wide shrink-0">
+                    VND
+                  </span>
+                  <span className="text-xl sm:text-2xl font-bold text-emerald-600 truncate">
+                    {internalValue || '0'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleKeypadDone}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 active:scale-95 transition shrink-0"
+                  title="Đóng bàn phím"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Custom Calculator Keypad */}
+              <CustomCalculatorKeyboard
+                value={internalValue}
+                onChange={handleKeypadChange}
+                onDone={handleKeypadDone}
+              />
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

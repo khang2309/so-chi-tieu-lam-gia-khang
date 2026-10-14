@@ -72,7 +72,8 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
       const ev = evaluateMathExpression(value);
       if (ev !== null && isMathExpression(value)) {
         onChange(formatExpressionWithDots(Math.round(ev).toString()));
-      } else if (onDone) {
+      }
+      if (onDone) {
         onDone();
       }
       return;
@@ -106,7 +107,7 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
   };
 
   return (
-    <div className={`w-full bg-[#f3f4f6] border-t border-[#e5e7eb] select-none ${className}`}>
+    <div className={`w-full bg-[#f3f4f6] select-none ${className}`}>
       {/* Quick Amount Suggestion Chips (Money Lover style bar) */}
       {quickAmounts && quickAmounts.length > 0 && (
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 overflow-x-auto no-scrollbar border-b border-[#e5e7eb] bg-[#f9fafb]">
@@ -115,7 +116,7 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
               type="button"
               key={amt}
               onClick={() => handleQuickAdd(amt)}
-              className="px-3 py-1 rounded-sm bg-white hover:bg-[#f3f4f6] border border-[#d1d5db] text-xs font-semibold text-gray-700 shrink-0 active:scale-95 transition shadow-2xs"
+              className="px-2.5 py-1 rounded bg-white hover:bg-gray-100 border border-gray-300 text-xs font-semibold text-gray-700 shrink-0 active:scale-95 transition"
             >
               {formatExpressionWithDots(amt.toString())}
             </button>
@@ -123,65 +124,65 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         </div>
       )}
 
-      {/* Calculator Grid (4 Columns x 5 Rows matching media_1791982056535_a8d46179.jpg) */}
+      {/* Calculator Grid (4 Columns x 5 Rows matching Money Lover) */}
       <div className="grid grid-cols-4 grid-rows-5 gap-px bg-[#e5e7eb] touch-manipulation">
         {/* Row 1 */}
         <button
           type="button"
           onClick={() => handlePress('C')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-lg active:bg-gray-100 flex items-center justify-center transition"
         >
           C
         </button>
         <button
           type="button"
           onClick={() => handlePress('÷')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           ÷
         </button>
         <button
           type="button"
           onClick={() => handlePress('×')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           ×
         </button>
         <button
           type="button"
           onClick={() => handlePress('BACKSPACE')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold active:bg-gray-100 flex items-center justify-center transition"
           title="Xóa ký tự trước"
         >
-          <Delete className="w-6 h-6 text-emerald-600" />
+          <Delete className="w-5 h-5 text-emerald-600" />
         </button>
 
         {/* Row 2 */}
         <button
           type="button"
           onClick={() => handlePress('7')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           7
         </button>
         <button
           type="button"
           onClick={() => handlePress('8')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           8
         </button>
         <button
           type="button"
           onClick={() => handlePress('9')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           9
         </button>
         <button
           type="button"
           onClick={() => handlePress('−')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           −
         </button>
@@ -190,28 +191,28 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         <button
           type="button"
           onClick={() => handlePress('4')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           4
         </button>
         <button
           type="button"
           onClick={() => handlePress('5')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           5
         </button>
         <button
           type="button"
           onClick={() => handlePress('6')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           6
         </button>
         <button
           type="button"
           onClick={() => handlePress('+')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           +
         </button>
@@ -220,52 +221,52 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         <button
           type="button"
           onClick={() => handlePress('1')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           1
         </button>
         <button
           type="button"
           onClick={() => handlePress('2')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           2
         </button>
         <button
           type="button"
           onClick={() => handlePress('3')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           3
         </button>
         <button
           type="button"
           onClick={() => handlePress('DONE')}
-          className="row-span-2 bg-[#0284c7] hover:bg-[#0369a1] active:bg-[#075985] text-[#0f172a] flex items-center justify-center transition shadow-xs"
-          title="Tính hoặc Hoàn tất"
+          className="row-span-2 bg-[#0284c7] hover:bg-[#0369a1] active:bg-[#075985] text-white flex items-center justify-center transition shadow-xs"
+          title="Xong (Đóng bàn phím)"
         >
-          <ChevronRight className="w-9 h-9 stroke-[3]" />
+          <ChevronRight className="w-8 h-8 stroke-[3]" />
         </button>
 
         {/* Row 5 */}
         <button
           type="button"
           onClick={() => handlePress('0')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           0
         </button>
         <button
           type="button"
           onClick={() => handlePress('000')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-lg active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-bold text-base active:bg-gray-100 flex items-center justify-center transition"
         >
           000
         </button>
         <button
           type="button"
           onClick={() => handlePress('.')}
-          className="h-13 sm:h-14 bg-white text-emerald-600 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-11 sm:h-12 bg-white text-emerald-700 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
         >
           .
         </button>
