@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, Calculator } from 'lucide-react';
+import { X, Check, Calculator, Delete } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
@@ -290,21 +290,39 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {/* Money Lover Amount Bar with clean green underline */}
             <div
               onClick={() => setShowKeypad(true)}
-              className="mt-1.5 flex items-center gap-3 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
+              className="mt-1.5 flex items-center justify-between gap-3 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
             >
-              <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
-                VND
-              </span>
-              <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-extrabold text-[#16a34a] tracking-tight truncate">
-                  {amount || '0'}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
+                  VND
                 </span>
-                {hasExpression && evaluatedAmount !== null && (
-                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded shrink-0">
-                    = {formatCurrency(Math.round(evaluatedAmount))}
+                <div className="flex-1 min-w-0 flex items-baseline gap-2">
+                  <span className="text-3xl sm:text-4xl font-extrabold text-[#16a34a] tracking-tight truncate">
+                    {amount || '0'}
                   </span>
-                )}
+                  {hasExpression && evaluatedAmount !== null && (
+                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded shrink-0">
+                      = {formatCurrency(Math.round(evaluatedAmount))}
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* Clear amount button */}
+              {amount && amount !== '0' && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAmount('0');
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-bold shrink-0 flex items-center gap-1 active:scale-95 transition"
+                  title="Xóa số tiền về 0"
+                >
+                  <Delete className="w-3.5 h-3.5 stroke-[2.3]" />
+                  <span>Xóa số</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -318,9 +336,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setNote('')}
-                  className="text-[10px] text-[#7a6a58] hover:text-[#b94a3b]"
+                  className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-xs font-bold text-rose-600 hover:bg-rose-100 active:scale-95 transition flex items-center gap-1"
+                  title="Xóa nội dung ghi chú"
                 >
-                  Xóa
+                  <Delete className="w-3.5 h-3.5 stroke-[2.3]" />
+                  <span>Xóa ghi chú</span>
                 </button>
               )}
             </div>

@@ -108,81 +108,90 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
 
   return (
     <div className={`w-full bg-[#f3f4f6] select-none ${className}`}>
-      {/* Quick Amount Suggestion Chips (Money Lover style bar) */}
-      {quickAmounts && quickAmounts.length > 0 && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 overflow-x-auto no-scrollbar border-b border-[#e5e7eb] bg-[#f9fafb]">
-          {quickAmounts.map((amt) => (
+      {/* Quick Amount Suggestion Chips (with clear-to-zero quick button) */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 overflow-x-auto no-scrollbar border-b border-[#e5e7eb] bg-[#f9fafb]">
+        <button
+          type="button"
+          onClick={() => onChange('0')}
+          className="px-3 py-1.5 rounded bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-300 text-xs font-bold text-rose-600 shrink-0 flex items-center gap-1 active:scale-95 transition"
+          title="Xóa nhanh về 0đ"
+        >
+          <Delete className="w-3.5 h-3.5 stroke-[2.5]" />
+          <span>Xóa (0đ)</span>
+        </button>
+        {quickAmounts && quickAmounts.length > 0 &&
+          quickAmounts.map((amt) => (
             <button
               type="button"
               key={amt}
               onClick={() => handleQuickAdd(amt)}
-              className="px-2.5 py-1 rounded bg-white hover:bg-gray-100 border border-gray-300 text-xs font-semibold text-gray-700 shrink-0 active:scale-95 transition"
+              className="px-2.5 py-1.5 rounded bg-white hover:bg-gray-100 border border-gray-300 text-xs font-semibold text-gray-700 shrink-0 active:scale-95 transition"
             >
               {formatExpressionWithDots(amt.toString())}
             </button>
           ))}
-        </div>
-      )}
+      </div>
 
       {/* Calculator Grid (4 Columns x 5 Rows matching Money Lover) */}
-      <div className="grid grid-cols-4 grid-rows-5 gap-px bg-[#e5e7eb] touch-manipulation">
-        {/* Row 1 */}
+      <div className="grid grid-cols-4 grid-rows-5 gap-px bg-[#d1d5db] touch-manipulation">
+        {/* Row 1: Delete cluster (C, Backspace) + Operators */}
         <button
           type="button"
           onClick={() => handlePress('C')}
-          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-lg active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-rose-50/70 hover:bg-rose-100 active:bg-rose-200 text-rose-600 font-black text-2xl flex items-center justify-center transition active:scale-95"
+          title="Xóa tất cả (Về 0)"
         >
           C
         </button>
         <button
           type="button"
           onClick={() => handlePress('÷')}
-          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-emerald-700 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           ÷
         </button>
         <button
           type="button"
           onClick={() => handlePress('×')}
-          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-emerald-700 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           ×
         </button>
         <button
           type="button"
           onClick={() => handlePress('BACKSPACE')}
-          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold active:bg-gray-100 flex items-center justify-center transition"
-          title="Xóa ký tự trước"
+          className="h-12 sm:h-14 bg-rose-50/70 hover:bg-rose-100 active:bg-rose-200 text-rose-600 flex items-center justify-center transition active:scale-95"
+          title="Xóa lùi từng số"
         >
-          <Delete className="w-5 h-5 text-emerald-600" />
+          <Delete className="w-7 h-7 sm:w-8 sm:h-8 text-rose-600 stroke-[2.3]" />
         </button>
 
         {/* Row 2 */}
         <button
           type="button"
           onClick={() => handlePress('7')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           7
         </button>
         <button
           type="button"
           onClick={() => handlePress('8')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           8
         </button>
         <button
           type="button"
           onClick={() => handlePress('9')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           9
         </button>
         <button
           type="button"
           onClick={() => handlePress('−')}
-          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-emerald-700 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           −
         </button>
@@ -191,28 +200,28 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         <button
           type="button"
           onClick={() => handlePress('4')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           4
         </button>
         <button
           type="button"
           onClick={() => handlePress('5')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           5
         </button>
         <button
           type="button"
           onClick={() => handlePress('6')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           6
         </button>
         <button
           type="button"
           onClick={() => handlePress('+')}
-          className="h-11 sm:h-12 bg-white text-emerald-600 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-emerald-700 font-bold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           +
         </button>
@@ -221,21 +230,21 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         <button
           type="button"
           onClick={() => handlePress('1')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           1
         </button>
         <button
           type="button"
           onClick={() => handlePress('2')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           2
         </button>
         <button
           type="button"
           onClick={() => handlePress('3')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           3
         </button>
@@ -245,28 +254,28 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
           className="row-span-2 bg-[#0284c7] hover:bg-[#0369a1] active:bg-[#075985] text-white flex items-center justify-center transition shadow-xs"
           title="Xong (Đóng bàn phím)"
         >
-          <ChevronRight className="w-8 h-8 stroke-[3]" />
+          <ChevronRight className="w-9 h-9 stroke-[3.5]" />
         </button>
 
         {/* Row 5 */}
         <button
           type="button"
           onClick={() => handlePress('0')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-semibold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-semibold text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           0
         </button>
         <button
           type="button"
           onClick={() => handlePress('000')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-bold text-base active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-bold text-lg active:bg-gray-100 flex items-center justify-center transition"
         >
           000
         </button>
         <button
           type="button"
           onClick={() => handlePress('.')}
-          className="h-11 sm:h-12 bg-white text-emerald-700 font-bold text-xl active:bg-gray-100 flex items-center justify-center transition"
+          className="h-12 sm:h-14 bg-white text-gray-800 font-black text-2xl active:bg-gray-100 flex items-center justify-center transition"
         >
           .
         </button>

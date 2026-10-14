@@ -48,9 +48,25 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         instance = this;
 
-        // Xóa sạch serverBasePath cũ nếu có để WebView luôn tải bộ assets gốc ổn định
+        // Khôi phục và áp dụng serverBasePath OTA đã cài đặt nếu tồn tại và hợp lệ
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE);
-        prefs.edit().remove(KEY_SERVER_PATH).remove(KEY_OTA_VERSION).apply();
+        String savedOtaPath = prefs.getString(KEY_SERVER_PATH, null);
+        if (savedOtaPath != null && !savedOtaPath.isEmpty()) {
+            File otaDir = new File(savedOtaPath);
+            File indexFile = new File(otaDir, "index.html");
+            if (indexFile.exists() && indexFile.length() > 0) {
+                // Đảm bảo Capacitor cũng lưu đường dẫn này vào CapWebViewSettings
+                SharedPreferences capPrefs = getSharedPreferences(com.getcapacitor.plugin.WebView.WEBVIEW_PREFS_NAME, Activity.MODE_PRIVATE);
+                capPrefs.edit().putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH, savedOtaPath).apply();
+                if (this.bridge != null) {
+                    this.bridge.setServerBasePath(savedOtaPath);
+                }
+            } else {
+                prefs.edit().remove(KEY_SERVER_PATH).remove(KEY_OTA_VERSION).apply();
+                SharedPreferences capPrefs = getSharedPreferences(com.getcapacitor.plugin.WebView.WEBVIEW_PREFS_NAME, Activity.MODE_PRIVATE);
+                capPrefs.edit().remove(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH).apply();
+            }
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -352,6 +368,11 @@ public class MainActivity extends BridgeActivity {
                     prefs.edit()
                             .putString(KEY_SERVER_PATH, finalWebPath)
                             .putString(KEY_OTA_VERSION, version)
+                            .apply();
+
+                    SharedPreferences capPrefs = getSharedPreferences(com.getcapacitor.plugin.WebView.WEBVIEW_PREFS_NAME, Activity.MODE_PRIVATE);
+                    capPrefs.edit()
+                            .putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH, finalWebPath)
                             .apply();
 
                     emitUpdateEvent(100, "completed", null);

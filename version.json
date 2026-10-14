@@ -1,8 +1,8 @@
 {
-  "version": "2.1.15",
-  "updateType": "ota",
-  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "Tinh chỉnh giao diện bàn phím máy tính: loại bỏ thanh cuộn thừa, tối ưu chiều cao phím gọn gàng, tự động đóng bàn phím ngay lập tức khi bấm nút > hoặc bấm ra ngoài",
+  "version": "2.1.16",
+  "updateType": "apk",
+  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
+  "releaseNotes": "- Khắc phục triệt để lỗi tự nhảy về bản v2.1.7 khi mở lại ứng dụng\n- Tăng kích thước cụm nút xóa (nút C, phím lùi xóa số, nút xóa ghi chú và xóa số tiền to rõ hơn)\n- Tối ưu kích thước và cảm giác bấm bàn phím số Money Lover",
   "allowSkip": true,
-  "updatedAt": "2026-10-14T13:32:49.184Z"
+  "updatedAt": "2026-10-14T14:22:36.092Z"
 }
