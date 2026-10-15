@@ -1,8 +1,8 @@
 {
-  "version": "2.1.19",
-  "updateType": "ota",
-  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Tối ưu phản hồi Đặt lại ngay lập tức (0ms delay) - Sửa lỗi Đồng bộ tự động nạp lại ví và sổ dữ liệu mẫu sau khi đặt lại",
+  "version": "2.1.20",
+  "updateType": "apk",
+  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
+  "releaseNotes": "- Xoa hoan toan du lieu mau ban dau: Tai app lan dau sach 100% (0 vi, 0 so, 0 giao dich) - Cho phep xoa vi hoac so cuoi cung neu muon xoa sach danh sach",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T03:44:55.681Z"
+  "updatedAt": "2026-10-15T03:59:35.966Z"
 }

@@ -404,19 +404,17 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
-                  {wallets.length > 1 && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
-                          onDeleteWallet(wallet.id);
-                        }
-                      }}
-                      className="p-2 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#fee2e2]/60 transition"
-                      title="Xóa ví"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
+                        onDeleteWallet(wallet.id);
+                      }
+                    }}
+                    className="p-2 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#fee2e2]/60 transition"
+                    title="Xóa ví"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             );

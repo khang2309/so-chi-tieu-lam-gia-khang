@@ -266,7 +266,7 @@ export function guessCategory(
  * Khớp tên ứng dụng ngân hàng/ví điện tử với danh sách Ví của người dùng
  */
 function matchWalletByAppName(appName: string, rawText: string, wallets: Wallet[]): string {
-  if (wallets.length === 0) return 'wallet-bank';
+  if (wallets.length === 0) return '';
   const lowerApp = (appName || '').toLowerCase();
 
   // 1. Khớp theo số tài khoản xuất hiện trong thông báo (nếu người dùng có điền số TK vào ví)
@@ -317,7 +317,7 @@ function matchWalletByAppName(appName: string, rawText: string, wallets: Wallet[
   }
 
   const defaultWallet = wallets.find((w) => w.isDefault) || wallets[0];
-  return defaultWallet.id;
+  return defaultWallet?.id || '';
 }
 
 /**
@@ -434,7 +434,7 @@ export function parseRawBankNotification(
   }
 
   const defaultLedger = ledgers.find((l) => l.isDefault) || ledgers[0];
-  const ledgerId = defaultLedger?.id || 'ledger-personal';
+  const ledgerId = defaultLedger?.id || '';
   const walletId = matchWalletByAppName(notif.appName, fullText, wallets);
   const categoryId = guessCategory(extractedNote, type, categories);
 

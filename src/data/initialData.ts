@@ -1,94 +1,10 @@
 import { Ledger, Wallet, Category, Transaction } from '../types';
 
-const DEFAULT_CREATED_AT = '2025-01-01T00:00:00.000Z';
 
-export const DEFAULT_LEDGERS: Ledger[] = [
-  {
-    id: 'ledger-personal',
-    name: 'Chi tiêu cá nhân',
-    description: 'Chi tiêu sinh hoạt, ăn uống và cá nhân hằng ngày',
-    icon: 'User',
-    color: '#a25832', // Da bò ấm
-    isDefault: true,
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'ledger-room',
-    name: 'Tiền trọ',
-    description: 'Tiền phòng, điện, nước, mạng chia 3 người',
-    icon: 'Home',
-    color: '#3d7a5a', // Xanh lá ấm
-    isDefault: false,
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'ledger-hometown',
-    name: 'Chi tiêu ở quê',
-    description: 'Biếu bố mẹ, mua sắm đồ dùng gia đình ở quê',
-    icon: 'Trees',
-    color: '#3b6e8c', // Xanh xám nhạt
-    isDefault: false,
-    createdAt: DEFAULT_CREATED_AT,
-  },
-];
+// Không có dữ liệu mẫu ban đầu: Người dùng tự tạo hoặc đồng bộ từ Cloud
+export const DEFAULT_LEDGERS: Ledger[] = [];
 
-export const DEFAULT_WALLETS: Wallet[] = [
-  {
-    id: 'wallet-cash',
-    name: 'Tiền mặt',
-    initialBalance: 0,
-    icon: 'Banknote',
-    color: '#2e7d32',
-    accountNumber: 'Ví tiền mặt',
-    isDefault: true,
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'wallet-mbbank',
-    name: 'MB Bank',
-    initialBalance: 0,
-    icon: 'Building2',
-    color: '#1565c0',
-    accountNumber: 'MB Bank',
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'wallet-timo',
-    name: 'Timo',
-    initialBalance: 0,
-    icon: 'CreditCard',
-    color: '#7b1fa2',
-    accountNumber: 'Timo Digital Bank',
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'wallet-bidv',
-    name: 'BIDV',
-    initialBalance: 0,
-    icon: 'Landmark',
-    color: '#00897b',
-    accountNumber: 'BIDV',
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'wallet-sacombank',
-    name: 'Sacombank',
-    initialBalance: 0,
-    icon: 'Landmark',
-    color: '#c62828',
-    accountNumber: 'Sacombank',
-    createdAt: DEFAULT_CREATED_AT,
-  },
-  {
-    id: 'wallet-momo',
-    name: 'MoMo',
-    initialBalance: 0,
-    icon: 'Smartphone',
-    color: '#ad1457',
-    accountNumber: 'Ví điện tử MoMo',
-    createdAt: DEFAULT_CREATED_AT,
-  },
-];
+export const DEFAULT_WALLETS: Wallet[] = [];
 
 export const DEFAULT_CATEGORIES: Category[] = [
   {

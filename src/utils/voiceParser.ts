@@ -1,5 +1,4 @@
 import { Category, TransactionType, Wallet } from '../types';
-import { DEFAULT_WALLETS } from '../data/initialData';
 import {
   callGeminiText,
   callGeminiAudio,
@@ -548,14 +547,14 @@ export const VOICE_FEW_SHOT_SYSTEM_PROMPT = VOICE_CHAIN_OF_THOUGHT_PROMPT;
 export async function parseVoiceWithGemini(
   text: string,
   categories: Category[],
-  wallets: Wallet[] = DEFAULT_WALLETS,
+  wallets: Wallet[] = [],
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
   onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<ParsedVoiceResult> {
   const cleanInput = text.trim();
-  const walletList = wallets && wallets.length > 0 ? wallets : DEFAULT_WALLETS;
-  const walletNames = walletList.map((w) => w.name).join(', ') || 'Tiền mặt';
+  const walletList = wallets || [];
+  const walletNames = walletList.map((w) => w.name).join(', ') || 'Chưa tạo ví';
 
   if (!cleanInput) {
     return {
@@ -564,8 +563,8 @@ export async function parseVoiceWithGemini(
       type: 'expense',
       categoryId: categories[0]?.id || '',
       rawText: text,
-      walletId: walletList[0]?.id || 'wallet-cash',
-      walletName: walletList[0]?.name || 'Tiền mặt',
+      walletId: walletList[0]?.id || '',
+      walletName: walletList[0]?.name || '',
     };
   }
 
@@ -740,13 +739,13 @@ export async function parseVoiceAudioWithGemini(
   audioBase64: string,
   mimeType: string,
   categories: Category[],
-  wallets: Wallet[] = DEFAULT_WALLETS,
+  wallets: Wallet[] = [],
   apiKeyOverride?: string,
   abortSignal?: AbortSignal,
   onModelSwitch?: (modelName: string, reason: string) => void
 ): Promise<ParsedVoiceResult> {
-  const walletList = wallets && wallets.length > 0 ? wallets : DEFAULT_WALLETS;
-  const walletNames = walletList.map((w) => w.name).join(', ') || 'Tiền mặt';
+  const walletList = wallets || [];
+  const walletNames = walletList.map((w) => w.name).join(', ') || 'Chưa tạo ví';
   const categoryNames = categories.map((c) => c.name).join(', ');
 
   const systemPrompt = buildVoiceSystemPrompt(walletNames);
@@ -897,8 +896,8 @@ Danh sách danh mục có sẵn: ${categoryNames}.`;
     categoryId: finalCat?.id || '',
     rawText: transcript || note,
     transcript: transcript || undefined,
-    walletId: matchedWallet?.id || 'wallet-cash',
-    walletName: matchedWallet?.name || 'Tiền mặt',
+    walletId: matchedWallet?.id || '',
+    walletName: matchedWallet?.name || '',
   };
 }
 

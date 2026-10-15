@@ -452,7 +452,6 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        {ledgers.length > 1 && (
                           <button
                             onClick={() => {
                               if (window.confirm(`Bạn có chắc muốn xóa sổ "${ledger.name}"?`)) {
@@ -464,7 +463,6 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
                       </div>
                     </div>
                   );

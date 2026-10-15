@@ -131,7 +131,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       const defaultLedger =
         initialLedgerId && initialLedgerId !== 'all'
           ? initialLedgerId
-          : fallbackDefaultLedger?.id || 'ledger-personal';
+          : fallbackDefaultLedger?.id || '';
       setLedgerId(defaultLedger);
 
       const fallbackDefaultWallet = wallets.find((w) => w.isDefault) || wallets[0];
@@ -139,7 +139,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         initialValues?.walletId ||
         (initialWalletId && initialWalletId !== 'all'
           ? initialWalletId
-          : fallbackDefaultWallet?.id || 'wallet-cash');
+          : fallbackDefaultWallet?.id || '');
       setWalletId(defaultWallet);
 
       if (initialValues?.categoryId) {

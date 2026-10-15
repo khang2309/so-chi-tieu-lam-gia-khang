@@ -400,19 +400,17 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
-                    {wallets.length > 1 && (
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
-                            onDeleteWallet(wallet.id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#f5ebe0] transition"
-                        title="Xóa ví"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
+                          onDeleteWallet(wallet.id);
+                        }
+                      }}
+                      className="p-1.5 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#f5ebe0] transition"
+                      title="Xóa ví"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );

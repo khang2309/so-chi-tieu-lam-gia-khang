@@ -97,7 +97,7 @@ export function useExpenseManager() {
         if (defaultL) return defaultL.id;
       }
     } catch (_) {}
-    return localStorage.getItem(STORAGE_KEYS.ACTIVE_LEDGER) || 'ledger-personal';
+    return localStorage.getItem(STORAGE_KEYS.ACTIVE_LEDGER) || 'all';
   });
 
   const [activeWalletId, setActiveWalletId] = useState<string>(() => {
@@ -662,10 +662,6 @@ export function useExpenseManager() {
   };
 
   const deleteLedger = (id: string) => {
-    if (ledgers.length <= 1) {
-      alert('Bạn phải giữ lại ít nhất một cuốn sổ!');
-      return;
-    }
     deletedLedgerIdsRef.current.add(id);
     const now = new Date().toISOString();
     let remaining = ledgers.filter((l) => l.id !== id);
@@ -684,7 +680,7 @@ export function useExpenseManager() {
       removeLedgerFromFirestore(uid, id);
       remaining.forEach((l) => syncLedgerToFirestore(uid, l));
     }
-    if (activeLedgerId === id) {
+    if (activeLedgerId === id || remaining.length === 0) {
       const defaultL = remaining.find((l) => l.isDefault) || remaining[0];
       setActiveLedgerId(defaultL?.id || 'all');
     }
@@ -763,10 +759,6 @@ export function useExpenseManager() {
   };
 
   const deleteWallet = (id: string) => {
-    if (wallets.length <= 1) {
-      alert('Bạn cần giữ lại ít nhất 1 nguồn tiền/ví!');
-      return;
-    }
     const now = new Date().toISOString();
     deletedWalletIdsRef.current.add(id);
     let remaining = wallets.filter((w) => w.id !== id);
@@ -785,7 +777,7 @@ export function useExpenseManager() {
       removeWalletFromFirestore(uid, id);
       remaining.forEach((w) => syncWalletToFirestore(uid, w));
     }
-    if (activeWalletId === id) {
+    if (activeWalletId === id || remaining.length === 0) {
       setActiveWalletId('all');
     }
   };

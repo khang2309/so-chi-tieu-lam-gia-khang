@@ -175,9 +175,9 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       setBatchItems(cleanedItems);
 
       const defaultLedger =
-        activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || 'ledger-personal';
+        activeLedgerId !== 'all' ? activeLedgerId : ledgers[0]?.id || '';
       setSelectedLedgerId(defaultLedger);
-      setSelectedWalletId(wallets.find((w) => w.isDefault)?.id || wallets[0]?.id || 'wallet-cash');
+      setSelectedWalletId(wallets.find((w) => w.isDefault)?.id || wallets[0]?.id || '');
 
       setStep('verify');
     } catch (err: any) {
@@ -518,11 +518,15 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                     onChange={(e) => setSelectedLedgerId(e.target.value)}
                     className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
                   >
-                    {ledgers.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
+                    {ledgers.length === 0 ? (
+                      <option value="">(Chưa tạo sổ nào)</option>
+                    ) : (
+                      ledgers.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -535,11 +539,15 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                     onChange={(e) => setSelectedWalletId(e.target.value)}
                     className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
                   >
-                    {wallets.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
+                    {wallets.length === 0 ? (
+                      <option value="">(Chưa tạo ví nào)</option>
+                    ) : (
+                      wallets.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>
