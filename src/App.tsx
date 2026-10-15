@@ -544,6 +544,7 @@ export function App() {
             onAddWallet={manager.addWallet}
             onUpdateWallet={manager.updateWallet}
             onSetDefaultWallet={manager.setDefaultWallet}
+            onReorderWallets={manager.reorderWallets}
             onDeleteWallet={manager.deleteWallet}
             onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
           />
@@ -774,6 +775,7 @@ export function App() {
         onAddWallet={manager.addWallet}
         onUpdateWallet={manager.updateWallet}
         onSetDefaultWallet={manager.setDefaultWallet}
+        onReorderWallets={manager.reorderWallets}
         onDeleteWallet={manager.deleteWallet}
         onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
       />

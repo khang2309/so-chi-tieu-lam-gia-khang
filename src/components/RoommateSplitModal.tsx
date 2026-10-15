@@ -10,9 +10,13 @@ import {
   Check,
   PlusCircle,
   Receipt,
+  Calculator,
+  ChevronDown,
 } from 'lucide-react';
 import { Ledger, Wallet, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
+import { parseAmountOrExpression } from '../utils/mathExpression';
 
 interface RoommateSplitModalProps {
   isOpen: boolean;
@@ -23,6 +27,30 @@ interface RoommateSplitModalProps {
   onAddBatchTransactions?: (items: Array<Omit<Transaction, 'id' | 'createdAt'>>) => void;
 }
 
+type ActiveField =
+  | 'roomRent'
+  | 'electricOld'
+  | 'electricNew'
+  | 'electricPrice'
+  | 'waterOld'
+  | 'waterNew'
+  | 'waterPrice'
+  | 'internetFee'
+  | 'garbageFee'
+  | null;
+
+const FIELD_ORDER: Array<{ id: Exclude<ActiveField, null>; label: string }> = [
+  { id: 'roomRent', label: 'Tiền phòng cơ bản' },
+  { id: 'electricOld', label: 'Điện: Số cũ' },
+  { id: 'electricNew', label: 'Điện: Số mới' },
+  { id: 'electricPrice', label: 'Điện: Đơn giá/kWh' },
+  { id: 'waterOld', label: 'Nước: Chỉ số cũ' },
+  { id: 'waterNew', label: 'Nước: Chỉ số mới' },
+  { id: 'waterPrice', label: 'Nước: Đơn giá/khối' },
+  { id: 'internetFee', label: 'Tiền Wifi / Mạng' },
+  { id: 'garbageFee', label: 'Rác & Dịch vụ' },
+];
+
 export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   isOpen,
   onClose,
@@ -31,93 +59,61 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   onAddTransaction,
   onAddBatchTransactions,
 }) => {
-  // ---- Trường tiền (string) — tự định dạng dấu chấm mỗi 3 chữ số ----
+  // Toàn bộ các con số đều để rỗng "" mặc định theo yêu cầu
   const [roomRent, setRoomRent] = useState<string>('');
+  const [electricOld, setElectricOld] = useState<string>('');
+  const [electricNew, setElectricNew] = useState<string>('');
   const [electricPrice, setElectricPrice] = useState<string>('');
+  const [waterOld, setWaterOld] = useState<string>('');
+  const [waterNew, setWaterNew] = useState<string>('');
   const [waterPrice, setWaterPrice] = useState<string>('');
   const [internetFee, setInternetFee] = useState<string>('');
   const [garbageFee, setGarbageFee] = useState<string>('');
 
-  // ---- Chỉ số đồng hồ (number) — không cần định dạng ----
-  const [electricOld, setElectricOld] = useState<number | ''>('');
-  const [electricNew, setElectricNew] = useState<number | ''>('');
-  const [waterOld, setWaterOld] = useState<number | ''>('');
-  const [waterNew, setWaterNew] = useState<number | ''>('');
+  // Bàn phím máy tính Custom Calculator Keyboard (giống bên Thêm Giao Dịch)
+  const [activeField, setActiveField] = useState<ActiveField>('roomRent');
 
   // Số người chia tiền
   const [roommatesCount, setRoommatesCount] = useState<number>(1);
 
-  // Sổ và Ví
+  // Sổ và Ví: Luôn chọn đúng ví mặc định (isDefault === true)
   const defaultRoomLedger = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
+  const defaultWallet = wallets.find((w) => w.isDefault) || wallets[0];
+
   const [selectedLedgerId, setSelectedLedgerId] = useState<string>(
     defaultRoomLedger?.id || ''
   );
   const [selectedWalletId, setSelectedWalletId] = useState<string>(
-    wallets[0]?.id || ''
+    defaultWallet?.id || ''
   );
-
-  // maxHeight điều chỉnh theo visualViewport (tránh bàn phím ảo che footer)
-  const [modalMaxHeight, setModalMaxHeight] = useState<string>(
-    'calc(100dvh - env(safe-area-inset-top, 0px) - 8px)'
-  );
-
-  // ---- Helpers định dạng số tiền VN ----
-  const formatNum = (val: string): string =>
-    val.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  const parseNum = (val: string): number => Number(val.replace(/\./g, '')) || 0;
-
-  // ---- Cập nhật sổ + ví khi mở modal ----
-  useEffect(() => {
-    if (isOpen) {
-      const roomL = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
-      setSelectedLedgerId(roomL?.id || '');
-      // Ưu tiên: MoMo > MB Bank > ví đầu tiên
-      const preferredWallet =
-        wallets.find(
-          (w) =>
-            w.name?.toLowerCase().includes('momo') ||
-            w.name?.toLowerCase().includes('mb')
-        ) || wallets[0];
-      setSelectedWalletId(preferredWallet?.id || '');
-    }
-  }, [isOpen, ledgers, wallets]);
-
-  // ---- Lắng nghe visualViewport để tránh bàn phím che modal ----
-  useEffect(() => {
-    if (!isOpen) return;
-    const vv = window.visualViewport;
-    const updateHeight = () => {
-      if (vv) {
-        // Chừa 8px padding ở trên để không sát mép màn hình
-        setModalMaxHeight(`${vv.height - 8}px`);
-      }
-    };
-    updateHeight();
-    vv?.addEventListener('resize', updateHeight);
-    vv?.addEventListener('scroll', updateHeight);
-    return () => {
-      vv?.removeEventListener('resize', updateHeight);
-      vv?.removeEventListener('scroll', updateHeight);
-    };
-  }, [isOpen]);
-
-  const selectedLedger = ledgers.find((l) => l.id === selectedLedgerId) || defaultRoomLedger;
 
   const [copied, setCopied] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
 
+  // Cập nhật Sổ & Ví khi mở modal (Tự động chọn đúng ví mặc định)
+  useEffect(() => {
+    if (isOpen) {
+      const roomL = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
+      setSelectedLedgerId(roomL?.id || '');
+
+      const defW = wallets.find((w) => w.isDefault) || wallets[0];
+      setSelectedWalletId(defW?.id || '');
+      setActiveField('roomRent');
+    }
+  }, [isOpen, ledgers, wallets]);
+
   if (!isOpen) return null;
 
-  // ---- Tính toán ----
-  const numRoomRent = parseNum(roomRent);
-  const numElectricOld = Number(electricOld) || 0;
-  const numElectricNew = Number(electricNew) || 0;
-  const numElectricPrice = parseNum(electricPrice);
-  const numWaterOld = Number(waterOld) || 0;
-  const numWaterNew = Number(waterNew) || 0;
-  const numWaterPrice = parseNum(waterPrice);
-  const numInternetFee = parseNum(internetFee);
-  const numGarbageFee = parseNum(garbageFee);
+  // ---- Tính toán số liệu ----
+  const numRoomRent = parseAmountOrExpression(roomRent, 0);
+  const numElectricOld = Number(electricOld.replace(/\D/g, '')) || 0;
+  const numElectricNew = Number(electricNew.replace(/\D/g, '')) || 0;
+  const numElectricPrice = parseAmountOrExpression(electricPrice, 0);
+  const numWaterOld = Number(waterOld.replace(/\D/g, '')) || 0;
+  const numWaterNew = Number(waterNew.replace(/\D/g, '')) || 0;
+  const numWaterPrice = parseAmountOrExpression(waterPrice, 0);
+  const numInternetFee = parseAmountOrExpression(internetFee, 0);
+  const numGarbageFee = parseAmountOrExpression(garbageFee, 0);
 
   const electricKwh = Math.max(0, numElectricNew - numElectricOld);
   const totalElectric = electricKwh * numElectricPrice;
@@ -129,6 +125,100 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
     numRoomRent + totalElectric + totalWater + numInternetFee + numGarbageFee;
   const count = roommatesCount > 0 ? roommatesCount : 1;
   const perPersonAmount = Math.round(totalRoomExpense / count);
+
+  const selectedLedger = ledgers.find((l) => l.id === selectedLedgerId) || defaultRoomLedger;
+
+  // Lấy giá trị hiện tại của ô đang focus vào bàn phím
+  const getActiveValue = (): string => {
+    switch (activeField) {
+      case 'roomRent':
+        return roomRent;
+      case 'electricOld':
+        return electricOld;
+      case 'electricNew':
+        return electricNew;
+      case 'electricPrice':
+        return electricPrice;
+      case 'waterOld':
+        return waterOld;
+      case 'waterNew':
+        return waterNew;
+      case 'waterPrice':
+        return waterPrice;
+      case 'internetFee':
+        return internetFee;
+      case 'garbageFee':
+        return garbageFee;
+      default:
+        return '';
+    }
+  };
+
+  // Cập nhật giá trị từ bàn phím Custom
+  const handleKeyboardChange = (newVal: string) => {
+    if (!activeField) return;
+    const isMeter = ['electricOld', 'electricNew', 'waterOld', 'waterNew'].includes(activeField);
+    const cleanVal = isMeter ? newVal.replace(/\D/g, '') : newVal;
+
+    switch (activeField) {
+      case 'roomRent':
+        setRoomRent(cleanVal);
+        break;
+      case 'electricOld':
+        setElectricOld(cleanVal);
+        break;
+      case 'electricNew':
+        setElectricNew(cleanVal);
+        break;
+      case 'electricPrice':
+        setElectricPrice(cleanVal);
+        break;
+      case 'waterOld':
+        setWaterOld(cleanVal);
+        break;
+      case 'waterNew':
+        setWaterNew(cleanVal);
+        break;
+      case 'waterPrice':
+        setWaterPrice(cleanVal);
+        break;
+      case 'internetFee':
+        setInternetFee(cleanVal);
+        break;
+      case 'garbageFee':
+        setGarbageFee(cleanVal);
+        break;
+    }
+  };
+
+  // Nút Done (mũi tên xanh) trên bàn phím: Chuyển tiếp sang trường tiếp theo
+  const handleDone = () => {
+    if (!activeField) return;
+    const currentIdx = FIELD_ORDER.findIndex((f) => f.id === activeField);
+    if (currentIdx !== -1 && currentIdx < FIELD_ORDER.length - 1) {
+      setActiveField(FIELD_ORDER[currentIdx + 1].id);
+    } else {
+      setActiveField(null);
+    }
+  };
+
+  // Gợi ý nhanh các mốc tiền cho từng ô
+  const getActiveQuickAmounts = (): number[] => {
+    switch (activeField) {
+      case 'roomRent':
+        return [500000, 1000000, 1500000, 2000000, 2500000, 3000000, 3500000, 4000000];
+      case 'electricPrice':
+        return [2500, 3000, 3500, 3800, 4000, 4500];
+      case 'waterPrice':
+        return [15000, 18000, 20000, 25000, 30000];
+      case 'internetFee':
+        return [50000, 80000, 100000, 150000, 200000, 250000];
+      case 'garbageFee':
+        return [20000, 30000, 40000, 50000, 60000, 80000];
+      default:
+        return [];
+    }
+  };
 
   const breakdownSummary = `🏠 BẢNG TÍNH TIỀN TRỌ THÁNG (CHIA ${count} NGƯỜI):
 ----------------------------------
@@ -243,55 +333,84 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
       <div
-        className="relative w-full sm:max-w-lg sm:m-3 rounded-t-2xl sm:rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg flex flex-col"
-        style={{ maxHeight: modalMaxHeight }}
+        className="relative w-full sm:max-w-lg sm:m-3 rounded-t-2xl sm:rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-150"
+        style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - 8px)' }}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] rounded-t-2xl shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#3d7a5a]/15 text-[#3d7a5a] flex items-center justify-center">
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] rounded-t-2xl shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#3d7a5a]/15 text-[#3d7a5a] flex items-center justify-center shrink-0">
               <Users className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-[#3e332a]">
-                Công Cụ Tính Tiền Trọ (Chia {count} Người)
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-[#3e332a] truncate">
+                Tính Tiền Trọ (Chia {count} Người)
               </h3>
-              <p className="text-xs text-[#7a6a58]">
-                Tự động tách thành nhiều giao dịch độc lập vào Sổ
+              <p className="text-[11px] text-[#7a6a58] truncate">
+                Tách giao dịch độc lập vào Sổ
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Nút lưu nhanh ngay trên Header */}
+            <button
+              onClick={handleSaveToLedger}
+              disabled={savedSuccess || totalRoomExpense <= 0}
+              className="px-3 py-1.5 rounded-lg bg-[#3d7a5a] text-white text-xs font-bold hover:bg-[#316248] active:scale-95 transition shadow-xs flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+            >
+              {savedSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-white" />
+                  <span>Đã lưu!</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Lưu</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Content Body — scrollable, grows between header and footer */}
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+        {/* Content Body — scrollable */}
+        <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-3 overscroll-contain">
           {/* Room Rent */}
-          <div className="p-3 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-1.5">
+          <div
+            onClick={() => setActiveField('roomRent')}
+            className={`p-3 rounded-xl border transition cursor-pointer select-none ${
+              activeField === 'roomRent'
+                ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25 shadow-xs'
+                : 'bg-[#fbf5eb] border-[#ebdcc9] hover:bg-[#f5ebe0]/60'
+            }`}
+          >
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5">
+              <label className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5 cursor-pointer">
                 <Home className="w-4 h-4 text-[#a25832]" />
-                Tiền phòng cơ bản
+                <span>Tiền phòng cơ bản</span>
               </label>
               <span className="text-xs font-bold text-[#a25832]">
                 {formatCurrency(numRoomRent)}
               </span>
             </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={roomRent}
-              onChange={(e) => setRoomRent(formatNum(e.target.value))}
-              placeholder="Nhập tiền phòng..."
-              className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] focus:outline-none focus:border-[#a25832]"
-            />
+            <div className="mt-1.5 flex items-center justify-between px-3 py-2 rounded-lg bg-[#fffdfa] border border-[#ebdcc9]">
+              <span className={`text-xs font-bold ${roomRent ? 'text-[#3e332a]' : 'text-[#a89886]'}`}>
+                {roomRent || 'Nhập tiền phòng...'}
+              </span>
+              {activeField === 'roomRent' && (
+                <span className="w-1.5 h-4 bg-[#a25832] rounded-full animate-pulse" />
+              )}
+            </div>
           </div>
 
           {/* Electricity Section */}
@@ -299,45 +418,53 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5">
                 <Zap className="w-4 h-4 text-[#ca8a04]" />
-                Tiền điện ({electricKwh} kWh = {formatCurrency(totalElectric)})
+                <span>Tiền điện ({electricKwh} kWh = {formatCurrency(totalElectric)})</span>
               </label>
               <span className="text-xs font-bold text-[#ca8a04]">
                 {formatCurrency(totalElectric)}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <div>
-                <span className="text-[10px] text-[#7a6a58]">Số cũ:</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={electricOld}
-                  onChange={(e) => setElectricOld(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0"
-                  className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
+              <div
+                onClick={() => setActiveField('electricOld')}
+                className={`p-2 rounded-lg border transition cursor-pointer select-none ${
+                  activeField === 'electricOld'
+                    ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                    : 'bg-[#fffdfa] border-[#ebdcc9]'
+                }`}
+              >
+                <span className="text-[10px] text-[#7a6a58] block">Số cũ:</span>
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
+                  {electricOld || <span className="text-[#a89886] font-normal">0</span>}
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-[#7a6a58]">Số mới:</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={electricNew}
-                  onChange={(e) => setElectricNew(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0"
-                  className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
+
+              <div
+                onClick={() => setActiveField('electricNew')}
+                className={`p-2 rounded-lg border transition cursor-pointer select-none ${
+                  activeField === 'electricNew'
+                    ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                    : 'bg-[#fffdfa] border-[#ebdcc9]'
+                }`}
+              >
+                <span className="text-[10px] text-[#7a6a58] block">Số mới:</span>
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
+                  {electricNew || <span className="text-[#a89886] font-normal">0</span>}
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-[#7a6a58]">Đơn giá/kWh:</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={electricPrice}
-                  onChange={(e) => setElectricPrice(formatNum(e.target.value))}
-                  placeholder="3.500"
-                  className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
+
+              <div
+                onClick={() => setActiveField('electricPrice')}
+                className={`p-2 rounded-lg border transition cursor-pointer select-none ${
+                  activeField === 'electricPrice'
+                    ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                    : 'bg-[#fffdfa] border-[#ebdcc9]'
+                }`}
+              >
+                <span className="text-[10px] text-[#7a6a58] block">Đơn giá/kWh:</span>
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
+                  {electricPrice || <span className="text-[#a89886] font-normal">3.500</span>}
+                </div>
               </div>
             </div>
           </div>
@@ -347,78 +474,91 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5">
                 <Droplets className="w-4 h-4 text-[#0284c7]" />
-                Tiền nước ({waterM3} khối = {formatCurrency(totalWater)})
+                <span>Tiền nước ({waterM3} khối = {formatCurrency(totalWater)})</span>
               </label>
               <span className="text-xs font-bold text-[#0284c7]">
                 {formatCurrency(totalWater)}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <div>
-                <span className="text-[10px] text-[#7a6a58]">Chỉ số cũ:</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={waterOld}
-                  onChange={(e) => setWaterOld(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0"
-                  className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
+              <div
+                onClick={() => setActiveField('waterOld')}
+                className={`p-2 rounded-lg border transition cursor-pointer select-none ${
+                  activeField === 'waterOld'
+                    ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                    : 'bg-[#fffdfa] border-[#ebdcc9]'
+                }`}
+              >
+                <span className="text-[10px] text-[#7a6a58] block">Chỉ số cũ:</span>
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
+                  {waterOld || <span className="text-[#a89886] font-normal">0</span>}
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-[#7a6a58]">Chỉ số mới:</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={waterNew}
-                  onChange={(e) => setWaterNew(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0"
-                  className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
+
+              <div
+                onClick={() => setActiveField('waterNew')}
+                className={`p-2 rounded-lg border transition cursor-pointer select-none ${
+                  activeField === 'waterNew'
+                    ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                    : 'bg-[#fffdfa] border-[#ebdcc9]'
+                }`}
+              >
+                <span className="text-[10px] text-[#7a6a58] block">Chỉ số mới:</span>
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
+                  {waterNew || <span className="text-[#a89886] font-normal">0</span>}
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-[#7a6a58]">Đơn giá/khối:</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={waterPrice}
-                  onChange={(e) => setWaterPrice(formatNum(e.target.value))}
-                  placeholder="25.000"
-                  className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
+
+              <div
+                onClick={() => setActiveField('waterPrice')}
+                className={`p-2 rounded-lg border transition cursor-pointer select-none ${
+                  activeField === 'waterPrice'
+                    ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                    : 'bg-[#fffdfa] border-[#ebdcc9]'
+                }`}
+              >
+                <span className="text-[10px] text-[#7a6a58] block">Đơn giá/khối:</span>
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
+                  {waterPrice || <span className="text-[#a89886] font-normal">25.000</span>}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Internet & Garbage Fees */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="p-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-1">
-              <label className="text-[11px] font-semibold text-[#3e332a] flex items-center gap-1">
+            <div
+              onClick={() => setActiveField('internetFee')}
+              className={`p-2.5 rounded-xl border transition cursor-pointer select-none ${
+                activeField === 'internetFee'
+                  ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                  : 'bg-[#fbf5eb] border-[#ebdcc9]'
+              }`}
+            >
+              <label className="text-[11px] font-semibold text-[#3e332a] flex items-center gap-1 cursor-pointer">
                 <Wifi className="w-3.5 h-3.5 text-[#7c3aed]" />
-                Tiền Wifi / Mạng
+                <span>Tiền Wifi / Mạng</span>
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={internetFee}
-                onChange={(e) => setInternetFee(formatNum(e.target.value))}
-                placeholder="0"
-                className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
-              />
+              <div className="text-xs font-bold text-[#3e332a] truncate mt-1">
+                {internetFee || <span className="text-[#a89886] font-normal">0</span>}
+              </div>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-1">
-              <label className="text-[11px] font-semibold text-[#3e332a] flex items-center gap-1">
+
+            <div
+              onClick={() => setActiveField('garbageFee')}
+              className={`p-2.5 rounded-xl border transition cursor-pointer select-none ${
+                activeField === 'garbageFee'
+                  ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
+                  : 'bg-[#fbf5eb] border-[#ebdcc9]'
+              }`}
+            >
+              <label className="text-[11px] font-semibold text-[#3e332a] flex items-center gap-1 cursor-pointer">
                 <Receipt className="w-3.5 h-3.5 text-[#6b7280]" />
-                Rác &amp; Dịch vụ
+                <span>Rác & Dịch vụ</span>
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={garbageFee}
-                onChange={(e) => setGarbageFee(formatNum(e.target.value))}
-                placeholder="0"
-                className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
-              />
+              <div className="text-xs font-bold text-[#3e332a] truncate mt-1">
+                {garbageFee || <span className="text-[#a89886] font-normal">0</span>}
+              </div>
             </div>
           </div>
 
@@ -426,13 +566,13 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
           <div className="flex items-center justify-between p-3 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9]">
             <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1.5">
               <Users className="w-4 h-4 text-[#3d7a5a]" />
-              Số người chia tiền:
+              <span>Số người chia tiền:</span>
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setRoommatesCount(Math.max(1, roommatesCount - 1))}
-                className="w-7 h-7 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-bold text-[#3e332a]"
+                className="w-7 h-7 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-bold text-[#3e332a] active:scale-95 transition"
               >
                 -
               </button>
@@ -442,7 +582,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
               <button
                 type="button"
                 onClick={() => setRoommatesCount(roommatesCount + 1)}
-                className="w-7 h-7 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-bold text-[#3e332a]"
+                className="w-7 h-7 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-bold text-[#3e332a] active:scale-95 transition"
               >
                 +
               </button>
@@ -450,7 +590,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
           </div>
 
           {/* Calculation Summary Card */}
-          <div className="p-4 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] space-y-2">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] space-y-2">
             <div className="flex items-center justify-between text-xs text-[#7a6a58]">
               <span>Tổng hóa đơn cả phòng:</span>
               <strong className="text-sm text-[#3e332a]">
@@ -461,7 +601,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             <div className="pt-2 border-t border-[#ebdcc9] flex items-center justify-between">
               <div>
                 <span className="text-xs font-serif italic text-[#7a6a58]">
-                  Mỗi người phải đóng (chia {count}):
+                  Mỗi người đóng (chia {count}):
                 </span>
                 <div className="text-xl sm:text-2xl font-bold text-[#a25832]">
                   {formatCurrency(perPersonAmount)}
@@ -471,12 +611,12 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
               {/* Copy breakdown button */}
               <button
                 onClick={handleCopy}
-                className="px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:text-[#3e332a] transition flex items-center gap-1.5 shadow-xs"
+                className="px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:text-[#3e332a] transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
               >
                 {copied ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-[#2e7d32]" />
-                    <span className="text-[#2e7d32]">Đã sao chép!</span>
+                    <span className="text-[#2e7d32] font-bold">Đã chép!</span>
                   </>
                 ) : (
                   <>
@@ -506,11 +646,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             </select>
           </div>
 
-          {/* Select wallet to record */}
+          {/* Select wallet to record (Chọn đúng ví mặc định ⭐) */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#7a6a58]">
-              Trừ vào ví của Lâm Gia Khang:
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[#7a6a58]">
+                Trừ vào ví của Lâm Gia Khang:
+              </label>
+              {wallets.find((w) => w.id === selectedWalletId)?.isDefault && (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
+                  ⭐ Ví mặc định
+                </span>
+              )}
+            </div>
             <select
               value={selectedWalletId}
               onChange={(e) => setSelectedWalletId(e.target.value)}
@@ -518,43 +665,74 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             >
               {wallets.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name}
+                  {w.name} {w.isDefault ? '⭐ (Mặc định)' : ''}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Footer Actions — luôn hiển thị kể cả khi bàn phím đang mở */}
-        <div
-          className="px-4 pt-3 pb-4 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between gap-2 shrink-0"
-          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-        >
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-[#ebdcc9] text-xs font-medium text-[#7a6a58] hover:bg-[#ebdcc9] transition"
-          >
-            Đóng
-          </button>
+        {/* Custom Calculator Keypad Docked at Bottom (Bàn phím máy tính giống Thêm Giao Dịch) */}
+        {activeField ? (
+          <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
+            {/* Header thanh điều khiển bàn phím */}
+            <div className="px-3 py-1.5 flex items-center justify-between bg-[#f3f4f6] border-b border-[#e5e7eb]">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Calculator className="w-3.5 h-3.5 text-[#0284c7] shrink-0" />
+                <span className="text-xs font-bold text-gray-700 truncate">
+                  Đang nhập: {FIELD_ORDER.find((f) => f.id === activeField)?.label}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveField(null)}
+                className="px-2 py-0.5 rounded-md bg-white border border-gray-300 text-[11px] font-bold text-gray-600 hover:text-gray-900 transition flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>Ẩn bàn phím</span>
+              </button>
+            </div>
 
-          <button
-            onClick={handleSaveToLedger}
-            disabled={savedSuccess || totalRoomExpense <= 0}
-            className="px-5 py-2 rounded-xl bg-[#3d7a5a] text-white text-xs font-semibold hover:bg-[#316248] active:scale-95 transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+            <CustomCalculatorKeyboard
+              value={getActiveValue()}
+              onChange={handleKeyboardChange}
+              onDone={handleDone}
+              quickAmounts={getActiveQuickAmounts()}
+            />
+          </div>
+        ) : (
+          /* Footer khi bàn phím đã ẩn */
+          <div
+            className="px-4 pt-3 pb-3 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between gap-2 shrink-0"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
-            {savedSuccess ? (
-              <>
-                <Check className="w-4 h-4 text-white" />
-                <span>Đã lưu các khoản vào {selectedLedger?.name || 'sổ'}!</span>
-              </>
-            ) : (
-              <>
-                <PlusCircle className="w-4 h-4" />
-                <span>Lưu các khoản trên vào {selectedLedger?.name || 'Sổ Tiền Trọ'}</span>
-              </>
-            )}
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveField('roomRent')}
+              className="px-3 py-2 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] text-xs font-semibold text-[#7a6a58] hover:bg-[#ebdcc9] transition flex items-center gap-1 cursor-pointer"
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              <span>Mở bàn phím số</span>
+            </button>
+
+            <button
+              onClick={handleSaveToLedger}
+              disabled={savedSuccess || totalRoomExpense <= 0}
+              className="px-5 py-2 rounded-xl bg-[#3d7a5a] text-white text-xs font-semibold hover:bg-[#316248] active:scale-95 transition shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              {savedSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>Đã lưu vào {selectedLedger?.name || 'sổ'}!</span>
+                </>
+              ) : (
+                <>
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Lưu vào {selectedLedger?.name || 'Sổ Tiền Trọ'}</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

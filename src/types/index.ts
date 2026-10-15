@@ -22,6 +22,7 @@ export interface Wallet {
   color: string;
   accountNumber?: string;
   isDefault?: boolean;
+  order?: number;
   createdAt: string;
   updatedAt?: string;
 }

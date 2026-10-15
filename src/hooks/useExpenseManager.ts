@@ -51,7 +51,7 @@ export function useExpenseManager() {
         if (parsed.length > 0 && !parsed.some((w) => w.isDefault)) {
           parsed[0].isDefault = true;
         }
-        return parsed;
+        return parsed.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       }
       return DEFAULT_WALLETS;
     } catch {
@@ -692,6 +692,7 @@ export function useExpenseManager() {
     const newWallet: Wallet = sanitizeData({
       ...data,
       isDefault: shouldBeDefault,
+      order: wallets.length,
       id: 'wallet-' + Date.now(),
       createdAt: now,
       updatedAt: now,
@@ -756,6 +757,25 @@ export function useExpenseManager() {
       }
       return updated;
     });
+  };
+
+  const reorderWallets = (reordered: Wallet[]) => {
+    const now = new Date().toISOString();
+    const updated = reordered.map((w, idx) =>
+      sanitizeData({
+        ...w,
+        order: idx,
+        updatedAt: now,
+      })
+    );
+    setWallets(updated);
+    try {
+      localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(updated));
+    } catch (_) {}
+    const uid = auth?.currentUser?.uid;
+    if (uid) {
+      updated.forEach((w) => syncWalletToFirestore(uid, w));
+    }
   };
 
   const deleteWallet = (id: string) => {
@@ -1048,6 +1068,7 @@ export function useExpenseManager() {
     addWallet,
     updateWallet,
     setDefaultWallet,
+    reorderWallets,
     deleteWallet,
     transferMoney,
     addCategory,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Wallet as WalletIcon,
   Plus,
@@ -8,6 +8,9 @@ import {
   Check,
   Star,
   X,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Wallet } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -22,6 +25,7 @@ interface WalletTabProps {
   onAddWallet: (data: Omit<Wallet, 'id' | 'createdAt'>) => void;
   onUpdateWallet: (id: string, data: Partial<Wallet>) => void;
   onSetDefaultWallet?: (id: string) => void;
+  onReorderWallets?: (reordered: Wallet[]) => void;
   onDeleteWallet: (id: string) => void;
   onOpenTransferModal: () => void;
 }
@@ -33,11 +37,24 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   onAddWallet,
   onUpdateWallet,
   onSetDefaultWallet,
+  onReorderWallets,
   onDeleteWallet,
   onOpenTransferModal,
 }) => {
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
   const [isAdding, setIsAdding] = useState<boolean>(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+
+  const moveWallet = (fromIndex: number, toIndex: number) => {
+    if (!onReorderWallets) return;
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= wallets.length || toIndex >= wallets.length) return;
+    if (fromIndex === toIndex) return;
+    const updated = [...wallets];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    onReorderWallets(updated);
+  };
 
   // Form states
   const [name, setName] = useState<string>('');
@@ -366,21 +383,98 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {wallets.map((wallet) => {
+          {wallets.map((wallet, idx) => {
             const currentBalance = walletBalances[wallet.id] || 0;
+            const isDragging = draggingId === wallet.id;
             return (
               <div
                 key={wallet.id}
-                className="p-4 rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper hover:bg-[#fbf5eb]/60 transition flex items-center justify-between gap-3 group"
+                data-wallet-index={idx}
+                draggable={Boolean(onReorderWallets && wallets.length > 1)}
+                onDragStart={() => {
+                  dragIndexRef.current = idx;
+                  setDraggingId(wallet.id);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (dragIndexRef.current !== null && dragIndexRef.current !== idx) {
+                    moveWallet(dragIndexRef.current, idx);
+                  }
+                  dragIndexRef.current = null;
+                  setDraggingId(null);
+                }}
+                onDragEnd={() => {
+                  dragIndexRef.current = null;
+                  setDraggingId(null);
+                }}
+                className={`p-3.5 sm:p-4 rounded-2xl border transition flex items-center justify-between gap-2.5 sm:gap-3 group select-none ${
+                  isDragging
+                    ? 'border-[#a25832] bg-[#f5ebe0] ring-2 ring-[#a25832]/30 shadow-md'
+                    : 'border-[#e8ded1] bg-[#fffdfa] shadow-paper hover:bg-[#fbf5eb]/60'
+                }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  {/* Reorder Grip Handle & Chevron Up/Down */}
+                  {wallets.length > 1 && onReorderWallets && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <div
+                        onTouchStart={() => {
+                          dragIndexRef.current = idx;
+                          setDraggingId(wallet.id);
+                        }}
+                        onTouchMove={(e) => {
+                          if (dragIndexRef.current === null) return;
+                          const touch = e.touches[0];
+                          if (!touch) return;
+                          const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                          const card = el?.closest('[data-wallet-index]');
+                          if (card) {
+                            const targetIdx = Number(card.getAttribute('data-wallet-index'));
+                            if (!isNaN(targetIdx) && targetIdx !== dragIndexRef.current) {
+                              moveWallet(dragIndexRef.current, targetIdx);
+                              dragIndexRef.current = targetIdx;
+                            }
+                          }
+                        }}
+                        onTouchEnd={() => {
+                          dragIndexRef.current = null;
+                          setDraggingId(null);
+                        }}
+                        className="p-1 -ml-1 text-[#a89886] hover:text-[#3e332a] active:text-[#a25832] cursor-grab active:cursor-grabbing touch-none"
+                        title="Giữ và kéo để đổi vị trí ví"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => moveWallet(idx, idx - 1)}
+                          className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition"
+                          title="Chuyển ví lên trên"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === wallets.length - 1}
+                          onClick={() => moveWallet(idx, idx + 1)}
+                          className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition"
+                          title="Chuyển ví xuống dưới"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-xs"
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-xs"
                     style={{ backgroundColor: wallet.color }}
                   >
                     <DynamicIcon name={wallet.icon} className="w-5 h-5" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-bold text-sm text-[#3e332a] truncate">
                         {wallet.name}
