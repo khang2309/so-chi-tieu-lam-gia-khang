@@ -21,8 +21,10 @@ import {
   AlertTriangle,
   RefreshCw,
   Landmark,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { showToast } from '../utils/toast';
 import { getSavedVisionConfig, saveVisionConfig } from '../utils/cloudVisionService';
 import { getCurrentRunningVersion } from '../utils/appUpdater';
 import {
@@ -61,11 +63,40 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onCheckUpdate,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, isOnline, logout, openAuthModal } = useAuth();
+  const { user, isOnline, logout, openAuthModal, linkEmailPassword } = useAuth();
 
   // Manual cloud sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  // Link Email/Password state
+  const [linkPasswordInput, setLinkPasswordInput] = useState('');
+  const [isLinkingPassword, setIsLinkingPassword] = useState(false);
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+
+  const handleSaveLinkedPassword = async () => {
+    const cleanPass = linkPasswordInput.trim();
+    if (!cleanPass) {
+      showToast('Vui lòng nhập mật khẩu cần đặt.');
+      return;
+    }
+    if (cleanPass.length < 6) {
+      showToast('Mật khẩu cần tối thiểu 6 ký tự.');
+      return;
+    }
+    setIsLinkingPassword(true);
+    try {
+      await linkEmailPassword(cleanPass);
+      showToast('Đã lưu mật khẩu thành công! Giờ bạn có thể dùng Email + Mật khẩu để đăng nhập.');
+      setLinkPasswordInput('');
+      setShowPasswordSection(false);
+    } catch (err: any) {
+      console.warn('Lỗi liên kết mật khẩu:', err);
+      showToast('Lỗi: ' + (err?.message || 'Không thể liên kết mật khẩu'));
+    } finally {
+      setIsLinkingPassword(false);
+    }
+  };
 
   // Gemini AI Vision & Parser Config
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
@@ -252,6 +283,47 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 <div className="text-[11px] text-[#15803d] bg-[#f0fdf4] border border-[#bbf7d0] p-2.5 rounded-lg flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>Dữ liệu đang được đồng bộ an toàn trên Firebase Cloud.</span>
+                </div>
+
+                {/* KHU VỰC THIẾT LẬP / ĐẶT MẬT KHẨU ĐĂNG NHẬP TRỰC TIẾP */}
+                <div className="p-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#3e332a]">
+                      <Lock className="w-3.5 h-3.5 text-[#a25832]" />
+                      <span>Mật khẩu đăng nhập bằng Email</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordSection(!showPasswordSection)}
+                      className="text-[11px] font-bold text-[#a25832] hover:underline cursor-pointer"
+                    >
+                      {showPasswordSection ? 'Thu gọn' : 'Thiết lập mật khẩu'}
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-[#7a6a58] leading-relaxed">
+                    Nếu bạn đăng nhập bằng Google, bạn có thể đặt mật khẩu tại đây để đăng nhập bằng Email + Mật khẩu bất cứ lúc nào mà không cần bấm Google.
+                  </p>
+
+                  {showPasswordSection && (
+                    <div className="pt-2 border-t border-[#ebdcc9] flex flex-col sm:flex-row gap-2 animate-in fade-in duration-150">
+                      <input
+                        type="password"
+                        value={linkPasswordInput}
+                        onChange={(e) => setLinkPasswordInput(e.target.value)}
+                        placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
+                        className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-white border border-[#ebdcc9] text-[#3e332a] focus:outline-none focus:border-[#a25832]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveLinkedPassword}
+                        disabled={isLinkingPassword}
+                        className="px-3 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] active:scale-95 disabled:opacity-50 transition shrink-0 cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        {isLinkingPassword ? 'Đang lưu...' : 'Lưu mật khẩu ngay'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {onSyncToCloud && (

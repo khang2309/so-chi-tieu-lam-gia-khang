@@ -9,6 +9,9 @@ import {
   GoogleAuthProvider,
   signInWithCredential,
   signInWithPopup,
+  EmailAuthProvider,
+  linkWithCredential,
+  updatePassword,
 } from 'firebase/auth';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
@@ -24,6 +27,7 @@ interface AuthContextType {
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
+  linkEmailPassword: (password: string) => Promise<void>;
   loginWithGoogleNative: () => Promise<void>;
   logout: () => Promise<void>;
   continueOffline: () => void;
@@ -120,6 +124,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
     }
     await sendPasswordResetEmail(auth, email);
+  };
+
+  const linkEmailPassword = async (newPassword: string) => {
+    if (!auth?.currentUser || !auth.currentUser.email) {
+      throw new Error('Bạn cần đăng nhập tài khoản trước khi thiết lập mật khẩu.');
+    }
+    const email = auth.currentUser.email;
+    const credential = EmailAuthProvider.credential(email, newPassword);
+
+    try {
+      await linkWithCredential(auth.currentUser, credential);
+    } catch (err: any) {
+      if (err?.code === 'auth/provider-already-linked') {
+        await updatePassword(auth.currentUser, newPassword);
+      } else {
+        throw err;
+      }
+    }
   };
 
   const loginWithGoogleNative = async () => {
@@ -243,6 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmail,
         registerWithEmail,
         sendPasswordReset,
+        linkEmailPassword,
         loginWithGoogleNative,
         logout,
         continueOffline,
