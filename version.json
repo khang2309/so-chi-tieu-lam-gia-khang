@@ -1,10 +1,10 @@
 {
-  "version": "2.1.32",
+  "version": "2.1.33",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Fix Minified React error #310 trong AppUpdateModal",
+  "releaseNotes": "Fix modal Tinh Tien Tro bi bam phim an nut Luu",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T10:46:51.148Z"
+  "updatedAt": "2026-10-15T10:57:36.665Z"
 }

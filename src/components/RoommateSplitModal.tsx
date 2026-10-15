@@ -209,10 +209,12 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full sm:max-w-lg sm:m-3 rounded-t-2xl sm:rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg flex flex-col"
+        style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - 8px)' }}
+      >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
+        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] rounded-t-2xl shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#3d7a5a]/15 text-[#3d7a5a] flex items-center justify-center">
               <Users className="w-4 h-4" />
@@ -234,8 +236,9 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+        {/* Content Body — scrollable, grows between header and footer */}
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+          {/* ===== phần nội dung giữ nguyên, không đổi bất cứ thứ gì ===== */}
           {/* Room Rent */}
           <div className="p-3 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-1.5">
             <div className="flex items-center justify-between">
@@ -479,8 +482,11 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between gap-2">
+        {/* Footer Actions — luôn hiển thị kể cả khi bàn phím đang mở */}
+        <div
+          className="px-4 pt-3 pb-4 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between gap-2 shrink-0"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl border border-[#ebdcc9] text-xs font-medium text-[#7a6a58] hover:bg-[#ebdcc9] transition"
