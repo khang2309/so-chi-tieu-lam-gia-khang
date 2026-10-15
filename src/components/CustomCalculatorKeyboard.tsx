@@ -69,9 +69,12 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
     }
 
     if (key === 'DONE') {
-      const ev = evaluateMathExpression(value);
-      if (ev !== null && isMathExpression(value)) {
-        onChange(formatExpressionWithDots(Math.round(ev).toString()));
+      if (isMathExpression(value)) {
+        const ev = evaluateMathExpression(value);
+        if (ev !== null && !isNaN(ev) && isFinite(ev)) {
+          onChange(formatExpressionWithDots(Math.round(ev).toString()));
+          return;
+        }
       }
       if (onDone) {
         onDone();
@@ -243,10 +246,18 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
         <button
           type="button"
           onClick={() => handlePress('DONE')}
-          className="row-span-2 bg-[#0284c7] hover:bg-[#0369a1] active:bg-[#075985] text-white flex items-center justify-center transition shadow-xs"
-          title="Xong (Đóng bàn phím)"
+          className={`row-span-2 text-white flex items-center justify-center transition shadow-xs cursor-pointer select-none ${
+            isMathExpression(value)
+              ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800'
+              : 'bg-[#0284c7] hover:bg-[#0369a1] active:bg-[#075985]'
+          }`}
+          title={isMathExpression(value) ? 'Tính kết quả (=)' : 'Xong (Tiếp tục)'}
         >
-          <ChevronRight className="w-9 h-9 stroke-[3.5]" />
+          {isMathExpression(value) ? (
+            <span className="text-3xl font-black font-mono leading-none select-none">=</span>
+          ) : (
+            <ChevronRight className="w-9 h-9 stroke-[3.5]" />
+          )}
         </button>
 
         {/* Row 5 */}

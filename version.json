@@ -1,10 +1,10 @@
 {
-  "version": "2.1.36",
+  "version": "2.1.37",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Fix loi doi vi tri vi tien bi nhay ve do Firestore snapshot chua sort va thieu guard cờ",
+  "releaseNotes": "Ho tro phep tinh toan toan dien cho moi o trong Tinh Tien Tro, nut bang tinh toan truc quan",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T11:36:59.167Z"
+  "updatedAt": "2026-10-15T11:54:17.132Z"
 }

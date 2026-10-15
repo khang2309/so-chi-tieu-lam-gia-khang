@@ -16,7 +16,12 @@ import {
 import { Ledger, Wallet, Transaction } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
-import { parseAmountOrExpression } from '../utils/mathExpression';
+import {
+  parseAmountOrExpression,
+  evaluateMathExpression,
+  isMathExpression,
+  formatExpressionWithDots,
+} from '../utils/mathExpression';
 
 interface RoommateSplitModalProps {
   isOpen: boolean;
@@ -104,13 +109,13 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
 
   if (!isOpen) return null;
 
-  // ---- Tính toán số liệu ----
+  // ---- Tính toán số liệu (Hỗ trợ phép toán +, −, ×, ÷ cho toàn bộ các ô) ----
   const numRoomRent = parseAmountOrExpression(roomRent, 0);
-  const numElectricOld = Number(electricOld.replace(/\D/g, '')) || 0;
-  const numElectricNew = Number(electricNew.replace(/\D/g, '')) || 0;
+  const numElectricOld = parseAmountOrExpression(electricOld, 0);
+  const numElectricNew = parseAmountOrExpression(electricNew, 0);
   const numElectricPrice = parseAmountOrExpression(electricPrice, 0);
-  const numWaterOld = Number(waterOld.replace(/\D/g, '')) || 0;
-  const numWaterNew = Number(waterNew.replace(/\D/g, '')) || 0;
+  const numWaterOld = parseAmountOrExpression(waterOld, 0);
+  const numWaterNew = parseAmountOrExpression(waterNew, 0);
   const numWaterPrice = parseAmountOrExpression(waterPrice, 0);
   const numInternetFee = parseAmountOrExpression(internetFee, 0);
   const numGarbageFee = parseAmountOrExpression(garbageFee, 0);
@@ -154,46 +159,98 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
     }
   };
 
-  // Cập nhật giá trị từ bàn phím Custom
-  const handleKeyboardChange = (newVal: string) => {
-    if (!activeField) return;
-    const isMeter = ['electricOld', 'electricNew', 'waterOld', 'waterNew'].includes(activeField);
-    const cleanVal = isMeter ? newVal.replace(/\D/g, '') : newVal;
+  // Tính toán và định dạng lại giá trị nếu ô đang chứa biểu thức toán học
+  const resolveMathValue = (val: string): string => {
+    if (!val) return '';
+    if (isMathExpression(val)) {
+      const ev = evaluateMathExpression(val);
+      if (ev !== null && !isNaN(ev) && isFinite(ev)) {
+        return formatExpressionWithDots(Math.round(ev).toString());
+      }
+    }
+    return val;
+  };
 
-    switch (activeField) {
+  const evaluateField = (field: ActiveField) => {
+    if (!field) return;
+    switch (field) {
       case 'roomRent':
-        setRoomRent(cleanVal);
+        setRoomRent((v) => resolveMathValue(v));
         break;
       case 'electricOld':
-        setElectricOld(cleanVal);
+        setElectricOld((v) => resolveMathValue(v));
         break;
       case 'electricNew':
-        setElectricNew(cleanVal);
+        setElectricNew((v) => resolveMathValue(v));
         break;
       case 'electricPrice':
-        setElectricPrice(cleanVal);
+        setElectricPrice((v) => resolveMathValue(v));
         break;
       case 'waterOld':
-        setWaterOld(cleanVal);
+        setWaterOld((v) => resolveMathValue(v));
         break;
       case 'waterNew':
-        setWaterNew(cleanVal);
+        setWaterNew((v) => resolveMathValue(v));
         break;
       case 'waterPrice':
-        setWaterPrice(cleanVal);
+        setWaterPrice((v) => resolveMathValue(v));
         break;
       case 'internetFee':
-        setInternetFee(cleanVal);
+        setInternetFee((v) => resolveMathValue(v));
         break;
       case 'garbageFee':
-        setGarbageFee(cleanVal);
+        setGarbageFee((v) => resolveMathValue(v));
         break;
     }
   };
 
-  // Nút Done (mũi tên xanh) trên bàn phím: Chuyển tiếp sang trường tiếp theo
+  // Chuyển trường: Tự động tính toán biểu thức ở trường cũ trước khi chuyển
+  const switchField = (nextField: ActiveField) => {
+    if (activeField && activeField !== nextField) {
+      evaluateField(activeField);
+    }
+    setActiveField(nextField);
+  };
+
+  // Cập nhật giá trị từ bàn phím Custom (hỗ trợ đầy đủ số và các phép tính +, −, ×, ÷)
+  const handleKeyboardChange = (newVal: string) => {
+    if (!activeField) return;
+
+    switch (activeField) {
+      case 'roomRent':
+        setRoomRent(newVal);
+        break;
+      case 'electricOld':
+        setElectricOld(newVal);
+        break;
+      case 'electricNew':
+        setElectricNew(newVal);
+        break;
+      case 'electricPrice':
+        setElectricPrice(newVal);
+        break;
+      case 'waterOld':
+        setWaterOld(newVal);
+        break;
+      case 'waterNew':
+        setWaterNew(newVal);
+        break;
+      case 'waterPrice':
+        setWaterPrice(newVal);
+        break;
+      case 'internetFee':
+        setInternetFee(newVal);
+        break;
+      case 'garbageFee':
+        setGarbageFee(newVal);
+        break;
+    }
+  };
+
+  // Nút Done (mũi tên xanh) trên bàn phím: Tính toán xong và chuyển sang ô kế tiếp
   const handleDone = () => {
     if (!activeField) return;
+    evaluateField(activeField);
     const currentIdx = FIELD_ORDER.findIndex((f) => f.id === activeField);
     if (currentIdx !== -1 && currentIdx < FIELD_ORDER.length - 1) {
       setActiveField(FIELD_ORDER[currentIdx + 1].id);
@@ -240,6 +297,9 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
 
   // TÁCH RIÊNG TỪNG GIAO DỊCH VÀO SỔ ĐÃ CHỌN
   const handleSaveToLedger = () => {
+    if (activeField) {
+      evaluateField(activeField);
+    }
     const itemsToSave: Array<Omit<Transaction, 'id' | 'createdAt'>> = [];
     const nowIso = new Date().toISOString();
     const targetLedgerId = selectedLedgerId || defaultRoomLedger?.id || 'ledger-room';
@@ -387,7 +447,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
         <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-3 overscroll-contain">
           {/* Room Rent */}
           <div
-            onClick={() => setActiveField('roomRent')}
+            onClick={() => switchField('roomRent')}
             className={`p-3 rounded-xl border transition cursor-pointer select-none ${
               activeField === 'roomRent'
                 ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25 shadow-xs'
@@ -404,11 +464,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
               </span>
             </div>
             <div className="mt-1.5 flex items-center justify-between px-3 py-2 rounded-lg bg-[#fffdfa] border border-[#ebdcc9]">
-              <span className={`text-xs font-bold ${roomRent ? 'text-[#3e332a]' : 'text-[#a89886]'}`}>
-                {roomRent || 'Nhập tiền phòng...'}
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className={`text-xs font-bold truncate ${roomRent ? 'text-[#3e332a]' : 'text-[#a89886]'}`}>
+                  {roomRent || 'Nhập tiền phòng...'}
+                </span>
+                {isMathExpression(roomRent) && (
+                  <span className="text-[11px] font-bold text-emerald-600 shrink-0">
+                    = {formatExpressionWithDots(Math.round(numRoomRent).toString())}
+                  </span>
+                )}
+              </div>
               {activeField === 'roomRent' && (
-                <span className="w-1.5 h-4 bg-[#a25832] rounded-full animate-pulse" />
+                <span className="w-1.5 h-4 bg-[#a25832] rounded-full animate-pulse shrink-0 ml-1" />
               )}
             </div>
           </div>
@@ -426,7 +493,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div
-                onClick={() => setActiveField('electricOld')}
+                onClick={() => switchField('electricOld')}
                 className={`p-2 rounded-lg border transition cursor-pointer select-none ${
                   activeField === 'electricOld'
                     ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -434,13 +501,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 }`}
               >
                 <span className="text-[10px] text-[#7a6a58] block">Số cũ:</span>
-                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
-                  {electricOld || <span className="text-[#a89886] font-normal">0</span>}
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5 flex items-center gap-1">
+                  <span className="truncate">{electricOld || <span className="text-[#a89886] font-normal">0</span>}</span>
+                  {isMathExpression(electricOld) && (
+                    <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                      = {formatExpressionWithDots(Math.round(numElectricOld).toString())}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div
-                onClick={() => setActiveField('electricNew')}
+                onClick={() => switchField('electricNew')}
                 className={`p-2 rounded-lg border transition cursor-pointer select-none ${
                   activeField === 'electricNew'
                     ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -448,13 +520,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 }`}
               >
                 <span className="text-[10px] text-[#7a6a58] block">Số mới:</span>
-                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
-                  {electricNew || <span className="text-[#a89886] font-normal">0</span>}
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5 flex items-center gap-1">
+                  <span className="truncate">{electricNew || <span className="text-[#a89886] font-normal">0</span>}</span>
+                  {isMathExpression(electricNew) && (
+                    <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                      = {formatExpressionWithDots(Math.round(numElectricNew).toString())}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div
-                onClick={() => setActiveField('electricPrice')}
+                onClick={() => switchField('electricPrice')}
                 className={`p-2 rounded-lg border transition cursor-pointer select-none ${
                   activeField === 'electricPrice'
                     ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -462,8 +539,13 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 }`}
               >
                 <span className="text-[10px] text-[#7a6a58] block">Đơn giá/kWh:</span>
-                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
-                  {electricPrice || <span className="text-[#a89886] font-normal">3.500</span>}
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5 flex items-center gap-1">
+                  <span className="truncate">{electricPrice || <span className="text-[#a89886] font-normal">3.500</span>}</span>
+                  {isMathExpression(electricPrice) && (
+                    <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                      = {formatExpressionWithDots(Math.round(numElectricPrice).toString())}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -482,7 +564,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div
-                onClick={() => setActiveField('waterOld')}
+                onClick={() => switchField('waterOld')}
                 className={`p-2 rounded-lg border transition cursor-pointer select-none ${
                   activeField === 'waterOld'
                     ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -490,13 +572,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 }`}
               >
                 <span className="text-[10px] text-[#7a6a58] block">Chỉ số cũ:</span>
-                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
-                  {waterOld || <span className="text-[#a89886] font-normal">0</span>}
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5 flex items-center gap-1">
+                  <span className="truncate">{waterOld || <span className="text-[#a89886] font-normal">0</span>}</span>
+                  {isMathExpression(waterOld) && (
+                    <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                      = {formatExpressionWithDots(Math.round(numWaterOld).toString())}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div
-                onClick={() => setActiveField('waterNew')}
+                onClick={() => switchField('waterNew')}
                 className={`p-2 rounded-lg border transition cursor-pointer select-none ${
                   activeField === 'waterNew'
                     ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -504,13 +591,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 }`}
               >
                 <span className="text-[10px] text-[#7a6a58] block">Chỉ số mới:</span>
-                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
-                  {waterNew || <span className="text-[#a89886] font-normal">0</span>}
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5 flex items-center gap-1">
+                  <span className="truncate">{waterNew || <span className="text-[#a89886] font-normal">0</span>}</span>
+                  {isMathExpression(waterNew) && (
+                    <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                      = {formatExpressionWithDots(Math.round(numWaterNew).toString())}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div
-                onClick={() => setActiveField('waterPrice')}
+                onClick={() => switchField('waterPrice')}
                 className={`p-2 rounded-lg border transition cursor-pointer select-none ${
                   activeField === 'waterPrice'
                     ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -518,8 +610,13 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 }`}
               >
                 <span className="text-[10px] text-[#7a6a58] block">Đơn giá/khối:</span>
-                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5">
-                  {waterPrice || <span className="text-[#a89886] font-normal">25.000</span>}
+                <div className="text-xs font-bold text-[#3e332a] truncate mt-0.5 flex items-center gap-1">
+                  <span className="truncate">{waterPrice || <span className="text-[#a89886] font-normal">25.000</span>}</span>
+                  {isMathExpression(waterPrice) && (
+                    <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                      = {formatExpressionWithDots(Math.round(numWaterPrice).toString())}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -528,7 +625,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
           {/* Internet & Garbage Fees */}
           <div className="grid grid-cols-2 gap-2">
             <div
-              onClick={() => setActiveField('internetFee')}
+              onClick={() => switchField('internetFee')}
               className={`p-2.5 rounded-xl border transition cursor-pointer select-none ${
                 activeField === 'internetFee'
                   ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -539,13 +636,18 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 <Wifi className="w-3.5 h-3.5 text-[#7c3aed]" />
                 <span>Tiền Wifi / Mạng</span>
               </label>
-              <div className="text-xs font-bold text-[#3e332a] truncate mt-1">
-                {internetFee || <span className="text-[#a89886] font-normal">0</span>}
+              <div className="text-xs font-bold text-[#3e332a] truncate mt-1 flex items-center gap-1">
+                <span className="truncate">{internetFee || <span className="text-[#a89886] font-normal">0</span>}</span>
+                {isMathExpression(internetFee) && (
+                  <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                    = {formatExpressionWithDots(Math.round(numInternetFee).toString())}
+                  </span>
+                )}
               </div>
             </div>
 
             <div
-              onClick={() => setActiveField('garbageFee')}
+              onClick={() => switchField('garbageFee')}
               className={`p-2.5 rounded-xl border transition cursor-pointer select-none ${
                 activeField === 'garbageFee'
                   ? 'bg-white border-[#a25832] ring-2 ring-[#a25832]/25'
@@ -556,8 +658,13 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 <Receipt className="w-3.5 h-3.5 text-[#6b7280]" />
                 <span>Rác & Dịch vụ</span>
               </label>
-              <div className="text-xs font-bold text-[#3e332a] truncate mt-1">
-                {garbageFee || <span className="text-[#a89886] font-normal">0</span>}
+              <div className="text-xs font-bold text-[#3e332a] truncate mt-1 flex items-center gap-1">
+                <span className="truncate">{garbageFee || <span className="text-[#a89886] font-normal">0</span>}</span>
+                {isMathExpression(garbageFee) && (
+                  <span className="text-[10px] font-bold text-emerald-600 shrink-0">
+                    = {formatExpressionWithDots(Math.round(numGarbageFee).toString())}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -677,20 +784,37 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
           <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
             {/* Header thanh điều khiển bàn phím */}
             <div className="px-3 py-1.5 flex items-center justify-between bg-[#f3f4f6] border-b border-[#e5e7eb]">
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <Calculator className="w-3.5 h-3.5 text-[#0284c7] shrink-0" />
                 <span className="text-xs font-bold text-gray-700 truncate">
                   Đang nhập: {FIELD_ORDER.find((f) => f.id === activeField)?.label}
                 </span>
+                {isMathExpression(getActiveValue()) && (
+                  <span className="text-xs font-bold text-emerald-600 truncate ml-1">
+                    = {formatExpressionWithDots(Math.round(evaluateMathExpression(getActiveValue()) || 0).toString())}
+                  </span>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveField(null)}
-                className="px-2 py-0.5 rounded-md bg-white border border-gray-300 text-[11px] font-bold text-gray-600 hover:text-gray-900 transition flex items-center gap-1 shrink-0 cursor-pointer"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-                <span>Ẩn bàn phím</span>
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isMathExpression(getActiveValue()) && (
+                  <button
+                    type="button"
+                    onClick={() => evaluateField(activeField)}
+                    className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 active:scale-95 transition flex items-center gap-0.5 cursor-pointer shadow-2xs"
+                    title="Bấm để tính kết quả"
+                  >
+                    <span>= Tính</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => switchField(null)}
+                  className="px-2 py-0.5 rounded-md bg-white border border-gray-300 text-[11px] font-bold text-gray-600 hover:text-gray-900 transition flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                  <span>Ẩn bàn phím</span>
+                </button>
+              </div>
             </div>
 
             <CustomCalculatorKeyboard
@@ -707,7 +831,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
             <button
-              onClick={() => setActiveField('roomRent')}
+              onClick={() => switchField('roomRent')}
               className="px-3 py-2 rounded-xl border border-[#ebdcc9] bg-[#fffdfa] text-xs font-semibold text-[#7a6a58] hover:bg-[#ebdcc9] transition flex items-center gap-1 cursor-pointer"
             >
               <Calculator className="w-3.5 h-3.5" />
