@@ -142,6 +142,16 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public String getNativeApkVersion() {
+            try {
+                android.content.pm.PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return pInfo.versionName != null ? pInfo.versionName : "";
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
         public void resetOtaBundle() {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE);
             prefs.edit().remove(KEY_SERVER_PATH).remove(KEY_OTA_VERSION).apply();

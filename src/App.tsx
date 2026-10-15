@@ -266,12 +266,35 @@ export function App() {
   };
 
   const handleVoiceParsedResult = (parsed: ParsedVoiceResult) => {
+    let effectiveWalletId = parsed.walletId;
+
+    if (manager.ledgers.length === 0) {
+      manager.addLedger({
+        name: 'Chi tiêu cá nhân',
+        description: 'Sổ chi tiêu cá nhân mặc định',
+        icon: 'BookOpen',
+        color: '#a25832',
+        isDefault: true,
+      });
+    }
+
+    if (manager.wallets.length === 0) {
+      const createdW = manager.addWallet({
+        name: 'Tiền mặt',
+        initialBalance: 0,
+        icon: 'Wallet',
+        color: '#2e7d32',
+        isDefault: true,
+      });
+      effectiveWalletId = createdW.id;
+    }
+
     setVoiceInitialValues({
       amount: parsed.amount,
       note: parsed.note,
       categoryId: parsed.categoryId,
       type: parsed.type,
-      walletId: parsed.walletId,
+      walletId: effectiveWalletId,
     });
     setEditingTransaction(null);
     setIsTransactionModalOpen(true);
@@ -686,6 +709,8 @@ export function App() {
         initialLedgerId={manager.activeLedgerId}
         initialWalletId={manager.activeWalletId}
         existingTransactions={manager.transactions}
+        onAddLedger={manager.addLedger}
+        onAddWallet={manager.addWallet}
       />
 
       {/* Voice Recognition Modal */}
@@ -705,6 +730,8 @@ export function App() {
         categories={manager.categories}
         activeLedgerId={manager.activeLedgerId}
         onSaveBatchTransactions={(items) => manager.addBatchTransactions(items)}
+        onAddLedger={manager.addLedger}
+        onAddWallet={manager.addWallet}
       />
 
       <RoommateSplitModal

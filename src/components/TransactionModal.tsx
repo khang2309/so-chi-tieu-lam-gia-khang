@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Check, Calculator } from 'lucide-react';
+import { X, Check, Calculator, Plus, Sparkles, Zap } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
@@ -24,6 +24,8 @@ interface TransactionModalProps {
   initialWalletId?: string;
   existingTransactions?: Transaction[];
   onOpenVoiceModal?: () => void;
+  onAddLedger?: (data: Omit<Ledger, 'id' | 'createdAt'>) => Ledger;
+  onAddWallet?: (data: Omit<Wallet, 'id' | 'createdAt'>) => Wallet;
 }
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
@@ -38,6 +40,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   initialLedgerId,
   initialWalletId,
   existingTransactions = [],
+  onAddLedger,
+  onAddWallet,
 }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState<string>('');
@@ -48,6 +52,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [note, setNote] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [showKeypad, setShowKeypad] = useState<boolean>(true);
+
+  // Quick inline creation state for Ledgers & Wallets
+  const [showQuickCreateLedger, setShowQuickCreateLedger] = useState<boolean>(false);
+  const [newLedgerName, setNewLedgerName] = useState<string>('');
+  const [showQuickCreateWallet, setShowQuickCreateWallet] = useState<boolean>(false);
+  const [newWalletName, setNewWalletName] = useState<string>('');
+  const [newWalletBalance, setNewWalletBalance] = useState<string>('');
 
   // Lấy các gợi ý từ lịch sử giao dịch (loại trừ đã xóa mềm) kèm giao dịch gốc tương ứng
   const noteSuggestions = useMemo(() => {
@@ -176,6 +187,65 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const evaluatedAmount = evaluateMathExpression(amount);
   const hasExpression = isMathExpression(amount);
 
+  const handleQuickInitDefaultLedgerAndWallet = () => {
+    if (ledgers.length === 0 && onAddLedger) {
+      const created = onAddLedger({
+        name: 'Chi tiêu cá nhân',
+        description: 'Sổ chi tiêu cá nhân mặc định',
+        icon: 'BookOpen',
+        color: '#a25832',
+        isDefault: true,
+      });
+      setLedgerId(created.id);
+    }
+    if (wallets.length === 0 && onAddWallet) {
+      const created = onAddWallet({
+        name: 'Tiền mặt',
+        initialBalance: 0,
+        icon: 'Wallet',
+        color: '#2e7d32',
+        isDefault: true,
+      });
+      setWalletId(created.id);
+    }
+  };
+
+  const handleCreateNewLedger = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (onAddLedger) {
+      const created = onAddLedger({
+        name: trimmed,
+        description: 'Sổ chi tiêu',
+        icon: 'BookOpen',
+        color: '#a25832',
+        isDefault: ledgers.length === 0,
+      });
+      setLedgerId(created.id);
+    }
+    setShowQuickCreateLedger(false);
+    setNewLedgerName('');
+  };
+
+  const handleCreateNewWallet = (name: string, initialBalanceStr: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const initialBalance = parseAmountOrExpression(initialBalanceStr, 0);
+    if (onAddWallet) {
+      const created = onAddWallet({
+        name: trimmed,
+        initialBalance: initialBalance,
+        icon: 'Wallet',
+        color: '#2e7d32',
+        isDefault: wallets.length === 0,
+      });
+      setWalletId(created.id);
+    }
+    setShowQuickCreateWallet(false);
+    setNewWalletName('');
+    setNewWalletBalance('');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const numAmount = parseAmountOrExpression(amount, 0);
@@ -188,6 +258,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
+    let finalLedgerId = ledgerId;
+    if (!finalLedgerId || !ledgers.some((l) => l.id === finalLedgerId)) {
+      if (ledgers.length > 0) {
+        finalLedgerId = (ledgers.find((l) => l.isDefault) || ledgers[0]).id;
+      } else if (onAddLedger) {
+        const created = onAddLedger({
+          name: 'Chi tiêu cá nhân',
+          description: 'Sổ chi tiêu cá nhân mặc định',
+          icon: 'BookOpen',
+          color: '#a25832',
+          isDefault: true,
+        });
+        finalLedgerId = created.id;
+      }
+    }
+
+    let finalWalletId = walletId;
+    if (!finalWalletId || !wallets.some((w) => w.id === finalWalletId)) {
+      if (wallets.length > 0) {
+        finalWalletId = (wallets.find((w) => w.isDefault) || wallets[0]).id;
+      } else if (onAddWallet) {
+        const created = onAddWallet({
+          name: 'Tiền mặt',
+          initialBalance: 0,
+          icon: 'Wallet',
+          color: '#2e7d32',
+          isDefault: true,
+        });
+        finalWalletId = created.id;
+      }
+    }
+
     const safeDate = date && !isNaN(new Date(date).getTime()) ? new Date(date) : new Date();
 
     onSave(
@@ -196,8 +298,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         type,
         date: safeDate.toISOString(),
         categoryId,
-        ledgerId,
-        walletId,
+        ledgerId: finalLedgerId,
+        walletId: finalWalletId,
         toWalletId: null,
         note: note.trim(),
       },
@@ -435,18 +537,104 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Quick banner if no ledgers or wallets exist */}
+          {(ledgers.length === 0 || wallets.length === 0) && (
+            <div className="p-3 rounded-xl bg-[#fff8ed] border border-[#ebdcc9] flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2 text-xs text-[#a25832]">
+                <Sparkles className="w-4 h-4 shrink-0 text-[#a25832]" />
+                <span className="font-semibold text-[11px] leading-tight">
+                  {ledgers.length === 0 && wallets.length === 0
+                    ? 'Bạn chưa có Sổ & Ví tiền nào'
+                    : ledgers.length === 0
+                    ? 'Bạn chưa có Sổ ghi chép nào'
+                    : 'Bạn chưa có Ví tiền nào'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickInitDefaultLedgerAndWallet}
+                className="px-2.5 py-1 rounded-lg bg-[#a25832] text-white text-[11px] font-bold hover:bg-[#8c4623] active:scale-95 transition shadow-2xs shrink-0 flex items-center gap-1 cursor-pointer"
+              >
+                <Zap className="w-3 h-3 fill-amber-300 text-amber-300" />
+                <span>Tạo nhanh 1 chạm</span>
+              </button>
+            </div>
+          )}
+
           {/* Ledger and Wallet Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Ledger */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#7a6a58]">Thuộc Sổ</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-[#7a6a58]">Thuộc Sổ</label>
+                {onAddLedger && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickCreateLedger((prev) => !prev);
+                      setShowKeypad(false);
+                    }}
+                    className="text-[11px] text-[#a25832] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Tạo sổ mới</span>
+                  </button>
+                )}
+              </div>
+
+              {showQuickCreateLedger && (
+                <div className="p-2 rounded-xl bg-[#fffdfa] border border-[#a25832] shadow-xs space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-[#a25832]">
+                    <span>Tên Sổ ghi chép mới:</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickCreateLedger(false)}
+                      className="text-[#7a6a58] hover:text-[#b94a3b] cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newLedgerName}
+                      onChange={(e) => setNewLedgerName(e.target.value)}
+                      placeholder="VD: Chi tiêu cá nhân"
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateNewLedger(newLedgerName);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCreateNewLedger(newLedgerName)}
+                      disabled={!newLedgerName.trim()}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#a25832] disabled:opacity-50 text-white text-xs font-bold shrink-0 hover:bg-[#8c4623] active:scale-95 transition cursor-pointer"
+                    >
+                      Tạo & Chọn
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <select
                 value={ledgerId}
-                onChange={(e) => setLedgerId(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === '__CREATE__') {
+                    setShowQuickCreateLedger(true);
+                    setShowKeypad(false);
+                    return;
+                  }
+                  setLedgerId(e.target.value);
+                }}
                 className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
               >
                 {ledgers.length === 0 ? (
-                  <option value="">(Chưa tạo sổ nào)</option>
+                  <option value="">(Chưa tạo sổ - Bấm Tạo sổ)</option>
                 ) : (
                   ledgers.map((l) => (
                     <option key={l.id} value={l.id}>
@@ -454,27 +642,102 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </option>
                   ))
                 )}
+                {onAddLedger && (
+                  <option value="__CREATE__">+ Tạo sổ mới...</option>
+                )}
               </select>
             </div>
 
             {/* Wallet */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#7a6a58]">
-                Nguồn tiền / Ví
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-[#7a6a58]">
+                  Nguồn tiền / Ví
+                </label>
+                {onAddWallet && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickCreateWallet((prev) => !prev);
+                      setShowKeypad(false);
+                    }}
+                    className="text-[11px] text-[#a25832] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Tạo ví mới</span>
+                  </button>
+                )}
+              </div>
+
+              {showQuickCreateWallet && (
+                <div className="p-2 rounded-xl bg-[#fffdfa] border border-[#a25832] shadow-xs space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-[#a25832]">
+                    <span>Tạo Ví tiền mới:</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickCreateWallet(false)}
+                      className="text-[#7a6a58] hover:text-[#b94a3b] cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={newWalletName}
+                    onChange={(e) => setNewWalletName(e.target.value)}
+                    placeholder="Tên ví (VD: Tiền mặt, MB Bank...)"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
+                    autoFocus
+                  />
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newWalletBalance}
+                      onChange={(e) => setNewWalletBalance(formatExpressionWithDots(e.target.value))}
+                      placeholder="Số dư (0đ)"
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateNewWallet(newWalletName, newWalletBalance);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCreateNewWallet(newWalletName, newWalletBalance)}
+                      disabled={!newWalletName.trim()}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#a25832] disabled:opacity-50 text-white text-xs font-bold shrink-0 hover:bg-[#8c4623] active:scale-95 transition cursor-pointer"
+                    >
+                      Tạo & Chọn
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <select
                 value={walletId}
-                onChange={(e) => setWalletId(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === '__CREATE__') {
+                    setShowQuickCreateWallet(true);
+                    setShowKeypad(false);
+                    return;
+                  }
+                  setWalletId(e.target.value);
+                }}
                 className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
               >
                 {wallets.length === 0 ? (
-                  <option value="">(Chưa tạo ví nào)</option>
+                  <option value="">(Chưa tạo ví - Bấm Tạo ví)</option>
                 ) : (
                   wallets.map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.name}
                     </option>
                   ))
+                )}
+                {onAddWallet && (
+                  <option value="__CREATE__">+ Tạo ví mới...</option>
                 )}
               </select>
             </div>

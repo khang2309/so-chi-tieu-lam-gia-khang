@@ -1,7 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export const BUILTIN_APP_VERSION = '2.1.24';
+export const BUILTIN_APP_VERSION = '2.1.25';
 
 export const GITHUB_VERSION_JSON_URL =
   'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/version.json';
@@ -10,6 +10,8 @@ export interface AppReleaseConfig {
   version: string;
   updateType: 'ota' | 'apk';
   downloadUrl: string;
+  minApkVersion?: string;
+  apkDownloadUrl?: string;
   releaseNotes: string;
   allowSkip: boolean;
   updatedAt: string;
@@ -19,6 +21,7 @@ declare global {
   interface Window {
     AndroidUpdater?: {
       getInstalledOtaVersion: () => string;
+      getNativeApkVersion?: () => string;
       resetOtaBundle: () => void;
       downloadAndApplyOtaZip: (zipUrl: string, version: string) => void;
       downloadAndInstallApk: (apkUrl: string) => void;
@@ -38,6 +41,19 @@ declare global {
       getRawNotificationLog?: () => string;
     };
   }
+}
+
+/**
+ * Lấy phiên bản APK gốc được cài đặt trên máy
+ */
+export function getNativeApkVersion(): string {
+  try {
+    const native = window.AndroidUpdater?.getNativeApkVersion?.();
+    if (native && native.trim()) {
+      return native.trim();
+    }
+  } catch (_) {}
+  return BUILTIN_APP_VERSION;
 }
 
 /**
@@ -137,6 +153,23 @@ export async function checkAppUpdateFromCloud(): Promise<{
 
   if (!bestRelease) {
     return { hasUpdate: false, currentVersion };
+  }
+
+  // Kiểm tra phiên bản APK gốc trên máy (native APK)
+  const nativeApk = getNativeApkVersion();
+  if (
+    bestRelease.minApkVersion &&
+    compareSemver(nativeApk, bestRelease.minApkVersion) < 0
+  ) {
+    // Bắt buộc chuyển sang hình thức APK vì bản gốc trên máy đã quá cũ so với yêu cầu
+    bestRelease.updateType = 'apk';
+    if (bestRelease.apkDownloadUrl) {
+      bestRelease.downloadUrl = bestRelease.apkDownloadUrl;
+    }
+    const alertPrefix = `[⚠️ CẦN CẬP NHẬT APK GỐC]\nBản cài đặt gốc trên máy của bạn (v${nativeApk}) đã cũ hơn yêu cầu tối thiểu (v${bestRelease.minApkVersion}). Cần cập nhật APK mới để các tính năng hoạt động chuẩn xác!\n\n`;
+    if (!bestRelease.releaseNotes.includes('[⚠️ CẦN CẬP NHẬT APK GỐC]')) {
+      bestRelease.releaseNotes = alertPrefix + (bestRelease.releaseNotes || '');
+    }
   }
 
   const hasUpdate = compareSemver(bestRelease.version, currentVersion) > 0;

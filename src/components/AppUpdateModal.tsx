@@ -241,6 +241,24 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
                     </p>
                   )}
 
+                  {release.apkDownloadUrl && release.updateType === 'ota' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const directApkUrl = normalizeDownloadUrl(release.apkDownloadUrl!);
+                        if (window.AndroidUpdater) {
+                          window.AndroidUpdater.downloadAndInstallApk(directApkUrl);
+                        } else {
+                          window.open(directApkUrl, '_blank');
+                        }
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#a25832]/40 bg-[#fbf5eb] hover:bg-[#ebdcc9] text-[#a25832] font-semibold text-xs flex items-center justify-center gap-1.5 transition active:scale-[0.99] cursor-pointer"
+                    >
+                      <Package className="w-4 h-4 text-[#a25832]" />
+                      <span>Hoặc tải cài đè APK mới nhất (Nếu bản gốc quá cũ)</span>
+                    </button>
+                  )}
+
                   {canSkip && (
                     <div className="grid grid-cols-2 gap-2">
                       <button

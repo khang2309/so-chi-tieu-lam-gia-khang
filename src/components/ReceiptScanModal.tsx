@@ -39,6 +39,8 @@ interface ReceiptScanModalProps {
   onSaveBatchTransactions: (
     items: Array<Omit<Transaction, 'id' | 'createdAt'>>
   ) => void;
+  onAddLedger?: (data: Omit<Ledger, 'id' | 'createdAt'>) => Ledger;
+  onAddWallet?: (data: Omit<Wallet, 'id' | 'createdAt'>) => Wallet;
 }
 
 const BatchItemAmountInput: React.FC<{
@@ -71,6 +73,8 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   categories,
   activeLedgerId,
   onSaveBatchTransactions,
+  onAddLedger,
+  onAddWallet,
 }) => {
   const [step, setStep] = useState<'scan' | 'verify'>('scan');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -96,6 +100,49 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     const cfg = getSavedVisionConfig();
     setVisionConfig(cfg);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const defL =
+        (activeLedgerId && activeLedgerId !== 'all'
+          ? ledgers.find((l) => l.id === activeLedgerId)
+          : null) ||
+        ledgers.find((l) => l.isDefault) ||
+        ledgers[0];
+      setSelectedLedgerId(defL?.id || '');
+
+      const defW = wallets.find((w) => w.isDefault) || wallets[0];
+      setSelectedWalletId(defW?.id || '');
+    }
+  }, [isOpen, activeLedgerId, ledgers, wallets]);
+
+  const handleCreateQuickLedger = () => {
+    const name = window.prompt('Nhập tên Sổ ghi chép mới:', 'Chi tiêu gia đình');
+    if (name && name.trim() && onAddLedger) {
+      const created = onAddLedger({
+        name: name.trim(),
+        description: 'Sổ chi tiêu',
+        icon: 'BookOpen',
+        color: '#a25832',
+        isDefault: ledgers.length === 0,
+      });
+      setSelectedLedgerId(created.id);
+    }
+  };
+
+  const handleCreateQuickWallet = () => {
+    const name = window.prompt('Nhập tên Ví / Tài khoản mới:', 'Tiền mặt');
+    if (name && name.trim() && onAddWallet) {
+      const created = onAddWallet({
+        name: name.trim(),
+        initialBalance: 0,
+        icon: 'Wallet',
+        color: '#2e7d32',
+        isDefault: wallets.length === 0,
+      });
+      setSelectedWalletId(created.id);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -277,14 +324,46 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     const mm = String(now.getMinutes()).padStart(2, '0');
     const ss = String(now.getSeconds()).padStart(2, '0');
 
+    let finalLedgerId = selectedLedgerId;
+    if (!finalLedgerId || !ledgers.some((l) => l.id === finalLedgerId)) {
+      if (ledgers.length > 0) {
+        finalLedgerId = (ledgers.find((l) => l.isDefault) || ledgers[0]).id;
+      } else if (onAddLedger) {
+        const created = onAddLedger({
+          name: 'Chi tiêu cá nhân',
+          description: 'Sổ chi tiêu cá nhân mặc định',
+          icon: 'BookOpen',
+          color: '#a25832',
+          isDefault: true,
+        });
+        finalLedgerId = created.id;
+      }
+    }
+
+    let finalWalletId = selectedWalletId;
+    if (!finalWalletId || !wallets.some((w) => w.id === finalWalletId)) {
+      if (wallets.length > 0) {
+        finalWalletId = (wallets.find((w) => w.isDefault) || wallets[0]).id;
+      } else if (onAddWallet) {
+        const created = onAddWallet({
+          name: 'Tiền mặt',
+          initialBalance: 0,
+          icon: 'Wallet',
+          color: '#2e7d32',
+          isDefault: true,
+        });
+        finalWalletId = created.id;
+      }
+    }
+
     // Chuyển đổi thành Transaction array
     const transactionsToSave = batchItems.map((item) => ({
       amount: Number(item.amount) || 0,
       type: 'expense' as const,
       date: new Date(`${item.date}T${hh}:${mm}:${ss}`).toISOString(),
       categoryId: item.categoryId,
-      ledgerId: selectedLedgerId,
-      walletId: selectedWalletId,
+      ledgerId: finalLedgerId,
+      walletId: finalWalletId,
       note: item.note.trim() || 'Khoản chi tiêu quét hóa đơn',
     }));
 
@@ -510,16 +589,33 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
-                    Ghi vào Sổ:
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                      Ghi vào Sổ:
+                    </label>
+                    {onAddLedger && (
+                      <button
+                        type="button"
+                        onClick={handleCreateQuickLedger}
+                        className="text-[11px] text-[#a25832] hover:underline font-bold cursor-pointer"
+                      >
+                        + Tạo sổ mới
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={selectedLedgerId}
-                    onChange={(e) => setSelectedLedgerId(e.target.value)}
+                    onChange={(e) => {
+                      if (e.target.value === '__CREATE__') {
+                        handleCreateQuickLedger();
+                        return;
+                      }
+                      setSelectedLedgerId(e.target.value);
+                    }}
                     className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
                   >
                     {ledgers.length === 0 ? (
-                      <option value="">(Chưa tạo sổ nào)</option>
+                      <option value="">(Tự động tạo Sổ cá nhân)</option>
                     ) : (
                       ledgers.map((l) => (
                         <option key={l.id} value={l.id}>
@@ -527,26 +623,49 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                         </option>
                       ))
                     )}
+                    {onAddLedger && (
+                      <option value="__CREATE__">+ Tạo sổ mới...</option>
+                    )}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
-                    Trừ từ Ví:
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                      Trừ từ Ví:
+                    </label>
+                    {onAddWallet && (
+                      <button
+                        type="button"
+                        onClick={handleCreateQuickWallet}
+                        className="text-[11px] text-[#a25832] hover:underline font-bold cursor-pointer"
+                      >
+                        + Tạo ví mới
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={selectedWalletId}
-                    onChange={(e) => setSelectedWalletId(e.target.value)}
+                    onChange={(e) => {
+                      if (e.target.value === '__CREATE__') {
+                        handleCreateQuickWallet();
+                        return;
+                      }
+                      setSelectedWalletId(e.target.value);
+                    }}
                     className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
                   >
                     {wallets.length === 0 ? (
-                      <option value="">(Chưa tạo ví nào)</option>
+                      <option value="">(Tự động tạo Ví tiền mặt)</option>
                     ) : (
                       wallets.map((w) => (
                         <option key={w.id} value={w.id}>
                           {w.name}
                         </option>
                       ))
+                    )}
+                    {onAddWallet && (
+                      <option value="__CREATE__">+ Tạo ví mới...</option>
                     )}
                   </select>
                 </div>
