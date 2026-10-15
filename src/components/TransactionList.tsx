@@ -134,6 +134,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const isPrependingRef = useRef<boolean>(false);
   const prevScrollWidthRef = useRef<number>(0);
   const prevScrollLeftRef = useRef<number>(0);
+  const isUserInteractingRef = useRef<boolean>(false);
+  const lastPrependTimeRef = useRef<number>(0);
 
   // Reset về vùng đệm ngắn mặc định khi đổi loại bộ lọc
   useEffect(() => {
@@ -419,13 +421,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
   }, []);
 
-  useEffect(() => {
-    // Tự động căn giữa tab đang chọn ngay khi mount hoặc khi đổi mốc thời gian
-    centerActiveTab('auto');
-    const timer = setTimeout(() => {
-      centerActiveTab('smooth');
-    }, 60);
-    return () => clearTimeout(timer);
+  // Tự động căn giữa tab đang chọn ngay trước khi trình duyệt vẽ (chuẩn vị trí ngay từ frame đầu tiên)
+  useLayoutEffect(() => {
+    if (!isPrependingRef.current) {
+      centerActiveTab('auto');
+    }
   }, [
     filterMode,
     selectedMonthKey,
@@ -742,7 +742,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       if (deltaWidth > 0) {
         container.scrollLeft = prevScrollLeftRef.current + deltaWidth;
       }
-      isPrependingRef.current = false;
+      requestAnimationFrame(() => {
+        isPrependingRef.current = false;
+      });
     }
   }, [timelineSliderTabs]);
 
@@ -1059,22 +1061,53 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         <div className="overflow-hidden border-b border-[#ebdcc9]/60">
           <div
             ref={sliderContainerRef}
+            onTouchStart={() => {
+              isUserInteractingRef.current = true;
+            }}
+            onTouchEnd={() => {
+              isUserInteractingRef.current = false;
+            }}
+            onTouchCancel={() => {
+              isUserInteractingRef.current = false;
+            }}
+            onPointerDown={() => {
+              isUserInteractingRef.current = true;
+            }}
+            onPointerUp={() => {
+              isUserInteractingRef.current = false;
+            }}
+            onPointerCancel={() => {
+              isUserInteractingRef.current = false;
+            }}
+            onMouseDown={() => {
+              isUserInteractingRef.current = true;
+            }}
+            onMouseUp={() => {
+              isUserInteractingRef.current = false;
+            }}
             onScroll={(e) => {
               const el = e.currentTarget;
-              if (el.scrollLeft < 100 && !isPrependingRef.current) {
+              // CHỈ nạp thêm khi chính người dùng đang chủ động vuốt/chạm (không chạy khi tự động căn giữa hoặc mount)
+              if (!isUserInteractingRef.current) return;
+
+              const now = Date.now();
+              if (now - lastPrependTimeRef.current < 400) return;
+
+              if (el.scrollLeft < 60 && !isPrependingRef.current) {
+                lastPrependTimeRef.current = now;
                 prevScrollWidthRef.current = el.scrollWidth;
                 prevScrollLeftRef.current = el.scrollLeft;
                 isPrependingRef.current = true;
                 setPastBufferCount((prev) => {
-                  if (filterMode === 'day') return prev + 10;
-                  if (filterMode === 'week') return prev + 6;
-                  if (filterMode === 'month') return prev + 6;
-                  if (filterMode === 'quarter') return prev + 4;
-                  return prev + 3;
+                  if (filterMode === 'day') return Math.min(prev + 10, 180);
+                  if (filterMode === 'week') return Math.min(prev + 6, 100);
+                  if (filterMode === 'month') return Math.min(prev + 6, 120);
+                  if (filterMode === 'quarter') return Math.min(prev + 4, 40);
+                  return Math.min(prev + 3, 20);
                 });
               }
             }}
-            className="flex items-center gap-7 overflow-x-auto no-scrollbar scroll-smooth py-2.5"
+            className="flex items-center gap-7 overflow-x-auto no-scrollbar py-2.5"
             style={{ paddingLeft: 'calc(50% - 60px)', paddingRight: 'calc(50% - 60px)' }}
           >
             {timelineSliderTabs.map((tab) => (
@@ -1082,7 +1115,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 key={tab.key}
                 ref={tab.isActive ? activeTabRef : null}
                 type="button"
-                onClick={tab.onSelect}
+                onClick={() => {
+                  tab.onSelect();
+                  setTimeout(() => centerActiveTab('smooth'), 20);
+                }}
                 className={`py-1 text-xs uppercase whitespace-nowrap transition cursor-pointer shrink-0 relative flex flex-col items-center select-none ${
                   tab.isActive
                     ? 'font-bold text-[#1c1917]'

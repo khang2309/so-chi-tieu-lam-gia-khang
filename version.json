@@ -1,10 +1,10 @@
 {
-  "version": "2.1.26",
+  "version": "2.1.27",
   "updateType": "apk",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "minApkVersion": "2.1.26",
+  "minApkVersion": "2.1.27",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Toi uu bo dem ngan cho thanh truot thoi gian (cuon muot khong giat), co che bat buoc cai APK goc truoc khi cap nhat OTA tiep theo",
+  "releaseNotes": "Khac phuc triet de loi tu truot thanh timeline va neo chinh xac 100% vao moc thoi gian hien tai",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T07:42:28.669Z"
+  "updatedAt": "2026-10-15T07:58:53.590Z"
 }
