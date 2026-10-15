@@ -1,7 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export const BUILTIN_APP_VERSION = '2.1.31';
+export const BUILTIN_APP_VERSION = '2.1.32';
 
 export const GITHUB_VERSION_JSON_URL =
   'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/version.json';

@@ -1,10 +1,10 @@
 {
-  "version": "2.1.31",
+  "version": "2.1.32",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Sua loi lech tab khi chuyen che do thoi gian va load vo tan khong bao gio bi khung",
+  "releaseNotes": "Fix Minified React error #310 trong AppUpdateModal",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T10:40:01.641Z"
+  "updatedAt": "2026-10-15T10:46:51.148Z"
 }

@@ -71,10 +71,11 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
     return () => window.removeEventListener('app-update-progress', handleProgress);
   }, []);
 
+  const caps = useMemo(() => inspectNativeCapabilities(), [isOpen]);
+
   if (!isOpen) return null;
 
   const currentVersion = getCurrentRunningVersion();
-  const caps = useMemo(() => inspectNativeCapabilities(), [isOpen]);
   const canSkip = release?.allowSkip !== false;
 
   const handleStartUpdate = () => {
