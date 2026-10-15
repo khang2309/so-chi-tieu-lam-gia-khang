@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import {
   Trash2,
   Edit3,
@@ -128,8 +128,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   );
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
-  // Số năm lùi về quá khứ mở rộng linh hoạt, cuộn vô tận không giới hạn
-  const [historyYearsBack, setHistoryYearsBack] = useState<number>(15);
+  // Vùng đệm các mốc thời gian quá khứ: Mặc định chỉ hiển thị khoảng thời gian ngắn
+  // Khi người dùng cuộn tới mép trái, tự động nạp thêm mà không làm gián đoạn thao tác vuốt
+  const [pastBufferCount, setPastBufferCount] = useState<number>(6);
+  const isPrependingRef = useRef<boolean>(false);
+  const prevScrollWidthRef = useRef<number>(0);
+  const prevScrollLeftRef = useRef<number>(0);
+
+  // Reset về vùng đệm ngắn mặc định khi đổi loại bộ lọc
+  useEffect(() => {
+    if (filterMode === 'month') setPastBufferCount(6);
+    else if (filterMode === 'week') setPastBufferCount(6);
+    else if (filterMode === 'day') setPastBufferCount(8);
+    else if (filterMode === 'quarter') setPastBufferCount(4);
+    else if (filterMode === 'year') setPastBufferCount(3);
+  }, [filterMode]);
 
   // Danh sách các tùy chọn khoảng thời gian (Money Lover UX)
   const periodModes: Array<{ key: FilterMode; label: string }> = [
@@ -386,19 +399,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     return tabs;
   }, [selectedDayKey, specificDate]);
 
-  // Tìm ngày giao dịch sớm nhất trong danh sách để tạo mốc thời gian không giới hạn
-  const earliestTxDate = useMemo(() => {
-    let earliest = new Date();
-    transactions.forEach((tx) => {
-      if (tx.date) {
-        const d = new Date(tx.date);
-        if (!isNaN(d.getTime()) && d < earliest && d.getFullYear() >= 2000) {
-          earliest = d;
-        }
-      }
-    });
-    return earliest;
-  }, [transactions]);
 
   // Ref container và tab đang chọn để tự động căn giữa (Center active tab)
   const sliderContainerRef = useRef<HTMLDivElement | null>(null);
@@ -436,21 +436,24 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     centerActiveTab,
   ]);
 
-  // 6. Tự động sinh danh sách Tabs trượt động (Trước / Hiện tại / Tương lai) - Động 100%, Không giới hạn
+  // 6. Tự động sinh danh sách Tabs trượt động (Trước / Hiện tại / Tương lai) - Vùng đệm ngắn, tải thêm mượt mà khi trượt
   const timelineSliderTabs = useMemo(() => {
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth() + 1;
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: THÁNG (Không giới hạn, quét từ năm sớm nhất đến hiện tại + tương lai)
+    // CHẾ ĐỘ: THÁNG (Vùng đệm ngắn mặc định 6 tháng, tự động mở rộng khi trượt)
     // -------------------------------------------------------------
     if (filterMode === 'month') {
-      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
+      let effectivePastCount = pastBufferCount;
       if (selectedMonthKey && selectedMonthKey !== 'month_future') {
-        const parsedYear = parseInt(selectedMonthKey.split('-')[0], 10);
-        if (!isNaN(parsedYear) && parsedYear < startYear) {
-          startYear = parsedYear;
+        const [sY, sM] = selectedMonthKey.split('-').map(Number);
+        if (sY && sM) {
+          const diff = (curYear - sY) * 12 + (curMonth - sM);
+          if (diff > effectivePastCount) {
+            effectivePastCount = diff + 2;
+          }
         }
       }
 
@@ -461,30 +464,25 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      for (let y = startYear; y <= curYear; y++) {
-        const maxM = y === curYear ? curMonth : 12;
-        for (let m = 1; m <= maxM; m++) {
-          const mKey = `${y}-${String(m).padStart(2, '0')}`;
-          let label = `THÁNG ${m}/${y}`;
+      for (let i = effectivePastCount; i >= 0; i--) {
+        const d = new Date(curYear, curMonth - 1 - i, 1);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const mKey = `${y}-${String(m).padStart(2, '0')}`;
+        let label = `THÁNG ${m}/${y}`;
 
-          if (y === curYear && m === curMonth) {
-            label = 'THÁNG NÀY';
-          } else {
-            const isPrevMonth =
-              (curMonth === 1 && y === curYear - 1 && m === 12) ||
-              (curMonth > 1 && y === curYear && m === curMonth - 1);
-            if (isPrevMonth) {
-              label = 'THÁNG TRƯỚC';
-            }
-          }
-
-          tabs.push({
-            key: mKey,
-            label,
-            isActive: selectedMonthKey === mKey,
-            onSelect: () => setSelectedMonthKey(mKey),
-          });
+        if (i === 0) {
+          label = 'THÁNG NÀY';
+        } else if (i === 1) {
+          label = 'THÁNG TRƯỚC';
         }
+
+        tabs.push({
+          key: mKey,
+          label,
+          isActive: selectedMonthKey === mKey,
+          onSelect: () => setSelectedMonthKey(mKey),
+        });
       }
 
       tabs.push({
@@ -498,9 +496,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: TUẦN (Không giới hạn, quét từ các tuần trước về tuần này + tương lai)
+    // CHẾ ĐỘ: TUẦN (Vùng đệm ngắn mặc định 6 tuần, mở rộng mượt mà)
     // -------------------------------------------------------------
     if (filterMode === 'week') {
+      let effectivePastCount = pastBufferCount;
+      const currOffset = parseInt(selectedWeekKey.replace('week_', ''), 10);
+      if (!isNaN(currOffset) && currOffset > effectivePastCount) {
+        effectivePastCount = currOffset + 2;
+      }
+
       const tabs: Array<{
         key: string;
         label: string;
@@ -508,8 +512,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      const totalWeeks = Math.max(52, historyYearsBack * 26);
-      for (let w = totalWeeks; w >= 0; w--) {
+      for (let w = effectivePastCount; w >= 0; w--) {
         const start = new Date(now);
         start.setDate(now.getDate() - now.getDay() - w * 7);
 
@@ -537,9 +540,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: NGÀY (Quét từ các ngày trước về hôm nay + tương lai + chọn ngày)
+    // CHẾ ĐỘ: NGÀY (Vùng đệm ngắn mặc định 8 ngày, mở rộng mượt mà)
     // -------------------------------------------------------------
     if (filterMode === 'day') {
+      let effectivePastCount = pastBufferCount;
+      if (selectedDayKey && selectedDayKey !== 'day_future' && selectedDayKey !== 'picker') {
+        const sDate = parseLocalDateKey(selectedDayKey);
+        if (sDate) {
+          const diffDays = Math.round((now.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays > effectivePastCount) {
+            effectivePastCount = diffDays + 3;
+          }
+        }
+      }
+
       const tabs: Array<{
         key: string;
         label: string;
@@ -547,16 +561,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      const totalDays = Math.max(90, Math.min(historyYearsBack * 90, 730));
-      for (let i = -totalDays; i <= 0; i++) {
+      for (let i = effectivePastCount; i >= 0; i--) {
         const d = new Date(now);
-        d.setDate(d.getDate() + i);
+        d.setDate(d.getDate() - i);
         const dStr = toLocalDateKey(d);
 
         let label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
         if (i === 0) label = 'HÔM NAY';
-        else if (i === -1) label = 'HÔM QUA';
-        else if (i === -2) label = 'HÔM KIA';
+        else if (i === -1 || i === 1) label = 'HÔM QUA';
+        else if (i === -2 || i === 2) label = 'HÔM KIA';
 
         tabs.push({
           key: dStr,
@@ -584,11 +597,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: QUÝ (Quét các quý từ các năm trước đến quý này + tương lai)
+    // CHẾ ĐỘ: QUÝ (Vùng đệm ngắn mặc định 4 quý)
     // -------------------------------------------------------------
     if (filterMode === 'quarter') {
       const curQ = Math.floor(now.getMonth() / 3) + 1;
-      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
+      let effectivePastCount = pastBufferCount;
 
       const tabs: Array<{
         key: string;
@@ -597,35 +610,30 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      for (let y = startYear; y <= curYear; y++) {
-        const maxQ = y === curYear ? curQ : 4;
-        for (let q = 1; q <= maxQ; q++) {
-          const qKey = `q_${y}_${q}`;
-          let label = `QUÝ ${q}/${y}`;
+      for (let i = effectivePastCount; i >= 0; i--) {
+        const totalQ = curYear * 4 + (curQ - 1) - i;
+        const y = Math.floor(totalQ / 4);
+        const q = (totalQ % 4) + 1;
+        const qKey = `q_${y}_${q}`;
+        let label = `QUÝ ${q}/${y}`;
 
-          if (y === curYear && q === curQ) {
-            label = 'QUÝ NÀY';
-          } else {
-            const isPrevQ =
-              (curQ === 1 && y === curYear - 1 && q === 4) ||
-              (curQ > 1 && y === curYear && q === curQ - 1);
-            if (isPrevQ) {
-              label = 'QUÝ TRƯỚC';
-            }
-          }
-
-          const isCurrentActive =
-            selectedQuarterKey === qKey ||
-            (label === 'QUÝ NÀY' && selectedQuarterKey === 'q_curr') ||
-            (label === 'QUÝ TRƯỚC' && selectedQuarterKey === 'q_prev');
-
-          tabs.push({
-            key: qKey,
-            label,
-            isActive: isCurrentActive,
-            onSelect: () => setSelectedQuarterKey(qKey),
-          });
+        if (i === 0) {
+          label = 'QUÝ NÀY';
+        } else if (i === 1) {
+          label = 'QUÝ TRƯỚC';
         }
+
+        const isCurrentActive =
+          selectedQuarterKey === qKey ||
+          (label === 'QUÝ NÀY' && selectedQuarterKey === 'q_curr') ||
+          (label === 'QUÝ TRƯỚC' && selectedQuarterKey === 'q_prev');
+
+        tabs.push({
+          key: qKey,
+          label,
+          isActive: isCurrentActive,
+          onSelect: () => setSelectedQuarterKey(qKey),
+        });
       }
 
       tabs.push({
@@ -639,10 +647,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: NĂM (Quét các năm từ sớm nhất đến năm nay + tương lai + tất cả)
+    // CHẾ ĐỘ: NĂM (Vùng đệm ngắn mặc định 3 năm)
     // -------------------------------------------------------------
     if (filterMode === 'year') {
-      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
+      let effectivePastCount = pastBufferCount;
+      if (selectedYearKey && selectedYearKey !== 'all_years' && selectedYearKey !== 'year_future') {
+        const y = parseInt(selectedYearKey, 10);
+        if (!isNaN(y) && curYear - y > effectivePastCount) {
+          effectivePastCount = curYear - y + 1;
+        }
+      }
+
       const tabs: Array<{
         key: string;
         label: string;
@@ -650,15 +665,16 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      for (let y = startYear; y <= curYear; y++) {
+      for (let i = effectivePastCount; i >= 0; i--) {
+        const y = curYear - i;
         let label = `NĂM ${y}`;
-        if (y === curYear) label = 'NĂM NAY';
-        else if (y === curYear - 1) label = 'NĂM NGOÁI';
+        if (i === 0) label = 'NĂM NAY';
+        else if (i === 1) label = 'NĂM NGOÁI';
 
         const isCurrentActive =
           selectedYearKey === String(y) ||
-          (y === curYear && selectedYearKey === 'year_curr') ||
-          (y === curYear - 1 && selectedYearKey === 'year_prev');
+          (i === 0 && selectedYearKey === 'year_curr') ||
+          (i === 1 && selectedYearKey === 'year_prev');
 
         tabs.push({
           key: String(y),
@@ -715,9 +731,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     selectedQuarterKey,
     selectedYearKey,
     selectedDayKey,
-    earliestTxDate,
-    historyYearsBack,
+    pastBufferCount,
   ]);
+
+  // Điều chỉnh scrollLeft đồng bộ trước khi trình duyệt vẽ (render) để không bị giật hoặc gián đoạn thao tác vuốt của người dùng
+  useLayoutEffect(() => {
+    if (isPrependingRef.current && sliderContainerRef.current) {
+      const container = sliderContainerRef.current;
+      const deltaWidth = container.scrollWidth - prevScrollWidthRef.current;
+      if (deltaWidth > 0) {
+        container.scrollLeft = prevScrollLeftRef.current + deltaWidth;
+      }
+      isPrependingRef.current = false;
+    }
+  }, [timelineSliderTabs]);
 
   // 7. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
   const isTxInSelectedTimeline = (tx: Transaction): boolean => {
@@ -1033,8 +1060,18 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           <div
             ref={sliderContainerRef}
             onScroll={(e) => {
-              if (e.currentTarget.scrollLeft < 150) {
-                setHistoryYearsBack((prev) => prev + 10);
+              const el = e.currentTarget;
+              if (el.scrollLeft < 100 && !isPrependingRef.current) {
+                prevScrollWidthRef.current = el.scrollWidth;
+                prevScrollLeftRef.current = el.scrollLeft;
+                isPrependingRef.current = true;
+                setPastBufferCount((prev) => {
+                  if (filterMode === 'day') return prev + 10;
+                  if (filterMode === 'week') return prev + 6;
+                  if (filterMode === 'month') return prev + 6;
+                  if (filterMode === 'quarter') return prev + 4;
+                  return prev + 3;
+                });
               }
             }}
             className="flex items-center gap-7 overflow-x-auto no-scrollbar scroll-smooth py-2.5"

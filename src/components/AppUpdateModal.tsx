@@ -12,6 +12,7 @@ import {
 import {
   AppReleaseConfig,
   getCurrentRunningVersion,
+  getNativeApkVersion,
   normalizeDownloadUrl,
 } from '../utils/appUpdater';
 
@@ -119,7 +120,8 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
                 {release ? 'Có Bản Cập Nhật Mới!' : 'Kiểm Tra Cập Nhật'}
               </h3>
               <p className="text-xs text-[#7a6a58]">
-                Phiên bản hiện tại: v{currentVersion}
+                Đang chạy: v{currentVersion}
+                {window.AndroidUpdater ? ` • APK gốc: v${getNativeApkVersion()}` : ''}
               </p>
             </div>
           </div>
@@ -137,6 +139,19 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
         <div className="p-5 overflow-y-auto space-y-4">
           {release ? (
             <>
+              {release.updateType === 'apk' && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                  <Package className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-bold text-amber-950">
+                      Bắt buộc cài đặt file APK trước:
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-amber-800">
+                      Bản cài đặt gốc trên máy của bạn (v{getNativeApkVersion()}) cần được nâng cấp qua file APK để cập nhật các thành phần hệ điều hành. Sau khi cài xong bản APK này, các bản cập nhật sau sẽ được tự động áp dụng qua OTA nhanh trong 2 giây.
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* Version Badge & Mode Badge */}
               <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9]">
                 <div>

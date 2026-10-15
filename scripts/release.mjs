@@ -85,7 +85,7 @@ const nextConfig = {
   downloadUrl: isApkMode
     ? 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk'
     : 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip',
-  minApkVersion: currentConfig.minApkVersion || '2.1.20',
+  minApkVersion: isApkMode ? nextVersion : (currentConfig.minApkVersion || nextVersion),
   apkDownloadUrl: 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk',
   releaseNotes,
   allowSkip: true,

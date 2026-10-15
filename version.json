@@ -1,10 +1,10 @@
 {
-  "version": "2.1.25",
-  "updateType": "ota",
-  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "minApkVersion": "2.1.20",
+  "version": "2.1.26",
+  "updateType": "apk",
+  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
+  "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Ho tro tao nhanh So va Vi ngay tren form, tu dong khoi tao khi dung Giong noi & Quet hoa don, bo sung co che bao ve minApkVersion truoc ban OTA",
+  "releaseNotes": "Toi uu bo dem ngan cho thanh truot thoi gian (cuon muot khong giat), co che bat buoc cai APK goc truoc khi cap nhat OTA tiep theo",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T05:49:52.932Z"
+  "updatedAt": "2026-10-15T07:42:28.669Z"
 }
