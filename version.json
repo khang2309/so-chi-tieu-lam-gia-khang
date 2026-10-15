@@ -1,10 +1,10 @@
 {
-  "version": "2.1.27",
+  "version": "2.1.28",
   "updateType": "apk",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "minApkVersion": "2.1.27",
+  "minApkVersion": "2.1.28",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Khac phuc triet de loi tu truot thanh timeline va neo chinh xac 100% vao moc thoi gian hien tai",
+  "releaseNotes": "Toi uu tu dong nap them moc thoi gian qua khu khi cuon va neo vi tri vuot vo tan",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T07:58:53.590Z"
+  "updatedAt": "2026-10-15T08:19:36.337Z"
 }

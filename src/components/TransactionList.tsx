@@ -134,11 +134,13 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const isPrependingRef = useRef<boolean>(false);
   const prevScrollWidthRef = useRef<number>(0);
   const prevScrollLeftRef = useRef<number>(0);
-  const isUserInteractingRef = useRef<boolean>(false);
+  const isInitializedRef = useRef<boolean>(false);
+  const isManualTabClickRef = useRef<boolean>(false);
   const lastPrependTimeRef = useRef<number>(0);
 
   // Reset về vùng đệm ngắn mặc định khi đổi loại bộ lọc
   useEffect(() => {
+    isInitializedRef.current = false;
     if (filterMode === 'month') setPastBufferCount(6);
     else if (filterMode === 'week') setPastBufferCount(6);
     else if (filterMode === 'day') setPastBufferCount(8);
@@ -424,7 +426,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   // Tự động căn giữa tab đang chọn ngay trước khi trình duyệt vẽ (chuẩn vị trí ngay từ frame đầu tiên)
   useLayoutEffect(() => {
     if (!isPrependingRef.current) {
-      centerActiveTab('auto');
+      centerActiveTab(isManualTabClickRef.current ? 'smooth' : 'auto');
+      isManualTabClickRef.current = false;
+      const timer = setTimeout(() => {
+        isInitializedRef.current = true;
+      }, 150);
+      return () => clearTimeout(timer);
     }
   }, [
     filterMode,
@@ -742,9 +749,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       if (deltaWidth > 0) {
         container.scrollLeft = prevScrollLeftRef.current + deltaWidth;
       }
-      requestAnimationFrame(() => {
-        isPrependingRef.current = false;
-      });
+      isPrependingRef.current = false;
     }
   }, [timelineSliderTabs]);
 
@@ -1061,46 +1066,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         <div className="overflow-hidden border-b border-[#ebdcc9]/60">
           <div
             ref={sliderContainerRef}
-            onTouchStart={() => {
-              isUserInteractingRef.current = true;
-            }}
-            onTouchEnd={() => {
-              isUserInteractingRef.current = false;
-            }}
-            onTouchCancel={() => {
-              isUserInteractingRef.current = false;
-            }}
-            onPointerDown={() => {
-              isUserInteractingRef.current = true;
-            }}
-            onPointerUp={() => {
-              isUserInteractingRef.current = false;
-            }}
-            onPointerCancel={() => {
-              isUserInteractingRef.current = false;
-            }}
-            onMouseDown={() => {
-              isUserInteractingRef.current = true;
-            }}
-            onMouseUp={() => {
-              isUserInteractingRef.current = false;
-            }}
             onScroll={(e) => {
               const el = e.currentTarget;
-              // CHỈ nạp thêm khi chính người dùng đang chủ động vuốt/chạm (không chạy khi tự động căn giữa hoặc mount)
-              if (!isUserInteractingRef.current) return;
+              if (!isInitializedRef.current || isPrependingRef.current) return;
 
               const now = Date.now();
-              if (now - lastPrependTimeRef.current < 400) return;
+              if (now - lastPrependTimeRef.current < 250) return;
 
-              if (el.scrollLeft < 60 && !isPrependingRef.current) {
+              // Tự động nạp thêm khi cuộn gần tới mép trái (trong khoảng 180px)
+              if (el.scrollLeft < 180) {
                 lastPrependTimeRef.current = now;
                 prevScrollWidthRef.current = el.scrollWidth;
                 prevScrollLeftRef.current = el.scrollLeft;
                 isPrependingRef.current = true;
                 setPastBufferCount((prev) => {
-                  if (filterMode === 'day') return Math.min(prev + 10, 180);
-                  if (filterMode === 'week') return Math.min(prev + 6, 100);
+                  if (filterMode === 'day') return Math.min(prev + 14, 365);
+                  if (filterMode === 'week') return Math.min(prev + 8, 150);
                   if (filterMode === 'month') return Math.min(prev + 6, 120);
                   if (filterMode === 'quarter') return Math.min(prev + 4, 40);
                   return Math.min(prev + 3, 20);
@@ -1116,8 +1097,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 ref={tab.isActive ? activeTabRef : null}
                 type="button"
                 onClick={() => {
+                  isManualTabClickRef.current = true;
                   tab.onSelect();
-                  setTimeout(() => centerActiveTab('smooth'), 20);
                 }}
                 className={`py-1 text-xs uppercase whitespace-nowrap transition cursor-pointer shrink-0 relative flex flex-col items-center select-none ${
                   tab.isActive
