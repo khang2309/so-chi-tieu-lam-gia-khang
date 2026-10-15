@@ -7,6 +7,7 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithCredential,
+  signInWithPopup,
 } from 'firebase/auth';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { Capacitor } from '@capacitor/core';
@@ -122,6 +123,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         localStorage.removeItem('user_is_logged_out');
       } catch {}
+
+      // 1. Nếu đang chạy trên Trình duyệt Web (Localhost / Web hosting)
+      if (!Capacitor.isNativePlatform()) {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await signInWithPopup(auth, provider);
+        try {
+          localStorage.removeItem('user_is_logged_out');
+          localStorage.setItem('hasSeenLoginPopup', 'true');
+        } catch {}
+        setIsAuthModalOpen(false);
+        return;
+      }
+
+      // 2. Nếu đang chạy trên ứng dụng Android Native (APK qua Capacitor)
       await GoogleAuth.initialize({
         clientId: '1049457866930-8p1gu1bmhm5f8q6fs4k14s1meb2h5l6f.apps.googleusercontent.com',
         scopes: ['profile', 'email'],
@@ -142,8 +158,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
       setIsAuthModalOpen(false);
     } catch (err: any) {
-      console.warn('Lỗi xác thực Google Native:', err);
-      // Hiển thị trực tiếp toàn bộ mã lỗi chi tiết (alert JSON hoặc message) theo yêu cầu
+      console.warn('Lỗi xác thực Google:', err);
+      // Nếu người dùng đóng popup thì không bung alert gây phiền toái
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.error === 'popup_closed_by_user'
+      ) {
+        console.log('Người dùng đã đóng popup Google');
+        throw err;
+      }
+      // Hiển thị trực tiếp toàn bộ mã lỗi chi tiết (alert JSON hoặc message) cho các lỗi kỹ thuật khác
       const errorStr =
         typeof err === 'object'
           ? (err.message ? `${err.message}\nChi tiết: ${JSON.stringify(err)}` : JSON.stringify(err))

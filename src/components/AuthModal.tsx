@@ -44,11 +44,25 @@ export const AuthModal: React.FC = () => {
       await loginWithGoogleNative();
       showToast('Đăng nhập Google thành công! ☁️');
     } catch (err: any) {
-      console.warn('Lỗi đăng nhập Google Native:', err);
-      const detail =
+      console.warn('Lỗi đăng nhập Google:', err);
+      // Nếu người dùng chủ động đóng popup hoặc hủy, không báo lỗi đỏ
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.error === 'popup_closed_by_user'
+      ) {
+        return;
+      }
+      let detail =
         typeof err === 'object'
           ? (err.message ? `${err.message}` : JSON.stringify(err))
           : String(err);
+
+      if (err?.code === 'auth/popup-blocked') {
+        detail = 'Trình duyệt đang chặn popup. Vui lòng cho phép mở popup trên trang này để đăng nhập Google.';
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        detail = 'Tên miền chưa được cấp phép trong Firebase Auth (Authorized Domains).';
+      }
       setError(detail);
     } finally {
       setIsGoogleSubmitting(false);
