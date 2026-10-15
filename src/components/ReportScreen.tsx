@@ -108,7 +108,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   const [periodType, setPeriodType] = useState<PeriodType>('month');
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState<boolean>(false);
   // Vùng đệm các mốc thời gian quá khứ: Mặc định ngắn, mở rộng mượt mà khi trượt
-  const [pastBufferCount, setPastBufferCount] = useState<number>(6);
+  const [pastBufferCount, setPastBufferCount] = useState<number>(12);
   const isPrependingRef = useRef<boolean>(false);
   const prevScrollWidthRef = useRef<number>(0);
   const prevScrollLeftRef = useRef<number>(0);
@@ -119,11 +119,11 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   // Reset về vùng đệm ngắn mặc định khi đổi loại bộ lọc
   useEffect(() => {
     isInitializedRef.current = false;
-    if (periodType === 'month') setPastBufferCount(6);
-    else if (periodType === 'week') setPastBufferCount(6);
-    else if (periodType === 'day') setPastBufferCount(8);
-    else if (periodType === 'quarter') setPastBufferCount(4);
-    else if (periodType === 'year') setPastBufferCount(3);
+    if (periodType === 'month') setPastBufferCount(12);
+    else if (periodType === 'week') setPastBufferCount(12);
+    else if (periodType === 'day') setPastBufferCount(15);
+    else if (periodType === 'quarter') setPastBufferCount(8);
+    else if (periodType === 'year') setPastBufferCount(5);
   }, [periodType]);
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
@@ -1291,20 +1291,20 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
                 if (!isInitializedRef.current || isPrependingRef.current) return;
 
                 const now = Date.now();
-                if (now - lastPrependTimeRef.current < 250) return;
+                if (now - lastPrependTimeRef.current < 150) return;
 
-                // Tự động nạp thêm khi cuộn gần tới mép trái (trong khoảng 180px)
-                if (el.scrollLeft < 180) {
+                // Tự động nạp thêm sớm từ xa (cách mép 320px) giúp cuộn mượt mà không khựng
+                if (el.scrollLeft < 320) {
                   lastPrependTimeRef.current = now;
                   prevScrollWidthRef.current = el.scrollWidth;
                   prevScrollLeftRef.current = el.scrollLeft;
                   isPrependingRef.current = true;
                   setPastBufferCount((prev) => {
-                    if (periodType === 'day') return Math.min(prev + 14, 365);
-                    if (periodType === 'week') return Math.min(prev + 8, 150);
-                    if (periodType === 'month') return Math.min(prev + 6, 120);
-                    if (periodType === 'quarter') return Math.min(prev + 4, 40);
-                    return Math.min(prev + 3, 20);
+                    if (periodType === 'day') return Math.min(prev + 15, 365);
+                    if (periodType === 'week') return Math.min(prev + 10, 150);
+                    if (periodType === 'month') return Math.min(prev + 12, 120);
+                    if (periodType === 'quarter') return Math.min(prev + 6, 40);
+                    return Math.min(prev + 4, 20);
                   });
                 }
               }}

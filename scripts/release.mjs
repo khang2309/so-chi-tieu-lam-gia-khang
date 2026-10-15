@@ -8,7 +8,8 @@ const pkgJsonPath = path.join(rootDir, 'package.json');
 const appUpdaterPath = path.join(rootDir, 'src', 'utils', 'appUpdater.ts');
 
 const args = process.argv.slice(2);
-const isApkMode = args.includes('--apk');
+const isForceApk = args.includes('--force-apk');
+const isApkMode = args.includes('--apk') || isForceApk;
 const customNotesArg = args.find((a) => !a.startsWith('--'));
 
 // 1. Đọc phiên bản hiện tại và tự động tăng thêm +0.0.1
@@ -79,13 +80,16 @@ if (isApkMode) {
 }
 
 // 4. Ghi file version.json mới
+// Mặc định mọi bản cập nhật đều phát hành OTA siêu tốc.
+// minApkVersion giữ ở '2.1.26' để máy cài APK cũ (< 2.1.26 như 2.1.2) tự động cài APK trước,
+// còn máy đã cài APK >= 2.1.26 sẽ được cập nhật OTA trực tiếp trong 2 giây mà KHÔNG BỊ BẮT CÀI LẠI APK!
 const nextConfig = {
   version: nextVersion,
-  updateType: isApkMode ? 'apk' : 'ota',
-  downloadUrl: isApkMode
+  updateType: isForceApk ? 'apk' : 'ota',
+  downloadUrl: isForceApk
     ? 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk'
     : 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip',
-  minApkVersion: isApkMode ? nextVersion : (currentConfig.minApkVersion || nextVersion),
+  minApkVersion: isForceApk ? nextVersion : '2.1.26',
   apkDownloadUrl: 'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk',
   releaseNotes,
   allowSkip: true,

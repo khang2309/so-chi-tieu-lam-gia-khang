@@ -130,7 +130,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [customEndDate, setCustomEndDate] = useState<string>('');
   // Vùng đệm các mốc thời gian quá khứ: Mặc định chỉ hiển thị khoảng thời gian ngắn
   // Khi người dùng cuộn tới mép trái, tự động nạp thêm mà không làm gián đoạn thao tác vuốt
-  const [pastBufferCount, setPastBufferCount] = useState<number>(6);
+  const [pastBufferCount, setPastBufferCount] = useState<number>(12);
   const isPrependingRef = useRef<boolean>(false);
   const prevScrollWidthRef = useRef<number>(0);
   const prevScrollLeftRef = useRef<number>(0);
@@ -141,11 +141,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   // Reset về vùng đệm ngắn mặc định khi đổi loại bộ lọc
   useEffect(() => {
     isInitializedRef.current = false;
-    if (filterMode === 'month') setPastBufferCount(6);
-    else if (filterMode === 'week') setPastBufferCount(6);
-    else if (filterMode === 'day') setPastBufferCount(8);
-    else if (filterMode === 'quarter') setPastBufferCount(4);
-    else if (filterMode === 'year') setPastBufferCount(3);
+    if (filterMode === 'month') setPastBufferCount(12);
+    else if (filterMode === 'week') setPastBufferCount(12);
+    else if (filterMode === 'day') setPastBufferCount(15);
+    else if (filterMode === 'quarter') setPastBufferCount(8);
+    else if (filterMode === 'year') setPastBufferCount(5);
   }, [filterMode]);
 
   // Danh sách các tùy chọn khoảng thời gian (Money Lover UX)
@@ -1071,20 +1071,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               if (!isInitializedRef.current || isPrependingRef.current) return;
 
               const now = Date.now();
-              if (now - lastPrependTimeRef.current < 250) return;
+              if (now - lastPrependTimeRef.current < 150) return;
 
-              // Tự động nạp thêm khi cuộn gần tới mép trái (trong khoảng 180px)
-              if (el.scrollLeft < 180) {
+              // Tự động nạp thêm sớm từ xa (cách mép 320px) giúp cuộn mượt mà không khựng
+              if (el.scrollLeft < 320) {
                 lastPrependTimeRef.current = now;
                 prevScrollWidthRef.current = el.scrollWidth;
                 prevScrollLeftRef.current = el.scrollLeft;
                 isPrependingRef.current = true;
                 setPastBufferCount((prev) => {
-                  if (filterMode === 'day') return Math.min(prev + 14, 365);
-                  if (filterMode === 'week') return Math.min(prev + 8, 150);
-                  if (filterMode === 'month') return Math.min(prev + 6, 120);
-                  if (filterMode === 'quarter') return Math.min(prev + 4, 40);
-                  return Math.min(prev + 3, 20);
+                  if (filterMode === 'day') return Math.min(prev + 15, 365);
+                  if (filterMode === 'week') return Math.min(prev + 10, 150);
+                  if (filterMode === 'month') return Math.min(prev + 12, 120);
+                  if (filterMode === 'quarter') return Math.min(prev + 6, 40);
+                  return Math.min(prev + 4, 20);
                 });
               }
             }}

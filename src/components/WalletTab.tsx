@@ -188,8 +188,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
         {/* Add / Edit Form Modal (Hiển thị dạng Popup trực tiếp, không bắt cuộn lên đầu trang) */}
         {(isAdding || editingWallet) && (
-          <div className="fixed inset-0 z-60 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90vh] my-auto animate-in zoom-in-95 duration-150">
               {/* Header cố định */}
               <div className="shrink-0 px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
                 <span className="text-sm font-bold text-[#3e332a]">
