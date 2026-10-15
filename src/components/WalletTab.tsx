@@ -188,10 +188,10 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
         {/* Add / Edit Form Modal (Hiển thị dạng Popup trực tiếp, không bắt cuộn lên đầu trang) */}
         {(isAdding || editingWallet) && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-              {/* Header */}
-              <div className="px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
+          <div className="fixed inset-0 z-60 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150">
+              {/* Header cố định */}
+              <div className="shrink-0 px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
                 <span className="text-sm font-bold text-[#3e332a]">
                   {editingWallet ? `Chỉnh sửa ví: ${editingWallet.name}` : 'Thêm Ví / Nguồn tiền mới'}
                 </span>
@@ -209,122 +209,126 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
               <form
                 onSubmit={handleSave}
-                className="p-5 space-y-3.5 max-h-[80vh] overflow-y-auto"
+                className="flex flex-col flex-1 min-h-0 overflow-hidden"
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Thân form cuộn mượt mà */}
+                <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58]">
+                        Tên ví / Ngân hàng:
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="VD: Techcombank, VNPAY..."
+                        required
+                        autoFocus
+                        className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
+                        <span>
+                          {editingWallet ? 'Số dư hiện tại:' : 'Số dư ban đầu:'}
+                        </span>
+                        {editingWallet && (
+                          <span className="text-[10px] text-amber-700 font-medium">
+                            (Tự khớp giao dịch cũ)
+                          </span>
+                        )}
+                      </label>
+                      <div className="mt-0.5">
+                        <SmartAmountInput
+                          value={initialBalance}
+                          onChange={setInitialBalance}
+                          size="compact"
+                          placeholder="0"
+                        />
+                      </div>
+                      {editingWallet && (
+                        <p className="text-[10px] text-[#7a6a58] mt-1 leading-tight">
+                          💡 Nhập số tiền hiện có. Ứng dụng tự động cân đối số dư ban đầu để khớp thực tế mà không làm mất lịch sử thu chi.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[11px] font-semibold text-[#7a6a58]">
-                      Tên ví / Ngân hàng:
+                      Số tài khoản / Ghi chú số thẻ:
                     </label>
                     <input
                       type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="VD: Techcombank, VNPAY..."
-                      required
-                      autoFocus
-                      className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      placeholder="VD: 1903xxx hoặc Tiền mặt trong ví"
+                      className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
                     />
                   </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#7a6a58] flex items-center justify-between">
-                      <span>
-                        {editingWallet ? 'Số dư hiện tại:' : 'Số dư ban đầu:'}
-                      </span>
-                      {editingWallet && (
-                        <span className="text-[10px] text-amber-700 font-medium">
-                          (Tự khớp giao dịch cũ)
-                        </span>
-                      )}
-                    </label>
-                    <div className="mt-0.5">
-                      <SmartAmountInput
-                        value={initialBalance}
-                        onChange={setInitialBalance}
-                        size="compact"
-                        placeholder="0"
-                      />
-                    </div>
-                    {editingWallet && (
-                      <p className="text-[10px] text-[#7a6a58] mt-1 leading-tight">
-                        💡 Nhập số tiền hiện có. Ứng dụng tự động cân đối số dư ban đầu để khớp thực tế mà không làm mất lịch sử thu chi.
-                      </p>
-                    )}
-                  </div>
-                </div>
 
-                <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
-                    Số tài khoản / Ghi chú số thẻ:
+                  {/* Icon & Color selector */}
+                  <div className="space-y-2.5 pt-1">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
+                        Icon nhận diện:
+                      </label>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {availableIcons.map((ic) => (
+                          <button
+                            type="button"
+                            key={ic.name}
+                            onClick={() => setIcon(ic.name)}
+                            className={`w-8 h-8 rounded-lg border transition flex items-center justify-center cursor-pointer ${
+                              icon === ic.name
+                                ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
+                                : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
+                            }`}
+                            title={ic.label}
+                          >
+                            <DynamicIcon name={ic.name} className="w-4 h-4" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
+                        Màu sắc ví:
+                      </label>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {availableColors.map((cl) => (
+                          <button
+                            type="button"
+                            key={cl}
+                            onClick={() => setColor(cl)}
+                            className={`w-6 h-6 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
+                              color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: cl }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isDefault}
+                      onChange={(e) => setIsDefault(e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#a25832]"
+                    />
+                    <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span>Đặt làm ví mặc định khi ghi chép giao dịch</span>
+                    </span>
                   </label>
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    placeholder="VD: 1903xxx hoặc Tiền mặt trong ví"
-                    className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
-                  />
                 </div>
 
-                {/* Icon & Color selector */}
-                <div className="space-y-2.5 pt-1">
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
-                      Icon nhận diện:
-                    </label>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {availableIcons.map((ic) => (
-                        <button
-                          type="button"
-                          key={ic.name}
-                          onClick={() => setIcon(ic.name)}
-                          className={`w-8 h-8 rounded-lg border transition flex items-center justify-center cursor-pointer ${
-                            icon === ic.name
-                              ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
-                              : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
-                          }`}
-                          title={ic.label}
-                        >
-                          <DynamicIcon name={ic.name} className="w-4 h-4" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
-                      Màu sắc ví:
-                    </label>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      {availableColors.map((cl) => (
-                        <button
-                          type="button"
-                          key={cl}
-                          onClick={() => setColor(cl)}
-                          className={`w-6 h-6 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
-                            color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
-                          }`}
-                          style={{ backgroundColor: cl }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={isDefault}
-                    onChange={(e) => setIsDefault(e.target.checked)}
-                    className="w-4 h-4 rounded accent-[#a25832]"
-                  />
-                  <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    <span>Đặt làm ví mặc định khi ghi chép giao dịch</span>
-                  </span>
-                </label>
-
-                <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#f0e4d5]">
+                {/* Footer cố định: Luôn nhìn thấy trên bàn phím */}
+                <div className="shrink-0 px-4 py-3 bg-[#fbf5eb] border-t border-[#f0e4d5] flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => {

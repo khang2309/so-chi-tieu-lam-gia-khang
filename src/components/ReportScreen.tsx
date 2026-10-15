@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -14,7 +14,6 @@ import {
   PieChart as PieIcon,
   BarChart3,
   Calendar,
-  ChevronLeft,
   ChevronRight,
   TrendingUp,
   TrendingDown,
@@ -23,9 +22,17 @@ import {
   Award,
   X,
   Users,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { Transaction, Category, Wallet, Ledger } from '../types';
-import { formatCurrency, formatDateTimeDisplay } from '../utils/formatters';
+import {
+  formatCurrency,
+  formatDateTimeDisplay,
+  toLocalDateKey,
+  toLocalMonthKey,
+  parseLocalDateKey,
+} from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
 
 // Register Chart.js components
@@ -58,7 +65,7 @@ interface ReportScreenProps {
   activeLedgerName?: string;
 }
 
-type PeriodType = 'day' | 'week' | 'month' | 'quarter' | 'year';
+type PeriodType = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 
 // Helper hàm xử lý Date an toàn tuyệt đối, chống Null Pointer Exception & Invalid Date
 const getSafeDate = (val?: string | null | Date): Date => {
@@ -69,14 +76,6 @@ const getSafeDate = (val?: string | null | Date): Date => {
   }
   const d = new Date(val);
   return isNaN(d.getTime()) ? new Date() : d;
-};
-
-const formatDateToYMD = (d: Date): string => {
-  const safe = getSafeDate(d);
-  const year = safe?.getFullYear?.() || new Date().getFullYear();
-  const month = String((safe?.getMonth?.() ?? 0) + 1).padStart(2, '0');
-  const day = String(safe?.getDate?.() ?? 1).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 };
 
 // Tính khoảng ngày Thứ 2 đến Chủ nhật của 1 tuần bằng Date object
@@ -104,22 +103,27 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   activeLedgerName = 'Tất cả các sổ',
 }) => {
   const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1; // 1-12
-  const currentQuarter = Math.floor(currentDate.getMonth() / 3) + 1; // 1-4
 
   // 1. Filter States với fallback an toàn
   const [periodType, setPeriodType] = useState<PeriodType>('month');
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
-  const [selectedQuarter, setSelectedQuarter] = useState<number>(currentQuarter);
-  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0);
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return formatDateToYMD(currentDate);
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState<boolean>(false);
+  const [historyYearsBack, setHistoryYearsBack] = useState<number>(15);
+
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
+    return toLocalMonthKey(currentDate);
   });
+  const [selectedDayKey, setSelectedDayKey] = useState<string>(() => {
+    return toLocalDateKey(currentDate);
+  });
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string>('week_0');
+  const [selectedQuarterKey, setSelectedQuarterKey] = useState<string>('q_curr');
+  const [selectedYearKey, setSelectedYearKey] = useState<string>('year_curr');
+  const [specificDate, setSpecificDate] = useState<string>(() => {
+    return toLocalDateKey(currentDate);
+  });
+
   const [compareWithPrevious, setCompareWithPrevious] = useState<boolean>(true);
   const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income'>('all');
-  const [isYearPickerOpen, setIsYearPickerOpen] = useState<boolean>(false);
 
   // Trạng thái xem chi tiết giao dịch của 1 danh mục (Bottom Sheet / Popup TẠI BÁO CÁO)
   const [selectedDetailCategory, setSelectedDetailCategory] = useState<CategoryBreakdownItem | null>(null);
@@ -127,168 +131,362 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   const getWallet = (wId: string) => wallets.find((w) => w.id === wId);
   const getLedger = (lId: string) => ledgers.find((l) => l.id === lId);
 
-  // LOGIC ĐỘNG HOÀN TOÀN (TUYỆT ĐỐI KHÔNG HARDCODE)
-  // 1. Tự động sinh danh sách NĂM xoay quanh selectedYear (Dynamic Shift 2 chiều)
-  const availableYears = useMemo(() => {
-    const baseYear = selectedYear || new Date().getFullYear();
-    const startY = baseYear - 4;
-    const endY = baseYear + 3;
-    const years: number[] = [];
-    for (let y = startY; y <= endY; y++) {
-      years.push(y);
+  // Danh sách các tùy chọn khoảng thời gian (Đồng bộ chuẩn Money Lover)
+  const periodModes: Array<{ key: PeriodType; label: string }> = [
+    { key: 'day', label: 'Ngày' },
+    { key: 'week', label: 'Tuần' },
+    { key: 'month', label: 'Tháng' },
+    { key: 'quarter', label: 'Quý' },
+    { key: 'year', label: 'Năm' },
+    { key: 'all', label: 'Tất cả' },
+  ];
+
+  const periodModeLabel = useMemo(() => {
+    switch (periodType) {
+      case 'day':
+        return 'Ngày';
+      case 'week':
+        return 'Tuần';
+      case 'month':
+        return 'Tháng';
+      case 'quarter':
+        return 'Quý';
+      case 'year':
+        return 'Năm';
+      case 'all':
+        return 'Tất cả';
+      default:
+        return 'Thời gian';
     }
-    return years;
-  }, [selectedYear]);
+  }, [periodType]);
 
-  // 2. Tự động sinh danh sách 12 THÁNG bằng Date Object (tự tính ngày nhuận tháng 2)
-  const dynamicMonths = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(selectedYear, i, 1);
-      const m = d.getMonth() + 1;
-      const daysInMonth = new Date(selectedYear, i + 1, 0).getDate();
-      return {
-        month: m,
-        label: `Tháng ${m}`,
-        shortLabel: `T${m}`,
-        daysInMonth,
-      };
-    });
-  }, [selectedYear]);
-
-  // 3. Tự động sinh 4 QUÝ bằng Date Object (tính tháng bắt đầu và kết thúc)
-  const dynamicQuarters = useMemo(() => {
-    return [1, 2, 3, 4].map((q) => {
-      const startM = (q - 1) * 3;
-      const endM = startM + 2;
-      const startDate = new Date(selectedYear, startM, 1);
-      const endDate = new Date(selectedYear, endM + 1, 0);
-      return {
-        quarter: q,
-        label: `Quý ${q}`,
-        monthsText: `T${startDate.getMonth() + 1} - T${endDate.getMonth() + 1}`,
-        startDate,
-        endDate,
-      };
-    });
-  }, [selectedYear]);
-
-  // 4. Tự động sinh danh sách TUẦN xoay quanh selectedWeekOffset (Dynamic Shift 2 chiều)
-  const dynamicWeeks = useMemo(() => {
+  const handleSelectPeriodMode = (mode: PeriodType) => {
+    setPeriodType(mode);
+    setIsPeriodMenuOpen(false);
     const now = new Date();
-    // Sinh 6 tuần trượt động xoay quanh selectedWeekOffset (từ selectedWeekOffset - 2 đến selectedWeekOffset + 3)
-    const offsets: number[] = [];
-    for (let off = selectedWeekOffset - 2; off <= selectedWeekOffset + 3; off++) {
-      offsets.push(off);
+    if (mode === 'week') {
+      setSelectedWeekKey('week_0');
+    } else if (mode === 'month') {
+      setSelectedMonthKey(toLocalMonthKey(now));
+    } else if (mode === 'quarter') {
+      setSelectedQuarterKey('q_curr');
+    } else if (mode === 'year') {
+      setSelectedYearKey('year_curr');
+    } else if (mode === 'day') {
+      setSelectedDayKey(toLocalDateKey(now));
     }
-    return offsets.map((off) => {
-      const { startOfWeek, endOfWeek } = getWeekRange(now, off);
-      const startStr = `${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1}`;
-      const endStr = `${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}`;
-      let label = '';
-      if (off === 0) label = 'Tuần này';
-      else if (off === 1) label = 'Tuần trước';
-      else if (off === -1) label = 'Tuần sau';
-      else if (off > 1) label = `${off} tuần trước`;
-      else label = `${Math.abs(off)} tuần sau`;
+  };
 
-      return {
-        offset: off,
-        label,
-        rangeText: `(${startStr} - ${endStr})`,
-        startDate: startOfWeek,
-        endDate: endOfWeek,
-      };
+  // Tìm ngày giao dịch sớm nhất để hỗ trợ cuộn quá khứ vô tận
+  const earliestTxDate = useMemo(() => {
+    let earliest = new Date();
+    transactions.forEach((tx) => {
+      if (tx.date) {
+        const d = new Date(tx.date);
+        if (!isNaN(d.getTime()) && d < earliest && d.getFullYear() >= 2000) {
+          earliest = d;
+        }
+      }
     });
-  }, [selectedWeekOffset]);
+    return earliest;
+  }, [transactions]);
 
-  // 5. Tự động sinh danh sách NGÀY xoay quanh selectedDate (Dynamic Shift 2 chiều)
-  const dynamicDays = useMemo(() => {
-    const safeD = getSafeDate(selectedDate);
-    const todayStr = formatDateToYMD(new Date());
-    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-    const days = [];
-    for (let offset = -3; offset <= 3; offset++) {
-      const d = new Date(safeD);
-      d.setDate(d.getDate() + offset);
-      const dateStr = formatDateToYMD(d);
-      const isToday = dateStr === todayStr;
-      const dayNum = d.getDate();
-      const monthNum = d.getMonth() + 1;
-      const dayName = isToday ? 'Hôm nay' : dayNames[d.getDay()];
+  // Ref container và tab đang chọn để tự động căn giữa (Center active tab)
+  const sliderContainerRef = useRef<HTMLDivElement | null>(null);
+  const activeTabRef = useRef<HTMLButtonElement | null>(null);
 
-      days.push({
-        dateStr,
-        dayNum,
-        monthNum,
-        dayName,
-        isToday,
-        isSelected: dateStr === selectedDate,
+  const centerActiveTab = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (activeTabRef.current && sliderContainerRef.current) {
+      const container = sliderContainerRef.current;
+      const tab = activeTabRef.current;
+      const tabLeft = tab.offsetLeft;
+      const tabWidth = tab.offsetWidth;
+      const containerWidth = container.offsetWidth;
+      const targetScrollLeft = tabLeft - containerWidth / 2 + tabWidth / 2;
+      container.scrollTo({
+        left: Math.max(0, targetScrollLeft),
+        behavior,
       });
     }
-    return days;
-  }, [selectedDate]);
+  }, []);
 
-  // Safe Date Picker change handler (Fallback chống trắng màn hình khi người dùng bấm XOÁ)
-  const handleDateChange = (val?: string | null) => {
-    if (!val || val.trim() === '') {
-      setSelectedDate(formatDateToYMD(new Date()));
-    } else {
-      setSelectedDate(val);
+  useEffect(() => {
+    centerActiveTab('auto');
+    const timer = setTimeout(() => {
+      centerActiveTab('smooth');
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [
+    periodType,
+    selectedMonthKey,
+    selectedWeekKey,
+    selectedQuarterKey,
+    selectedYearKey,
+    selectedDayKey,
+    centerActiveTab,
+  ]);
+
+  // Tự động sinh danh sách Tabs trượt động (Trước / Hiện tại / Tương lai) - Động 100%, Không hardcode
+  const timelineSliderTabs = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+
+    // THÁNG
+    if (periodType === 'month') {
+      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
+      if (selectedMonthKey && selectedMonthKey !== 'month_future') {
+        const parsedYear = parseInt(selectedMonthKey.split('-')[0], 10);
+        if (!isNaN(parsedYear) && parsedYear < startYear) {
+          startYear = parsedYear;
+        }
+      }
+
+      const tabs: Array<{
+        key: string;
+        label: string;
+        isActive: boolean;
+        onSelect: () => void;
+      }> = [];
+
+      for (let y = startYear; y <= curYear; y++) {
+        const maxM = y === curYear ? curMonth : 12;
+        for (let m = 1; m <= maxM; m++) {
+          const mKey = `${y}-${String(m).padStart(2, '0')}`;
+          let label = `THÁNG ${m}/${y}`;
+
+          if (y === curYear && m === curMonth) {
+            label = 'THÁNG NÀY';
+          } else {
+            const isPrevMonth =
+              (curMonth === 1 && y === curYear - 1 && m === 12) ||
+              (curMonth > 1 && y === curYear && m === curMonth - 1);
+            if (isPrevMonth) {
+              label = 'THÁNG TRƯỚC';
+            }
+          }
+
+          tabs.push({
+            key: mKey,
+            label,
+            isActive: selectedMonthKey === mKey,
+            onSelect: () => setSelectedMonthKey(mKey),
+          });
+        }
+      }
+
+      tabs.push({
+        key: 'month_future',
+        label: 'TƯƠNG LAI',
+        isActive: selectedMonthKey === 'month_future',
+        onSelect: () => setSelectedMonthKey('month_future'),
+      });
+
+      return tabs;
     }
-  };
 
-  // Quick navigation handlers cho cả 5 mốc thời gian
-  const handlePrevPeriod = () => {
+    // TUẦN
+    if (periodType === 'week') {
+      const tabs: Array<{
+        key: string;
+        label: string;
+        isActive: boolean;
+        onSelect: () => void;
+      }> = [];
+
+      const totalWeeks = Math.max(52, historyYearsBack * 26);
+      for (let w = totalWeeks; w >= 0; w--) {
+        const start = new Date(now);
+        start.setDate(now.getDate() - now.getDay() - w * 7);
+
+        let label = `TUẦN ${start.getDate()}/${start.getMonth() + 1}`;
+        if (w === 0) label = 'TUẦN NÀY';
+        else if (w === 1) label = 'TUẦN TRƯỚC';
+        else if (w === 2) label = '2 TUẦN TRƯỚC';
+
+        tabs.push({
+          key: `week_${w}`,
+          label,
+          isActive: selectedWeekKey === `week_${w}`,
+          onSelect: () => setSelectedWeekKey(`week_${w}`),
+        });
+      }
+
+      tabs.push({
+        key: 'week_future',
+        label: 'TƯƠNG LAI',
+        isActive: selectedWeekKey === 'week_future',
+        onSelect: () => setSelectedWeekKey('week_future'),
+      });
+
+      return tabs;
+    }
+
+    // NGÀY
     if (periodType === 'day') {
-      const d = getSafeDate(selectedDate);
-      d.setDate(d.getDate() - 1);
-      setSelectedDate(formatDateToYMD(d));
-    } else if (periodType === 'week') {
-      setSelectedWeekOffset((prev) => prev + 1);
-    } else if (periodType === 'month') {
-      if (selectedMonth === 1) {
-        setSelectedMonth(12);
-        setSelectedYear((y) => y - 1);
-      } else {
-        setSelectedMonth((m) => m - 1);
-      }
-    } else if (periodType === 'quarter') {
-      if (selectedQuarter === 1) {
-        setSelectedQuarter(4);
-        setSelectedYear((y) => y - 1);
-      } else {
-        setSelectedQuarter((q) => q - 1);
-      }
-    } else if (periodType === 'year') {
-      setSelectedYear((y) => y - 1);
-    }
-  };
+      const tabs: Array<{
+        key: string;
+        label: string;
+        isActive: boolean;
+        onSelect: () => void;
+      }> = [];
 
-  const handleNextPeriod = () => {
-    if (periodType === 'day') {
-      const d = getSafeDate(selectedDate);
-      d.setDate(d.getDate() + 1);
-      setSelectedDate(formatDateToYMD(d));
-    } else if (periodType === 'week') {
-      setSelectedWeekOffset((prev) => prev - 1);
-    } else if (periodType === 'month') {
-      if (selectedMonth === 12) {
-        setSelectedMonth(1);
-        setSelectedYear((y) => y + 1);
-      } else {
-        setSelectedMonth((m) => m + 1);
+      const totalDays = Math.max(90, Math.min(historyYearsBack * 90, 730));
+      for (let i = -totalDays; i <= 0; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() + i);
+        const dStr = toLocalDateKey(d);
+
+        let label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (i === 0) label = 'HÔM NAY';
+        else if (i === -1) label = 'HÔM QUA';
+        else if (i === -2) label = 'HÔM KIA';
+
+        tabs.push({
+          key: dStr,
+          label,
+          isActive: selectedDayKey === dStr,
+          onSelect: () => setSelectedDayKey(dStr),
+        });
       }
-    } else if (periodType === 'quarter') {
-      if (selectedQuarter === 4) {
-        setSelectedQuarter(1);
-        setSelectedYear((y) => y + 1);
-      } else {
-        setSelectedQuarter((q) => q + 1);
-      }
-    } else if (periodType === 'year') {
-      setSelectedYear((y) => y + 1);
+
+      tabs.push({
+        key: 'day_future',
+        label: 'TƯƠNG LAI',
+        isActive: selectedDayKey === 'day_future',
+        onSelect: () => setSelectedDayKey('day_future'),
+      });
+
+      tabs.push({
+        key: 'picker',
+        label: 'CHỌN NGÀY...',
+        isActive: selectedDayKey === 'picker',
+        onSelect: () => setSelectedDayKey('picker'),
+      });
+
+      return tabs;
     }
-  };
+
+    // QUÝ
+    if (periodType === 'quarter') {
+      const curQ = Math.floor(now.getMonth() / 3) + 1;
+      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
+
+      const tabs: Array<{
+        key: string;
+        label: string;
+        isActive: boolean;
+        onSelect: () => void;
+      }> = [];
+
+      for (let y = startYear; y <= curYear; y++) {
+        const maxQ = y === curYear ? curQ : 4;
+        for (let q = 1; q <= maxQ; q++) {
+          const qKey = `q_${y}_${q}`;
+          let label = `QUÝ ${q}/${y}`;
+
+          if (y === curYear && q === curQ) {
+            label = 'QUÝ NÀY';
+          } else {
+            const isPrevQ =
+              (curQ === 1 && y === curYear - 1 && q === 4) ||
+              (curQ > 1 && y === curYear && q === curQ - 1);
+            if (isPrevQ) {
+              label = 'QUÝ TRƯỚC';
+            }
+          }
+
+          const isCurrentActive =
+            selectedQuarterKey === qKey ||
+            (label === 'QUÝ NÀY' && selectedQuarterKey === 'q_curr') ||
+            (label === 'QUÝ TRƯỚC' && selectedQuarterKey === 'q_prev');
+
+          tabs.push({
+            key: qKey,
+            label,
+            isActive: isCurrentActive,
+            onSelect: () => setSelectedQuarterKey(qKey),
+          });
+        }
+      }
+
+      tabs.push({
+        key: 'q_future',
+        label: 'TƯƠNG LAI',
+        isActive: selectedQuarterKey === 'q_future',
+        onSelect: () => setSelectedQuarterKey('q_future'),
+      });
+
+      return tabs;
+    }
+
+    // NĂM
+    if (periodType === 'year') {
+      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
+      const tabs: Array<{
+        key: string;
+        label: string;
+        isActive: boolean;
+        onSelect: () => void;
+      }> = [];
+
+      for (let y = startYear; y <= curYear; y++) {
+        let label = `NĂM ${y}`;
+        if (y === curYear) label = 'NĂM NAY';
+        else if (y === curYear - 1) label = 'NĂM NGOÁI';
+
+        const isCurrentActive =
+          selectedYearKey === String(y) ||
+          (y === curYear && selectedYearKey === 'year_curr') ||
+          (y === curYear - 1 && selectedYearKey === 'year_prev');
+
+        tabs.push({
+          key: String(y),
+          label,
+          isActive: isCurrentActive,
+          onSelect: () => setSelectedYearKey(String(y)),
+        });
+      }
+
+      tabs.push({
+        key: 'year_future',
+        label: 'TƯƠNG LAI',
+        isActive: selectedYearKey === 'year_future',
+        onSelect: () => setSelectedYearKey('year_future'),
+      });
+
+      tabs.push({
+        key: 'all_years',
+        label: 'TẤT CẢ',
+        isActive: selectedYearKey === 'all_years',
+        onSelect: () => setSelectedYearKey('all_years'),
+      });
+
+      return tabs;
+    }
+
+    if (periodType === 'all') {
+      return [
+        {
+          key: 'all',
+          label: 'TẤT CẢ THỜI GIAN',
+          isActive: true,
+          onSelect: () => {},
+        },
+      ];
+    }
+
+    return [];
+  }, [
+    periodType,
+    selectedWeekKey,
+    selectedMonthKey,
+    selectedQuarterKey,
+    selectedYearKey,
+    selectedDayKey,
+    earliestTxDate,
+    historyYearsBack,
+  ]);
 
   // 2. Base transactions filtered by active Ledger
   const ledgerTransactions = useMemo(() => {
@@ -299,30 +497,82 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
 
   // 3. Current Period Transactions
   const currentPeriodTransactions = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const curQ = Math.floor(now.getMonth() / 3) + 1;
+
     return ledgerTransactions.filter((tx) => {
       if (!tx.date) return false;
       const txDate = getSafeDate(tx.date);
+      const txDateStr = toLocalDateKey(tx.date);
 
-      if (periodType === 'day') {
-        const safeD = getSafeDate(selectedDate);
-        const targetStr = formatDateToYMD(safeD);
-        if (formatDateToYMD(txDate) !== targetStr) return false;
-      } else if (periodType === 'week') {
-        const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset);
-        if (txDate < startOfWeek || txDate > endOfWeek) return false;
+      if (periodType === 'all') {
+        // Lấy tất cả
       } else if (periodType === 'month') {
-        if (
-          txDate?.getFullYear?.() !== selectedYear ||
-          (txDate?.getMonth?.() ?? -1) + 1 !== selectedMonth
-        ) {
-          return false;
+        if (selectedMonthKey === 'month_future') {
+          const isFuture =
+            txDate.getFullYear() > curYear ||
+            (txDate.getFullYear() === curYear && txDate.getMonth() + 1 > curMonth);
+          if (!isFuture) return false;
+        } else {
+          const txMonthKey = toLocalMonthKey(tx.date);
+          if (txMonthKey !== selectedMonthKey) return false;
+        }
+      } else if (periodType === 'week') {
+        if (selectedWeekKey === 'week_future') {
+          const { endOfWeek } = getWeekRange(now, 0);
+          if (txDate <= endOfWeek) return false;
+        } else {
+          const offset = parseInt(selectedWeekKey.replace('week_', ''), 10) || 0;
+          const { startOfWeek, endOfWeek } = getWeekRange(now, offset);
+          if (txDate < startOfWeek || txDate > endOfWeek) return false;
+        }
+      } else if (periodType === 'day') {
+        if (selectedDayKey === 'day_future') {
+          const todayStr = toLocalDateKey(now);
+          if (txDateStr <= todayStr) return false;
+        } else if (selectedDayKey === 'picker') {
+          if (txDateStr !== specificDate) return false;
+        } else {
+          if (txDateStr !== selectedDayKey) return false;
         }
       } else if (periodType === 'quarter') {
-        if (txDate?.getFullYear?.() !== selectedYear) return false;
-        const txQuarter = Math.floor((txDate?.getMonth?.() ?? 0) / 3) + 1;
-        if (txQuarter !== selectedQuarter) return false;
+        if (selectedQuarterKey === 'q_future') {
+          const isFuture =
+            txDate.getFullYear() > curYear ||
+            (txDate.getFullYear() === curYear && Math.floor(txDate.getMonth() / 3) + 1 > curQ);
+          if (!isFuture) return false;
+        } else {
+          let targetYear = curYear;
+          let targetQ = curQ;
+          if (selectedQuarterKey === 'q_curr') {
+            targetYear = curYear;
+            targetQ = curQ;
+          } else if (selectedQuarterKey === 'q_prev') {
+            targetYear = curQ === 1 ? curYear - 1 : curYear;
+            targetQ = curQ === 1 ? 4 : curQ - 1;
+          } else if (selectedQuarterKey.startsWith('q_')) {
+            const parts = selectedQuarterKey.split('_');
+            targetYear = parseInt(parts[1], 10);
+            targetQ = parseInt(parts[2], 10);
+          }
+          const txQ = Math.floor(txDate.getMonth() / 3) + 1;
+          if (txDate.getFullYear() !== targetYear || txQ !== targetQ) return false;
+        }
       } else if (periodType === 'year') {
-        if (txDate?.getFullYear?.() !== selectedYear) return false;
+        if (selectedYearKey === 'all_years') {
+          // Lấy tất cả
+        } else if (selectedYearKey === 'year_future') {
+          if (txDate.getFullYear() <= curYear) return false;
+        } else {
+          let targetYear = curYear;
+          if (selectedYearKey === 'year_curr') targetYear = curYear;
+          else if (selectedYearKey === 'year_prev') targetYear = curYear - 1;
+          else targetYear = parseInt(selectedYearKey, 10);
+
+          if (txDate.getFullYear() !== targetYear) return false;
+        }
       }
 
       // Filter by type if selected
@@ -335,48 +585,86 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   }, [
     ledgerTransactions,
     periodType,
-    selectedDate,
-    selectedWeekOffset,
-    selectedYear,
-    selectedMonth,
-    selectedQuarter,
+    selectedMonthKey,
+    selectedWeekKey,
+    selectedDayKey,
+    specificDate,
+    selectedQuarterKey,
+    selectedYearKey,
     selectedType,
   ]);
 
   // 4. Previous Period Transactions (for Comparison)
   const previousPeriodTransactions = useMemo(() => {
-    if (!compareWithPrevious) return [];
+    if (!compareWithPrevious || periodType === 'all') return [];
+
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curQ = Math.floor(now.getMonth() / 3) + 1;
+
+    if (
+      selectedMonthKey === 'month_future' ||
+      selectedWeekKey === 'week_future' ||
+      selectedDayKey === 'day_future' ||
+      selectedQuarterKey === 'q_future' ||
+      selectedYearKey === 'year_future' ||
+      selectedYearKey === 'all_years'
+    ) {
+      return [];
+    }
 
     return ledgerTransactions.filter((tx) => {
       if (!tx.date) return false;
       const txDate = getSafeDate(tx.date);
+      const txDateStr = toLocalDateKey(tx.date);
 
-      if (periodType === 'day') {
-        const safeD = getSafeDate(selectedDate);
-        const prevD = new Date(safeD);
-        prevD.setDate((prevD?.getDate?.() ?? 1) - 1);
-        const prevDateStr = formatDateToYMD(prevD);
-        if (formatDateToYMD(txDate) !== prevDateStr) return false;
-      } else if (periodType === 'week') {
-        const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset + 1);
-        if (txDate < startOfWeek || txDate > endOfWeek) return false;
-      } else if (periodType === 'month') {
-        const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
-        const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+      if (periodType === 'month') {
+        const [selY, selM] = selectedMonthKey.split('-').map(Number);
+        const prevYear = selM === 1 ? selY - 1 : selY;
+        const prevMonth = selM === 1 ? 12 : selM - 1;
         if (
-          txDate?.getFullYear?.() !== prevYear ||
-          (txDate?.getMonth?.() ?? -1) + 1 !== prevMonth
+          txDate.getFullYear() !== prevYear ||
+          txDate.getMonth() + 1 !== prevMonth
         ) {
           return false;
         }
+      } else if (periodType === 'week') {
+        const offset = parseInt(selectedWeekKey.replace('week_', ''), 10) || 0;
+        const { startOfWeek, endOfWeek } = getWeekRange(now, offset + 1);
+        if (txDate < startOfWeek || txDate > endOfWeek) return false;
+      } else if (periodType === 'day') {
+        const baseDate =
+          selectedDayKey === 'picker'
+            ? parseLocalDateKey(specificDate)
+            : parseLocalDateKey(selectedDayKey);
+        const prevD = new Date(baseDate);
+        prevD.setDate(prevD.getDate() - 1);
+        if (txDateStr !== toLocalDateKey(prevD)) return false;
       } else if (periodType === 'quarter') {
-        const prevYear = selectedQuarter === 1 ? selectedYear - 1 : selectedYear;
-        const prevQuarter = selectedQuarter === 1 ? 4 : selectedQuarter - 1;
-        if (txDate?.getFullYear?.() !== prevYear) return false;
-        const txQuarter = Math.floor((txDate?.getMonth?.() ?? 0) / 3) + 1;
-        if (txQuarter !== prevQuarter) return false;
+        let targetYear = curYear;
+        let targetQ = curQ;
+        if (selectedQuarterKey === 'q_curr') {
+          targetYear = curYear;
+          targetQ = curQ;
+        } else if (selectedQuarterKey === 'q_prev') {
+          targetYear = curQ === 1 ? curYear - 1 : curYear;
+          targetQ = curQ === 1 ? 4 : curQ - 1;
+        } else if (selectedQuarterKey.startsWith('q_')) {
+          const parts = selectedQuarterKey.split('_');
+          targetYear = parseInt(parts[1], 10);
+          targetQ = parseInt(parts[2], 10);
+        }
+        const prevYear = targetQ === 1 ? targetYear - 1 : targetYear;
+        const prevQ = targetQ === 1 ? 4 : targetQ - 1;
+        const txQ = Math.floor(txDate.getMonth() / 3) + 1;
+        if (txDate.getFullYear() !== prevYear || txQ !== prevQ) return false;
       } else if (periodType === 'year') {
-        if (txDate?.getFullYear?.() !== selectedYear - 1) return false;
+        let targetYear = curYear;
+        if (selectedYearKey === 'year_curr') targetYear = curYear;
+        else if (selectedYearKey === 'year_prev') targetYear = curYear - 1;
+        else targetYear = parseInt(selectedYearKey, 10);
+
+        if (txDate.getFullYear() !== targetYear - 1) return false;
       }
 
       if (selectedType !== 'all' && tx.type !== selectedType) {
@@ -389,12 +677,12 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     ledgerTransactions,
     compareWithPrevious,
     periodType,
-    selectedDate,
-    selectedWeekOffset,
-    selectedYear,
-    selectedMonth,
-    selectedQuarter,
-    selectedType,
+    selectedMonthKey,
+    selectedWeekKey,
+    selectedDayKey,
+    specificDate,
+    selectedQuarterKey,
+    selectedYearKey,
   ]);
 
   // Danh sách giao dịch chi tiết cho danh mục đang xem popup (TẠI BÁO CÁO)
@@ -676,7 +964,14 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       };
     } else if (periodType === 'quarter') {
       // 3 tháng của quý được tính động
-      const startM = (selectedQuarter - 1) * 3;
+      let qNum = Math.floor(new Date().getMonth() / 3) + 1;
+      if (selectedQuarterKey === 'q_prev') {
+        qNum = qNum === 1 ? 4 : qNum - 1;
+      } else if (selectedQuarterKey.startsWith('q_')) {
+        const parts = selectedQuarterKey.split('_');
+        qNum = parseInt(parts[2], 10) || qNum;
+      }
+      const startM = (qNum - 1) * 3;
       const quarterMonths = [0, 1, 2].map((offset) => {
         const m = startM + offset + 1;
         return {
@@ -753,7 +1048,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
         ],
       };
     }
-  }, [currentPeriodTransactions, periodType, selectedQuarter]);
+  }, [currentPeriodTransactions, periodType, selectedQuarterKey]);
 
   const barChartOptions = useMemo(() => {
     return {
@@ -810,271 +1105,200 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       .slice(0, 5);
   }, [currentPeriodTransactions]);
 
-  // Title display hỗ trợ đủ 5 mốc
+  // Title display hỗ trợ đủ các mốc
   const periodTitle = useMemo(() => {
+    if (periodType === 'all') return 'Tất cả thời gian';
+
     if (periodType === 'day') {
-      const d = getSafeDate(selectedDate);
-      return `Ngày ${d?.getDate?.()}/${(d?.getMonth?.() ?? 0) + 1}/${d?.getFullYear?.()}`;
+      if (selectedDayKey === 'day_future') return 'Giao dịch tương lai';
+      const d =
+        selectedDayKey === 'picker'
+          ? parseLocalDateKey(specificDate)
+          : parseLocalDateKey(selectedDayKey);
+      return `Ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
     }
     if (periodType === 'week') {
-      const { startOfWeek, endOfWeek } = getWeekRange(new Date(), selectedWeekOffset);
-      const prefix = selectedWeekOffset === 0 ? 'Tuần này' : selectedWeekOffset === 1 ? 'Tuần trước' : `${selectedWeekOffset} tuần trước`;
+      if (selectedWeekKey === 'week_future') return 'Giao dịch tương lai';
+      const offset = parseInt(selectedWeekKey.replace('week_', ''), 10) || 0;
+      const { startOfWeek, endOfWeek } = getWeekRange(new Date(), offset);
+      const prefix =
+        offset === 0
+          ? 'Tuần này'
+          : offset === 1
+          ? 'Tuần trước'
+          : `${offset} tuần trước`;
       return `${prefix} (${startOfWeek.getDate()}/${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}/${endOfWeek.getFullYear()})`;
     }
     if (periodType === 'month') {
-      return `Tháng ${selectedMonth}/${selectedYear}`;
+      if (selectedMonthKey === 'month_future') return 'Giao dịch tương lai';
+      const [y, m] = selectedMonthKey.split('-').map(Number);
+      return `Tháng ${m}/${y}`;
     }
     if (periodType === 'quarter') {
-      const startM = (selectedQuarter - 1) * 3 + 1;
-      const endM = selectedQuarter * 3;
-      return `Quý ${selectedQuarter}/${selectedYear} (Tháng ${startM} - ${endM})`;
+      if (selectedQuarterKey === 'q_future') return 'Giao dịch tương lai';
+      const now = new Date();
+      let targetYear = now.getFullYear();
+      let targetQ = Math.floor(now.getMonth() / 3) + 1;
+      if (selectedQuarterKey === 'q_prev') {
+        targetYear = targetQ === 1 ? targetYear - 1 : targetYear;
+        targetQ = targetQ === 1 ? 4 : targetQ - 1;
+      } else if (selectedQuarterKey.startsWith('q_')) {
+        const parts = selectedQuarterKey.split('_');
+        targetYear = parseInt(parts[1], 10);
+        targetQ = parseInt(parts[2], 10);
+      }
+      const startM = (targetQ - 1) * 3 + 1;
+      const endM = targetQ * 3;
+      return `Quý ${targetQ}/${targetYear} (Tháng ${startM} - ${endM})`;
     }
-    return `Năm ${selectedYear}`;
-  }, [periodType, selectedDate, selectedWeekOffset, selectedMonth, selectedQuarter, selectedYear]);
+    if (periodType === 'year') {
+      if (selectedYearKey === 'all_years') return 'Tất cả các năm';
+      if (selectedYearKey === 'year_future') return 'Giao dịch tương lai';
+      if (selectedYearKey === 'year_curr') return `Năm ${new Date().getFullYear()}`;
+      if (selectedYearKey === 'year_prev') return `Năm ${new Date().getFullYear() - 1}`;
+      return `Năm ${selectedYearKey}`;
+    }
+    return 'Báo cáo';
+  }, [
+    periodType,
+    selectedDayKey,
+    specificDate,
+    selectedWeekKey,
+    selectedMonthKey,
+    selectedQuarterKey,
+    selectedYearKey,
+  ]);
 
   return (
     <div className="space-y-4 pb-20 animate-in fade-in duration-200">
       {/* 1. HEADER & CHỌN MỐC THỜI GIAN */}
       <section className="rounded-2xl border border-[#e8ded1] bg-[#fffdfa] shadow-paper p-4 space-y-3.5">
-        {/* Tiêu đề & Chọn Sổ */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#f0e4d5]">
+        {/* Tiêu đề & Chọn Khoảng Thời Gian (1 nút Dropdown duy nhất) */}
+        <div className="flex items-center justify-between gap-2 pb-3 border-b border-[#f0e4d5]">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-[#a25832]/10 text-[#a25832] flex items-center justify-center shrink-0">
               <BarChart3 className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-[#3e332a]">
-                Báo Cáo & Thống Kê Chuyên Sâu
+                Báo Cáo & Thống Kê
               </h2>
-              <p className="text-xs text-[#7a6a58]">
-                {activeLedgerId === 'all'
-                  ? 'Tổng hợp toàn bộ các sổ'
-                  : `Đang lọc theo sổ: ${activeLedgerName}`}
+              <p className="text-xs text-[#7a6a58] flex items-center gap-1.5 font-medium">
+                <span className="text-[#a25832] font-bold">{periodTitle}</span>
+                <span>•</span>
+                <span>
+                  {activeLedgerId === 'all'
+                    ? 'Tổng hợp tất cả sổ'
+                    : `Sổ: ${activeLedgerName}`}
+                </span>
               </p>
             </div>
           </div>
 
-          {/* Nút chuyển chế độ ĐỦ 5 MỐC: ['Ngày', 'Tuần', 'Tháng', 'Quý', 'Năm'] */}
-          <div className="flex items-center bg-[#f5ebe0] p-1 rounded-xl border border-[#ebdcc9] self-start sm:self-auto overflow-x-auto scrollbar-none">
-            {(
-              [
-                { type: 'day', label: 'Ngày' },
-                { type: 'week', label: 'Tuần' },
-                { type: 'month', label: 'Tháng' },
-                { type: 'quarter', label: 'Quý' },
-                { type: 'year', label: 'Năm' },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.type}
-                onClick={() => setPeriodType(item.type)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                  periodType === item.type
-                    ? 'bg-[#a25832] text-white shadow-xs'
-                    : 'text-[#7a6a58] hover:text-[#3e332a]'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Thanh Điều Hướng Thời Gian (Prev, Label, Next, Year Picker) */}
-        <div className="flex items-center justify-between gap-2 bg-[#fcf8f2] p-2.5 rounded-xl border border-[#ebdcc9]">
-          <button
-            onClick={handlePrevPeriod}
-            className="p-1.5 rounded-lg bg-white border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer active:scale-95"
-            title="Kỳ trước"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Middle: Period Label + Quick Picker */}
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-[#a25832]" />
-            <span className="text-xs sm:text-sm font-bold text-[#3e332a] truncate max-w-[200px] sm:max-w-none">
-              {periodTitle}
-            </span>
-
-            {/* Nút mở nhanh Year Picker */}
+          {/* Nút Dropdown thời gian duy nhất (Gọn gàng, không trùng lặp) */}
+          <div className="relative">
             <button
-              onClick={() => setIsYearPickerOpen((prev) => !prev)}
-              className="px-2 py-0.5 rounded-md bg-white border border-[#ebdcc9] text-[11px] font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer shrink-0"
-              title="Đổi năm nhanh"
+              type="button"
+              onClick={() => setIsPeriodMenuOpen(!isPeriodMenuOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#ebdcc9] hover:border-[#a25832] text-[#3e332a] font-bold shadow-2xs hover:bg-[#fff9f4] transition cursor-pointer active:scale-95"
+              title="Bấm để chọn khoảng thời gian"
             >
-              Năm {selectedYear} ▼
+              <Calendar className="w-3.5 h-3.5 text-[#a25832]" />
+              <span className="text-xs">{periodModeLabel}</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-[#7a6a58] transition-transform duration-200 ${
+                  isPeriodMenuOpen ? 'rotate-180' : ''
+                }`}
+              />
             </button>
-          </div>
 
-          <button
-            onClick={handleNextPeriod}
-            className="p-1.5 rounded-lg bg-white border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer active:scale-95"
-            title="Kỳ sau"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+            {isPeriodMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsPeriodMenuOpen(false)}
+                />
+                <div className="absolute right-0 mt-1.5 w-44 rounded-2xl bg-white border border-[#d8c8b4] shadow-xl z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3 py-1 text-[10px] font-bold text-[#a89886] uppercase tracking-wider">
+                    Khoảng thời gian
+                  </div>
+                  {periodModes.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => handleSelectPeriodMode(item.key)}
+                      className="w-full px-3.5 py-2 flex items-center justify-between text-xs font-semibold hover:bg-[#fbf5eb] text-[#3e332a] transition cursor-pointer text-left"
+                    >
+                      <span
+                        className={
+                          periodType === item.key ? 'text-[#a25832] font-bold' : ''
+                        }
+                      >
+                        {item.label}
+                      </span>
+                      {periodType === item.key && (
+                        <Check className="w-3.5 h-3.5 text-[#a25832]" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Year Picker Dropdown (Cuộn chọn năm bất kỳ - Sinh động 100%) */}
-        {isYearPickerOpen && (
-          <div className="p-3 bg-[#fbf5eb] rounded-xl border border-[#ebdcc9] space-y-2 animate-in slide-in-from-top-1 duration-150">
-            <div className="flex items-center justify-between text-xs font-bold text-[#7a6a58]">
-              <span>Chọn năm báo cáo:</span>
-              <button
-                onClick={() => setIsYearPickerOpen(false)}
-                className="text-[#a25832] hover:underline cursor-pointer"
-              >
-                Đóng ✕
-              </button>
-            </div>
-            {/* Lưới cuộn các năm */}
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-36 overflow-y-auto p-1">
-              {availableYears.map((y) => (
+        {/* 2. THANH TRƯỢT THỜI GIAN NGANG (TRƯỚC / HIỆN TẠI / TƯƠNG LAI) - CHUẨN MONEY LOVER, TỰ ĐỘNG CĂN GIỮA, CUỘN VÔ TẬN */}
+        {timelineSliderTabs.length > 0 && (
+          <div className="overflow-hidden border-b border-[#ebdcc9]/60">
+            <div
+              ref={sliderContainerRef}
+              onScroll={(e) => {
+                if (e.currentTarget.scrollLeft < 150) {
+                  setHistoryYearsBack((prev) => prev + 10);
+                }
+              }}
+              className="flex items-center gap-7 overflow-x-auto no-scrollbar scroll-smooth py-2.5"
+              style={{
+                paddingLeft: 'calc(50% - 60px)',
+                paddingRight: 'calc(50% - 60px)',
+              }}
+            >
+              {timelineSliderTabs.map((tab) => (
                 <button
-                  key={y}
-                  onClick={() => {
-                    setSelectedYear(y);
-                    setIsYearPickerOpen(false);
-                  }}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition text-center cursor-pointer ${
-                    selectedYear === y
-                      ? 'bg-[#a25832] text-white shadow-xs'
-                      : 'bg-white text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
+                  key={tab.key}
+                  ref={tab.isActive ? activeTabRef : null}
+                  type="button"
+                  onClick={tab.onSelect}
+                  className={`py-1 text-xs uppercase whitespace-nowrap transition cursor-pointer shrink-0 relative flex flex-col items-center select-none ${
+                    tab.isActive
+                      ? 'font-bold text-[#1c1917]'
+                      : 'font-semibold text-[#8c7b69] hover:text-[#1c1917]'
                   }`}
                 >
-                  {y}
+                  <span className="leading-tight tracking-wide">{tab.label}</span>
+                  {tab.isActive && (
+                    <span className="absolute -bottom-2 left-0 right-0 h-[2.5px] bg-[#1c1917] rounded-full" />
+                  )}
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* GIAO DIỆN CHỌN THỜI GIAN TƯƠNG ỨNG TỪNG CHẾ ĐỘ (ĐỘNG 100%) */}
-
-        {/* 1. Nếu chọn Ngày: Dải ngày trượt động 2 chiều + DatePicker với Fallback an toàn */}
-        {periodType === 'day' && (
-          <div className="space-y-2 pt-1">
-            {/* Dải ngày trượt động 2 chiều xoay quanh selectedDate */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {dynamicDays.map((d) => (
-                <button
-                  key={d.dateStr}
-                  onClick={() => setSelectedDate(d.dateStr)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 text-center cursor-pointer border ${
-                    d.isSelected
-                      ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs'
-                      : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border-[#ebdcc9]'
-                  }`}
-                >
-                  <div className={`text-[10px] ${d.isSelected ? 'text-[#ebdcc9]' : 'opacity-70'}`}>
-                    {d.dayName}
-                  </div>
-                  <div className="font-bold text-xs mt-0.5">
-                    {d.dayNum}/{d.monthNum}
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#f0e4d5]/60">
-              <span className="text-xs text-[#7a6a58] font-semibold">Hoặc chọn ngày:</span>
-              <input
-                type="date"
-                value={selectedDate || formatDateToYMD(new Date())}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-white border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-              />
-              <button
-                onClick={() => setSelectedDate(formatDateToYMD(new Date()))}
-                className="px-2.5 py-1.5 rounded-lg bg-white border border-[#ebdcc9] text-xs font-semibold text-[#a25832] hover:bg-[#f5ebe0] transition cursor-pointer"
-              >
-                Hôm nay
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 2. Nếu chọn Tuần: Lưới các tuần gần đây */}
-        {periodType === 'week' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
-            {dynamicWeeks.map((w) => (
-              <button
-                key={w.offset}
-                onClick={() => setSelectedWeekOffset(w.offset)}
-                className={`py-2 px-2.5 rounded-xl text-xs font-semibold transition text-left cursor-pointer border ${
-                  selectedWeekOffset === w.offset
-                    ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs'
-                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border-[#ebdcc9]'
-                }`}
-              >
-                <div className="font-bold">{w.label}</div>
-                <div className={`text-[10px] ${selectedWeekOffset === w.offset ? 'text-[#ebdcc9]' : 'text-[#a89886]'}`}>
-                  {w.rangeText}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* 3. Nếu chọn Tháng: 12 tháng sinh động bằng Date Object */}
-        {periodType === 'month' && (
-          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 pt-1">
-            {dynamicMonths.map((m) => (
-              <button
-                key={m.month}
-                onClick={() => setSelectedMonth(m.month)}
-                className={`py-1 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
-                  selectedMonth === m.month
-                    ? 'bg-[#3e332a] text-white shadow-xs'
-                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
-                }`}
-                title={`Tháng ${m.month} (${m.daysInMonth} ngày)`}
-              >
-                {m.shortLabel}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* 4. Nếu chọn Quý: 4 Quý sinh động bằng Date Object */}
-        {periodType === 'quarter' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
-            {dynamicQuarters.map((q) => (
-              <button
-                key={q.quarter}
-                onClick={() => setSelectedQuarter(q.quarter)}
-                className={`p-2.5 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${
-                  selectedQuarter === q.quarter
-                    ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs'
-                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border-[#ebdcc9]'
-                }`}
-              >
-                <div className="text-sm">{q.label}</div>
-                <div className={`text-[10px] font-normal mt-0.5 ${selectedQuarter === q.quarter ? 'text-[#ebdcc9]' : 'text-[#a89886]'}`}>
-                  {q.monthsText}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* 5. Nếu chọn Năm: Danh sách năm */}
-        {periodType === 'year' && (
-          <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-1">
-            {availableYears.map((y) => (
-              <button
-                key={y}
-                onClick={() => setSelectedYear(y)}
-                className={`py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer text-center ${
-                  selectedYear === y
-                    ? 'bg-[#3e332a] text-white shadow-xs'
-                    : 'bg-[#fbf5eb] text-[#7a6a58] hover:bg-[#ebdcc9] border border-[#ebdcc9]'
-                }`}
-              >
-                {y}
-              </button>
-            ))}
+        {/* Ô chọn ngày khi ở tab Chọn ngày... */}
+        {periodType === 'day' && selectedDayKey === 'picker' && (
+          <div className="flex items-center gap-2 pt-1 px-1">
+            <span className="text-xs text-[#7a6a58] font-semibold">Chọn ngày:</span>
+            <input
+              type="date"
+              value={specificDate || toLocalDateKey(new Date())}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSpecificDate(e.target.value);
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-white border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+            />
           </div>
         )}
 

@@ -1,8 +1,8 @@
 {
-  "version": "2.1.23",
+  "version": "2.1.24",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Căn giữa chuẩn xác tab mốc thời gian hiện tại (THÁNG NÀY / TUẦN NÀY / HÔM NAY)\\n- Mở rộng lịch sử động không giới hạn (quét toàn bộ các tháng/tuần/ngày từ trước đến nay, không ép người dùng chỉ xem 3 tháng)\\n- Bổ sung nút chọn nhảy nhanh đến bất kỳ tháng nào trong lịch sử",
+  "releaseNotes": "- Bo 2 icon lich trung lap, dong bo bo loc thoi gian vo tan sang Bao Cao, co dinh nut luu tren ban phim ao",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T04:59:27.180Z"
+  "updatedAt": "2026-10-15T05:26:43.435Z"
 }

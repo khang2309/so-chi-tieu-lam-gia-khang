@@ -128,6 +128,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   );
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  // Số năm lùi về quá khứ mở rộng linh hoạt, cuộn vô tận không giới hạn
+  const [historyYearsBack, setHistoryYearsBack] = useState<number>(15);
 
   // Danh sách các tùy chọn khoảng thời gian (Money Lover UX)
   const periodModes: Array<{ key: FilterMode; label: string }> = [
@@ -444,7 +446,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     // CHẾ ĐỘ: THÁNG (Không giới hạn, quét từ năm sớm nhất đến hiện tại + tương lai)
     // -------------------------------------------------------------
     if (filterMode === 'month') {
-      let startYear = Math.min(curYear - 2, earliestTxDate.getFullYear());
+      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
       if (selectedMonthKey && selectedMonthKey !== 'month_future') {
         const parsedYear = parseInt(selectedMonthKey.split('-')[0], 10);
         if (!isNaN(parsedYear) && parsedYear < startYear) {
@@ -496,7 +498,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: TUẦN (Không giới hạn, quét từ 52 tuần trước về tuần này + tương lai)
+    // CHẾ ĐỘ: TUẦN (Không giới hạn, quét từ các tuần trước về tuần này + tương lai)
     // -------------------------------------------------------------
     if (filterMode === 'week') {
       const tabs: Array<{
@@ -506,7 +508,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      for (let w = 52; w >= 0; w--) {
+      const totalWeeks = Math.max(52, historyYearsBack * 26);
+      for (let w = totalWeeks; w >= 0; w--) {
         const start = new Date(now);
         start.setDate(now.getDate() - now.getDay() - w * 7);
 
@@ -534,7 +537,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
 
     // -------------------------------------------------------------
-    // CHẾ ĐỘ: NGÀY (Quét 60 ngày qua + hôm nay + tương lai + chọn ngày)
+    // CHẾ ĐỘ: NGÀY (Quét từ các ngày trước về hôm nay + tương lai + chọn ngày)
     // -------------------------------------------------------------
     if (filterMode === 'day') {
       const tabs: Array<{
@@ -544,7 +547,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         onSelect: () => void;
       }> = [];
 
-      for (let i = -60; i <= 0; i++) {
+      const totalDays = Math.max(90, Math.min(historyYearsBack * 90, 730));
+      for (let i = -totalDays; i <= 0; i++) {
         const d = new Date(now);
         d.setDate(d.getDate() + i);
         const dStr = toLocalDateKey(d);
@@ -584,7 +588,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     // -------------------------------------------------------------
     if (filterMode === 'quarter') {
       const curQ = Math.floor(now.getMonth() / 3) + 1;
-      let startYear = Math.min(curYear - 3, earliestTxDate.getFullYear());
+      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
 
       const tabs: Array<{
         key: string;
@@ -638,7 +642,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     // CHẾ ĐỘ: NĂM (Quét các năm từ sớm nhất đến năm nay + tương lai + tất cả)
     // -------------------------------------------------------------
     if (filterMode === 'year') {
-      let startYear = Math.min(curYear - 5, earliestTxDate.getFullYear());
+      let startYear = Math.min(curYear - historyYearsBack, earliestTxDate.getFullYear() - 5);
       const tabs: Array<{
         key: string;
         label: string;
@@ -712,6 +716,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     selectedYearKey,
     selectedDayKey,
     earliestTxDate,
+    historyYearsBack,
   ]);
 
   // 7. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
@@ -1008,30 +1013,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               </div>
             </>
           )}
-          {/* Nút chọn nhanh tháng bất kỳ từ lịch khi ở chế độ Tháng */}
-          {filterMode === 'month' && (
-            <div className="relative inline-flex items-center">
-              <input
-                type="month"
-                value={selectedMonthKey === 'month_future' ? '' : selectedMonthKey}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setSelectedMonthKey(e.target.value);
-                  }
-                }}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                title="Bấm để chọn tháng bất kỳ trong lịch sử"
-              />
-              <button
-                type="button"
-                className="p-1.5 rounded-xl bg-white border border-[#ebdcc9] text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#fff9f4] transition shadow-2xs cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
-                title="Chọn tháng bất kỳ trong lịch sử"
-              >
-                <Calendar className="w-3.5 h-3.5 text-[#a25832]" />
-                <span className="hidden sm:inline">Chọn tháng</span>
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -1046,11 +1027,16 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         </div>
       </div>
 
-      {/* 2. THANH TRƯỢT THỜI GIAN NGANG (TRƯỚC / HIỆN TẠI / TƯƠNG LAI) - CHUẨN MONEY LOVER, TỰ ĐỘNG CĂN GIỮA */}
+      {/* 2. THANH TRƯỢT THỜI GIAN NGANG (TRƯỚC / HIỆN TẠI / TƯƠNG LAI) - CHUẨN MONEY LOVER, TỰ ĐỘNG CĂN GIỮA, CUỘN VÔ TẬN */}
       {timelineSliderTabs.length > 0 && (
         <div className="overflow-hidden border-b border-[#ebdcc9]/60">
           <div
             ref={sliderContainerRef}
+            onScroll={(e) => {
+              if (e.currentTarget.scrollLeft < 150) {
+                setHistoryYearsBack((prev) => prev + 10);
+              }
+            }}
             className="flex items-center gap-7 overflow-x-auto no-scrollbar scroll-smooth py-2.5"
             style={{ paddingLeft: 'calc(50% - 60px)', paddingRight: 'calc(50% - 60px)' }}
           >
