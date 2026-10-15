@@ -3,6 +3,7 @@ import {
   User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -22,6 +23,7 @@ interface AuthContextType {
   isFirebaseAvailable: boolean;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   loginWithGoogleNative: () => Promise<void>;
   logout: () => Promise<void>;
   continueOffline: () => void;
@@ -111,6 +113,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('hasSeenLoginPopup', 'true');
     } catch {}
     setIsAuthModalOpen(false);
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    if (!auth) {
+      throw new Error('Firebase chưa được cấu hình khóa API trong file .env');
+    }
+    await sendPasswordResetEmail(auth, email);
   };
 
   const loginWithGoogleNative = async () => {
@@ -233,6 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFirebaseAvailable: isFirebaseConfigured,
         loginWithEmail,
         registerWithEmail,
+        sendPasswordReset,
         loginWithGoogleNative,
         logout,
         continueOffline,

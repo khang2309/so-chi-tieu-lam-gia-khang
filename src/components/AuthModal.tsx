@@ -18,6 +18,7 @@ export const AuthModal: React.FC = () => {
     loginWithEmail,
     registerWithEmail,
     loginWithGoogleNative,
+    sendPasswordReset,
     continueOffline,
     isOnline,
   } = useAuth();
@@ -28,8 +29,34 @@ export const AuthModal: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   if (!isAuthModalOpen) return null;
+
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError('Vui lòng nhập địa chỉ Email vào ô bên dưới trước, rồi bấm "Quên mật khẩu".');
+      return;
+    }
+    setError(null);
+    setIsResettingPassword(true);
+    try {
+      await sendPasswordReset(cleanEmail);
+      showToast('Đã gửi email đặt lại mật khẩu! Vui lòng kiểm tra hộp thư của bạn 📩');
+    } catch (err: any) {
+      console.warn('Lỗi gửi email đặt lại mật khẩu:', err);
+      let msg = err?.message || 'Không thể gửi email đặt lại mật khẩu.';
+      if (msg.includes('user-not-found')) {
+        msg = 'Không tìm thấy tài khoản với email này.';
+      } else if (msg.includes('invalid-email')) {
+        msg = 'Địa chỉ Email không hợp lệ.';
+      }
+      setError(msg);
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
 
   const handleSkip = () => {
     localStorage.setItem('hasSeenLoginPopup', 'true');
@@ -101,7 +128,7 @@ export const AuthModal: React.FC = () => {
         msg.includes('wrong-password') ||
         msg.includes('invalid-credential')
       ) {
-        msg = 'Email hoặc mật khẩu không chính xác.';
+        msg = 'Email hoặc mật khẩu không chính xác. Nếu trước đó bạn đã từng đăng nhập bằng Google, hãy bấm "Đăng nhập nhanh bằng Google" hoặc bấm "Quên mật khẩu" bên dưới để đặt mật khẩu.';
       } else if (msg.includes('email-already-in-use')) {
         msg = 'Email này đã được đăng ký trước đó. Vui lòng bấm Đăng nhập.';
       } else if (msg.includes('weak-password')) {
@@ -277,6 +304,18 @@ export const AuthModal: React.FC = () => {
                   required
                   className="w-full mt-1 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:outline-none focus:border-[#a25832]"
                 />
+                {mode === 'login' && (
+                  <div className="flex justify-end mt-1.5">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={isResettingPassword}
+                      className="text-[11px] font-semibold text-[#a25832] hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      {isResettingPassword ? 'Đang gửi email...' : 'Quên mật khẩu?'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <button
