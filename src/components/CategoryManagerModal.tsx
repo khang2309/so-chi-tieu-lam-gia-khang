@@ -154,112 +154,128 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
             )}
           </div>
 
-          {/* Add / Edit Form */}
+          {/* Add / Edit Form Modal (Hiển thị dạng Popup trực tiếp, không bắt cuộn lên đầu trang) */}
           {(isAdding || editingCategory) && (
-            <form
-              onSubmit={handleSave}
-              className="p-4 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#3e332a]">
-                  {editingCategory ? `Chỉnh sửa: ${editingCategory.name}` : 'Thêm danh mục mới'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdding(false);
-                    setEditingCategory(null);
-                  }}
-                  className="text-xs text-[#7a6a58] hover:underline"
-                >
-                  Hủy bỏ
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
-                    Tên danh mục:
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="VD: Du lịch, Xem phim..."
-                    required
-                    className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
-                    Loại danh mục:
-                  </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as any)}
-                    className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+                {/* Header */}
+                <div className="px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
+                  <span className="text-sm font-bold text-[#3e332a]">
+                    {editingCategory ? `Chỉnh sửa: ${editingCategory.name}` : 'Thêm danh mục mới'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdding(false);
+                      setEditingCategory(null);
+                    }}
+                    className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
                   >
-                    <option value="expense">Khoản Chi tiêu</option>
-                    <option value="income">Khoản Thu nhập</option>
-                    <option value="both">Cả hai (Thu & Chi)</option>
-                  </select>
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
 
-              {/* Icon selector */}
-              <div>
-                <label className="text-[11px] font-semibold text-[#7a6a58]">
-                  Biểu tượng:
-                </label>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {availableIcons.map((ic) => (
-                    <button
-                      type="button"
-                      key={ic}
-                      onClick={() => setIcon(ic)}
-                      className={`p-1.5 rounded-md border transition ${
-                        icon === ic
-                          ? 'bg-[#3e332a] text-white border-[#3e332a]'
-                          : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9]'
-                      }`}
-                    >
-                      <DynamicIcon name={ic} className="w-3.5 h-3.5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Color selector */}
-              <div>
-                <label className="text-[11px] font-semibold text-[#7a6a58]">
-                  Màu sắc:
-                </label>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {availableColors.map((cl) => (
-                    <button
-                      type="button"
-                      key={cl}
-                      onClick={() => setColor(cl)}
-                      className={`w-5 h-5 rounded-full border transition ${
-                        color === cl ? 'ring-2 ring-[#3e332a] scale-110' : ''
-                      }`}
-                      style={{ backgroundColor: cl }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-1 flex justify-end">
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs"
+                <form
+                  onSubmit={handleSave}
+                  className="p-5 space-y-3.5 max-h-[80vh] overflow-y-auto"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{editingCategory ? 'Lưu cập nhật' : 'Thêm'}</span>
-                </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58]">
+                        Tên danh mục:
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="VD: Du lịch, Xem phim..."
+                        required
+                        autoFocus
+                        className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58]">
+                        Loại danh mục:
+                      </label>
+                      <select
+                        value={type}
+                        onChange={(e) => setType(e.target.value as any)}
+                        className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                      >
+                        <option value="expense">Khoản Chi tiêu</option>
+                        <option value="income">Khoản Thu nhập</option>
+                        <option value="both">Cả hai (Thu & Chi)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Icon selector */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                      Biểu tượng:
+                    </label>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {availableIcons.map((ic) => (
+                        <button
+                          type="button"
+                          key={ic}
+                          onClick={() => setIcon(ic)}
+                          className={`p-1.5 rounded-md border transition cursor-pointer ${
+                            icon === ic
+                              ? 'bg-[#3e332a] text-white border-[#3e332a]'
+                              : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9]'
+                          }`}
+                        >
+                          <DynamicIcon name={ic} className="w-3.5 h-3.5" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Color selector */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                      Màu sắc:
+                    </label>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {availableColors.map((cl) => (
+                        <button
+                          type="button"
+                          key={cl}
+                          onClick={() => setColor(cl)}
+                          className={`w-5 h-5 rounded-full border transition cursor-pointer ${
+                            color === cl ? 'ring-2 ring-[#3e332a] scale-110' : ''
+                          }`}
+                          style={{ backgroundColor: cl }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#f0e4d5]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAdding(false);
+                        setEditingCategory(null);
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{editingCategory ? 'Lưu cập nhật' : 'Thêm'}</span>
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
+            </div>
           )}
 
           {/* Categories Grid */}

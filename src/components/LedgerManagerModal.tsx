@@ -173,123 +173,139 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
             )}
           </div>
 
-          {/* Add / Edit Form */}
+          {/* Add / Edit Form Modal (Hiển thị dạng Popup trực tiếp, không bắt cuộn lên đầu trang) */}
           {(isAdding || editingLedger) && (
-            <form
-              onSubmit={handleSave}
-              className="p-4 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#3e332a]">
-                  {editingLedger ? `Chỉnh sửa sổ: ${editingLedger.name}` : 'Thêm Sổ Chi Tiêu mới'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdding(false);
-                    setEditingLedger(null);
-                  }}
-                  className="text-xs text-[#7a6a58] hover:underline"
-                >
-                  Hủy bỏ
-                </button>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-[#7a6a58]">
-                  Tên sổ chi tiêu:
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="VD: Quỹ du lịch, Đám cưới..."
-                  required
-                  className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-[#7a6a58]">
-                  Mô tả mục đích:
-                </label>
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="VD: Ghi chép chi tiêu riêng biệt"
-                  className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
-                />
-              </div>
-
-              {/* Icon & Color selector */}
-              <div className="space-y-2.5 pt-1">
-                <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
-                    Biểu tượng sổ:
-                  </label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {availableIcons.map((ic) => (
-                      <button
-                        type="button"
-                        key={ic.name}
-                        onClick={() => setIcon(ic.name)}
-                        className={`w-8 h-8 rounded-lg border transition flex items-center justify-center cursor-pointer ${
-                          icon === ic.name
-                            ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
-                            : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
-                        }`}
-                        title={ic.label}
-                      >
-                        <DynamicIcon name={ic.name} className="w-4 h-4" />
-                      </button>
-                    ))}
-                  </div>
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+                {/* Header */}
+                <div className="px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
+                  <span className="text-sm font-bold text-[#3e332a]">
+                    {editingLedger ? `Chỉnh sửa sổ: ${editingLedger.name}` : 'Thêm Sổ Chi Tiêu mới'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdding(false);
+                      setEditingLedger(null);
+                    }}
+                    className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
-                    Màu bìa sổ:
-                  </label>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    {availableColors.map((cl) => (
-                      <button
-                        type="button"
-                        key={cl}
-                        onClick={() => setColor(cl)}
-                        className={`w-6 h-6 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
-                          color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: cl }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  onChange={(e) => setIsDefault(e.target.checked)}
-                  className="w-4 h-4 rounded accent-[#a25832]"
-                />
-                <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  <span>Đặt làm sổ mặc định khi mở ứng dụng</span>
-                </span>
-              </label>
-
-              <div className="pt-1 flex justify-end">
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs"
+                <form
+                  onSubmit={handleSave}
+                  className="p-5 space-y-3.5 max-h-[80vh] overflow-y-auto"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{editingLedger ? 'Lưu thay đổi' : 'Tạo sổ'}</span>
-                </button>
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                      Tên sổ chi tiêu:
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="VD: Quỹ du lịch, Đám cưới..."
+                      required
+                      autoFocus
+                      className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                      Mô tả mục đích:
+                    </label>
+                    <input
+                      type="text"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="VD: Ghi chép chi tiêu riêng biệt"
+                      className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
+                    />
+                  </div>
+
+                  {/* Icon & Color selector */}
+                  <div className="space-y-2.5 pt-1">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
+                        Biểu tượng sổ:
+                      </label>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {availableIcons.map((ic) => (
+                          <button
+                            type="button"
+                            key={ic.name}
+                            onClick={() => setIcon(ic.name)}
+                            className={`w-8 h-8 rounded-lg border transition flex items-center justify-center cursor-pointer ${
+                              icon === ic.name
+                                ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
+                                : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
+                            }`}
+                            title={ic.label}
+                          >
+                            <DynamicIcon name={ic.name} className="w-4 h-4" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
+                        Màu bìa sổ:
+                      </label>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {availableColors.map((cl) => (
+                          <button
+                            type="button"
+                            key={cl}
+                            onClick={() => setColor(cl)}
+                            className={`w-6 h-6 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
+                              color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: cl }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isDefault}
+                      onChange={(e) => setIsDefault(e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#a25832]"
+                    />
+                    <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span>Đặt làm sổ mặc định khi mở ứng dụng</span>
+                    </span>
+                  </label>
+
+                  <div className="pt-2 flex justify-end gap-2 border-t border-[#f0e4d5]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAdding(false);
+                        setEditingLedger(null);
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{editingLedger ? 'Lưu thay đổi' : 'Tạo sổ'}</span>
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
+            </div>
           )}
 
           {/* Ledgers List */}

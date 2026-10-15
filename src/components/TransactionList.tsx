@@ -10,6 +10,8 @@ import {
   Filter,
   Calendar,
   X,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
 import {
@@ -21,7 +23,7 @@ import {
 } from '../utils/formatters';
 import { DynamicIcon } from './DynamicIcon';
 
-export type FilterMode = 'month' | 'day' | 'week' | 'quarter' | 'year' | 'custom';
+export type FilterMode = 'month' | 'day' | 'week' | 'quarter' | 'year' | 'all' | 'custom';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -99,6 +101,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
   // Chế độ bộ lọc thời gian: Mặc định là 'month' (Tháng)
   const [filterMode, setFilterMode] = useState<FilterMode>('month');
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
 
   // Khóa mốc thời gian đang chọn cho từng chế độ
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
@@ -112,13 +115,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>('week_0');
 
   const [selectedQuarterKey, setSelectedQuarterKey] = useState<string>(() => {
-    const now = new Date();
-    const q = Math.floor(now.getMonth() / 3) + 1;
-    return `q${q}`;
+    return 'q_curr';
   });
 
   const [selectedYearKey, setSelectedYearKey] = useState<string>(() => {
-    return String(new Date().getFullYear());
+    return 'year_curr';
   });
 
   // Cho chế độ Ngày cụ thể hoặc Tùy chỉnh khoảng thời gian
@@ -127,6 +128,64 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   );
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  // Danh sách các tùy chọn khoảng thời gian (Money Lover UX)
+  const periodModes: Array<{ key: FilterMode; label: string }> = [
+    { key: 'day', label: 'Ngày' },
+    { key: 'week', label: 'Tuần' },
+    { key: 'month', label: 'Tháng' },
+    { key: 'quarter', label: 'Quý' },
+    { key: 'year', label: 'Năm' },
+    { key: 'all', label: 'Tất cả' },
+    { key: 'custom', label: 'Tuỳ chỉnh' },
+  ];
+
+  const periodModeLabel = useMemo(() => {
+    switch (filterMode) {
+      case 'day':
+        return 'Ngày';
+      case 'week':
+        return 'Tuần';
+      case 'month':
+        return 'Tháng';
+      case 'quarter':
+        return 'Quý';
+      case 'year':
+        return 'Năm';
+      case 'all':
+        return 'Tất cả';
+      case 'custom':
+        return 'Tuỳ chỉnh';
+      default:
+        return 'Thời gian';
+    }
+  }, [filterMode]);
+
+  const handleSelectPeriodMode = (mode: FilterMode) => {
+    setFilterMode(mode);
+    setIsPeriodMenuOpen(false);
+    const now = new Date();
+    if (mode === 'week') {
+      setSelectedWeekKey('week_0');
+    } else if (mode === 'month') {
+      setSelectedMonthKey(toLocalMonthKey(now));
+    } else if (mode === 'quarter') {
+      setSelectedQuarterKey('q_curr');
+    } else if (mode === 'year') {
+      setSelectedYearKey('year_curr');
+    } else if (mode === 'day') {
+      setSelectedDayKey(toLocalDateKey(now));
+    } else if (mode === 'custom') {
+      if (!customStartDate) {
+        const d = new Date();
+        d.setDate(1);
+        setCustomStartDate(toLocalDateKey(d));
+      }
+      if (!customEndDate) {
+        setCustomEndDate(toLocalDateKey(new Date()));
+      }
+    }
+  };
 
   // Xác thực khoảng thời gian tùy chỉnh (Từ ngày > Đến ngày)
   const isInvalidCustomDateRange = useMemo(() => {
@@ -325,27 +384,332 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     return tabs;
   }, [selectedDayKey, specificDate]);
 
-  // 6. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
+  // 6. Tự động sinh danh sách Tabs trượt động (Trước / Hiện tại / Tương lai) - Động 100%, Không hardcode
+  const timelineSliderTabs = useMemo(() => {
+    const now = new Date();
+
+    if (filterMode === 'week') {
+      const getWeekRange = (offset: number) => {
+        const start = new Date(now);
+        start.setDate(now.getDate() - now.getDay() - offset * 7);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        return {
+          start,
+          end,
+          text: `${start.getDate()}/${start.getMonth() + 1} - ${end.getDate()}/${end.getMonth() + 1}`,
+        };
+      };
+
+      const w0 = getWeekRange(0);
+      const w1 = getWeekRange(1);
+      const w2 = getWeekRange(2);
+      const w3 = getWeekRange(3);
+
+      return [
+        {
+          key: 'week_3',
+          label: '3 TUẦN TRƯỚC',
+          subLabel: w3.text,
+          isActive: selectedWeekKey === 'week_3',
+          onSelect: () => setSelectedWeekKey('week_3'),
+        },
+        {
+          key: 'week_2',
+          label: '2 TUẦN TRƯỚC',
+          subLabel: w2.text,
+          isActive: selectedWeekKey === 'week_2',
+          onSelect: () => setSelectedWeekKey('week_2'),
+        },
+        {
+          key: 'week_1',
+          label: 'TUẦN TRƯỚC',
+          subLabel: w1.text,
+          isActive: selectedWeekKey === 'week_1',
+          onSelect: () => setSelectedWeekKey('week_1'),
+        },
+        {
+          key: 'week_0',
+          label: 'TUẦN NÀY',
+          subLabel: w0.text,
+          isActive: selectedWeekKey === 'week_0',
+          onSelect: () => setSelectedWeekKey('week_0'),
+        },
+        {
+          key: 'week_future',
+          label: 'TƯƠNG LAI',
+          subLabel: 'Sau tuần này',
+          isActive: selectedWeekKey === 'week_future',
+          onSelect: () => setSelectedWeekKey('week_future'),
+        },
+      ];
+    }
+
+    if (filterMode === 'month') {
+      const m0Key = toLocalMonthKey(now);
+      const m1Date = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const m1Key = toLocalMonthKey(m1Date);
+      const m2Date = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const m2Key = toLocalMonthKey(m2Date);
+      const m3Date = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      const m3Key = toLocalMonthKey(m3Date);
+
+      return [
+        {
+          key: m3Key,
+          label: `THÁNG ${m3Date.getMonth() + 1}/${m3Date.getFullYear()}`,
+          subLabel: '3 tháng trước',
+          isActive: selectedMonthKey === m3Key,
+          onSelect: () => setSelectedMonthKey(m3Key),
+        },
+        {
+          key: m2Key,
+          label: '2 THÁNG TRƯỚC',
+          subLabel: `Tháng ${m2Date.getMonth() + 1}/${m2Date.getFullYear()}`,
+          isActive: selectedMonthKey === m2Key,
+          onSelect: () => setSelectedMonthKey(m2Key),
+        },
+        {
+          key: m1Key,
+          label: 'THÁNG TRƯỚC',
+          subLabel: `Tháng ${m1Date.getMonth() + 1}/${m1Date.getFullYear()}`,
+          isActive: selectedMonthKey === m1Key,
+          onSelect: () => setSelectedMonthKey(m1Key),
+        },
+        {
+          key: m0Key,
+          label: 'THÁNG NÀY',
+          subLabel: `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`,
+          isActive: selectedMonthKey === m0Key,
+          onSelect: () => setSelectedMonthKey(m0Key),
+        },
+        {
+          key: 'month_future',
+          label: 'TƯƠNG LAI',
+          subLabel: 'Các tháng tới',
+          isActive: selectedMonthKey === 'month_future',
+          onSelect: () => setSelectedMonthKey('month_future'),
+        },
+      ];
+    }
+
+    if (filterMode === 'quarter') {
+      const curQ = Math.floor(now.getMonth() / 3) + 1;
+      const curYear = now.getFullYear();
+      const prevQ = curQ === 1 ? 4 : curQ - 1;
+      const prevY = curQ === 1 ? curYear - 1 : curYear;
+
+      return [
+        {
+          key: 'q_prev',
+          label: 'QUÝ TRƯỚC',
+          subLabel: `Quý ${prevQ}/${prevY}`,
+          isActive: selectedQuarterKey === 'q_prev',
+          onSelect: () => setSelectedQuarterKey('q_prev'),
+        },
+        {
+          key: 'q_curr',
+          label: 'QUÝ NÀY',
+          subLabel: `Quý ${curQ}/${curYear}`,
+          isActive: selectedQuarterKey === 'q_curr',
+          onSelect: () => setSelectedQuarterKey('q_curr'),
+        },
+        {
+          key: 'q_future',
+          label: 'TƯƠNG LAI',
+          subLabel: 'Các quý tới',
+          isActive: selectedQuarterKey === 'q_future',
+          onSelect: () => setSelectedQuarterKey('q_future'),
+        },
+      ];
+    }
+
+    if (filterMode === 'year') {
+      const curY = now.getFullYear();
+      return [
+        {
+          key: String(curY - 2),
+          label: `NĂM ${curY - 2}`,
+          subLabel: `${curY - 2}`,
+          isActive: selectedYearKey === String(curY - 2),
+          onSelect: () => setSelectedYearKey(String(curY - 2)),
+        },
+        {
+          key: 'year_prev',
+          label: 'NĂM NGOÁI',
+          subLabel: `Năm ${curY - 1}`,
+          isActive: selectedYearKey === 'year_prev',
+          onSelect: () => setSelectedYearKey('year_prev'),
+        },
+        {
+          key: 'year_curr',
+          label: 'NĂM NAY',
+          subLabel: `Năm ${curY}`,
+          isActive: selectedYearKey === 'year_curr',
+          onSelect: () => setSelectedYearKey('year_curr'),
+        },
+        {
+          key: 'year_future',
+          label: 'TƯƠNG LAI',
+          subLabel: 'Năm tới',
+          isActive: selectedYearKey === 'year_future',
+          onSelect: () => setSelectedYearKey('year_future'),
+        },
+        {
+          key: 'all_years',
+          label: 'TẤT CẢ',
+          subLabel: 'Toàn bộ lịch sử',
+          isActive: selectedYearKey === 'all_years',
+          onSelect: () => setSelectedYearKey('all_years'),
+        },
+      ];
+    }
+
+    if (filterMode === 'day') {
+      const today = new Date();
+      const todayStr = toLocalDateKey(today);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const yesterdayStr = toLocalDateKey(yesterday);
+
+      const d2 = new Date(today);
+      d2.setDate(today.getDate() - 2);
+      const d2Str = toLocalDateKey(d2);
+
+      return [
+        {
+          key: d2Str,
+          label: 'HÔM KIA',
+          subLabel: `${d2.getDate()}/${d2.getMonth() + 1}`,
+          isActive: selectedDayKey === d2Str,
+          onSelect: () => setSelectedDayKey(d2Str),
+        },
+        {
+          key: yesterdayStr,
+          label: 'HÔM QUA',
+          subLabel: `${yesterday.getDate()}/${yesterday.getMonth() + 1}`,
+          isActive: selectedDayKey === yesterdayStr,
+          onSelect: () => setSelectedDayKey(yesterdayStr),
+        },
+        {
+          key: todayStr,
+          label: 'HÔM NAY',
+          subLabel: `${today.getDate()}/${today.getMonth() + 1}`,
+          isActive: selectedDayKey === todayStr,
+          onSelect: () => setSelectedDayKey(todayStr),
+        },
+        {
+          key: 'day_future',
+          label: 'TƯƠNG LAI',
+          subLabel: 'Sau hôm nay',
+          isActive: selectedDayKey === 'day_future',
+          onSelect: () => setSelectedDayKey('day_future'),
+        },
+        {
+          key: 'picker',
+          label: 'CHỌN NGÀY...',
+          subLabel: specificDate
+            ? `${specificDate.split('-')[2]}/${specificDate.split('-')[1]}`
+            : undefined,
+          isActive: selectedDayKey === 'picker',
+          onSelect: () => setSelectedDayKey('picker'),
+        },
+      ];
+    }
+
+    if (filterMode === 'all') {
+      return [
+        {
+          key: 'all',
+          label: 'TẤT CẢ THỜI GIAN',
+          subLabel: 'Xem toàn bộ lịch sử thu chi',
+          isActive: true,
+          onSelect: () => {},
+        },
+      ];
+    }
+
+    if (filterMode === 'custom') {
+      return [
+        {
+          key: 'custom',
+          label: 'KHOẢNG NGÀY TÙY CHỈNH',
+          subLabel:
+            customStartDate && customEndDate
+              ? `${customStartDate} → ${customEndDate}`
+              : 'Chọn ngày bắt đầu và kết thúc',
+          isActive: true,
+          onSelect: () => {},
+        },
+      ];
+    }
+
+    return [];
+  }, [
+    filterMode,
+    selectedWeekKey,
+    selectedMonthKey,
+    selectedQuarterKey,
+    selectedYearKey,
+    selectedDayKey,
+    specificDate,
+    customStartDate,
+    customEndDate,
+  ]);
+
+  // 7. Hàm kiểm tra giao dịch có thuộc mốc thời gian động đã chọn không
   const isTxInSelectedTimeline = (tx: Transaction): boolean => {
     const txDateStr = toLocalDateKey(tx.date);
     const txDate = new Date(tx.date);
+    const now = new Date();
 
     switch (filterMode) {
+      case 'all':
+        return true;
+
       case 'month': {
+        if (selectedMonthKey === 'month_future') {
+          const curYear = now.getFullYear();
+          const curMonth = now.getMonth();
+          return (
+            txDate.getFullYear() > curYear ||
+            (txDate.getFullYear() === curYear && txDate.getMonth() > curMonth)
+          );
+        }
         const txMonthKey = toLocalMonthKey(tx.date);
         return txMonthKey === selectedMonthKey;
       }
+
       case 'day': {
+        const todayStr = toLocalDateKey(now);
+        if (selectedDayKey === 'day_future') {
+          return txDateStr > todayStr;
+        }
         if (selectedDayKey === 'picker') {
           return txDateStr === specificDate;
         }
         return txDateStr === selectedDayKey;
       }
+
       case 'week': {
-        const now = new Date();
+        const startOfCurWeek = new Date(now);
+        startOfCurWeek.setDate(now.getDate() - now.getDay());
+        startOfCurWeek.setHours(0, 0, 0, 0);
+
+        const endOfCurWeek = new Date(startOfCurWeek);
+        endOfCurWeek.setDate(startOfCurWeek.getDate() + 6);
+        endOfCurWeek.setHours(23, 59, 59, 999);
+
+        if (selectedWeekKey === 'week_future') {
+          return txDate > endOfCurWeek;
+        }
+
         const weekOffset = parseInt(selectedWeekKey.replace('week_', ''), 10) || 0;
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay() - weekOffset * 7);
+        const startOfWeek = new Date(startOfCurWeek);
+        startOfWeek.setDate(startOfCurWeek.getDate() - weekOffset * 7);
         startOfWeek.setHours(0, 0, 0, 0);
 
         const endOfWeek = new Date(startOfWeek);
@@ -354,22 +718,43 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
         return txDate >= startOfWeek && txDate <= endOfWeek;
       }
-      case 'quarter': {
-        const targetYear =
-          selectedYearKey && selectedYearKey !== 'all_years'
-            ? parseInt(selectedYearKey, 10)
-            : new Date().getFullYear();
 
-        if (txDate.getFullYear() !== targetYear) return false;
+      case 'quarter': {
+        const curQuarter = Math.floor(now.getMonth() / 3) + 1;
+        const curYear = now.getFullYear();
         const txQuarter = Math.floor(txDate.getMonth() / 3) + 1;
+        const txYear = txDate.getFullYear();
+
+        if (selectedQuarterKey === 'q_future') {
+          return txYear > curYear || (txYear === curYear && txQuarter > curQuarter);
+        }
+        if (selectedQuarterKey === 'q_curr') {
+          return txYear === curYear && txQuarter === curQuarter;
+        }
+        if (selectedQuarterKey === 'q_prev') {
+          const prevQ = curQuarter === 1 ? 4 : curQuarter - 1;
+          const prevY = curQuarter === 1 ? curYear - 1 : curYear;
+          return txYear === prevY && txQuarter === prevQ;
+        }
         const targetQuarter = parseInt(selectedQuarterKey.replace('q', ''), 10);
-        return txQuarter === targetQuarter;
+        return txYear === curYear && txQuarter === targetQuarter;
       }
+
       case 'year': {
-        // CHỈ NĂM MỚI CÓ 'all_years' ĐỂ XEM TOÀN BỘ LỊCH SỬ
         if (selectedYearKey === 'all_years') return true;
+        const curYear = now.getFullYear();
+        if (selectedYearKey === 'year_future') {
+          return txDate.getFullYear() > curYear;
+        }
+        if (selectedYearKey === 'year_curr') {
+          return txDate.getFullYear() === curYear;
+        }
+        if (selectedYearKey === 'year_prev') {
+          return txDate.getFullYear() === curYear - 1;
+        }
         return String(txDate.getFullYear()) === selectedYearKey;
       }
+
       case 'custom': {
         if (!customStartDate && !customEndDate) return true;
         const start = customStartDate
@@ -380,6 +765,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           : new Date('2099-12-31');
         return txDate >= start && txDate <= end;
       }
+
       default:
         return true;
     }
@@ -511,63 +897,149 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     });
   }, [filteredList]);
 
-  // Nhãn badge tóm tắt bộ lọc
-  const filterBadgeLabel = useMemo(() => {
-    let modeText = '';
-    if (filterMode === 'month') {
-      const [y, m] = selectedMonthKey.split('-');
-      modeText = `Tháng ${m}/${y}`;
-    } else if (filterMode === 'day') {
-      if (selectedDayKey === 'picker') {
-        const [y, m, d] = specificDate.split('-');
-        modeText = `${d}/${m}/${y}`;
-      } else {
-        const [y, m, d] = selectedDayKey.split('-');
-        const todayStr = toLocalDateKey(new Date());
-        modeText = selectedDayKey === todayStr ? 'Hôm nay' : `${d}/${m}/${y}`;
-      }
-    } else if (filterMode === 'week') {
-      const tab = weekTabs.find((w) => w.key === selectedWeekKey);
-      modeText = tab ? tab.label : 'Tuần';
-    } else if (filterMode === 'quarter') {
-      modeText = `Quý ${selectedQuarterKey.replace('q', '')}`;
-    } else if (filterMode === 'year') {
-      modeText = selectedYearKey === 'all_years' ? 'Tất cả các năm' : `Năm ${selectedYearKey}`;
-    } else if (filterMode === 'custom') {
-      modeText = 'Tùy chỉnh';
-    }
 
-    if (typeFilter === 'expense') {
-      modeText = `${modeText} • Chi`;
-    } else if (typeFilter === 'income') {
-      modeText = `${modeText} • Thu`;
-    }
-
-    if (selectedCategoryId && selectedCategoryId !== 'all') {
-      const cat = categories.find((c) => c.id === selectedCategoryId);
-      if (cat) {
-        modeText = `${modeText} • ${cat.name}`;
-      }
-    }
-
-    return modeText;
-  }, [
-    filterMode,
-    selectedMonthKey,
-    selectedDayKey,
-    specificDate,
-    selectedWeekKey,
-    selectedQuarterKey,
-    selectedYearKey,
-    typeFilter,
-    selectedCategoryId,
-    categories,
-    weekTabs,
-  ]);
 
   return (
     <div className="space-y-3 pb-24 animate-in fade-in duration-200">
-      {/* 1. THANH TÓM TẮT TÀI CHÍNH TINH GỌN (TIỀN VÀO / TIỀN RA / CHÊNH LỆCH) */}
+      {/* 1. HÀNG ĐIỀU KHIỂN BỘ LỌC THỜI GIAN: NÚT DROPDOWN & ĐẾM GIAO DỊCH */}
+      <div className="flex items-center justify-between px-1 text-xs">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsPeriodMenuOpen(!isPeriodMenuOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#ebdcc9] hover:border-[#a25832] text-[#3e332a] font-bold shadow-2xs hover:bg-[#fff9f4] transition cursor-pointer active:scale-95"
+            title="Bấm để chọn khoảng thời gian"
+          >
+            <Calendar className="w-3.5 h-3.5 text-[#a25832]" />
+            <span className="text-xs">{periodModeLabel}</span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-[#7a6a58] transition-transform duration-200 ${
+                isPeriodMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {/* Menu Dropdown các chế độ thời gian */}
+          {isPeriodMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setIsPeriodMenuOpen(false)}
+              />
+              <div className="absolute left-0 mt-1.5 w-44 rounded-2xl bg-white border border-[#d8c8b4] shadow-xl z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-3 py-1 text-[10px] font-bold text-[#a89886] uppercase tracking-wider">
+                  Khoảng thời gian
+                </div>
+                {periodModes.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleSelectPeriodMode(item.key)}
+                    className="w-full px-3.5 py-2 flex items-center justify-between text-xs font-semibold hover:bg-[#fbf5eb] text-[#3e332a] transition cursor-pointer text-left"
+                  >
+                    <span className={filterMode === item.key ? 'text-[#a25832] font-bold' : ''}>
+                      {item.label}
+                    </span>
+                    {filterMode === item.key && (
+                      <Check className="w-3.5 h-3.5 text-[#a25832]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {selectedCategoryId && selectedCategoryId !== 'all' && (
+            <span className="text-[11px] font-semibold text-[#a25832] bg-[#fbf5eb] px-2 py-0.5 rounded-lg border border-[#ebdcc9]">
+              {getCategory(selectedCategoryId)?.name || 'Danh mục'}
+            </span>
+          )}
+          <span className="font-medium text-[#8c7b69]">
+            {windowSummary.count} giao dịch
+          </span>
+        </div>
+      </div>
+
+      {/* 2. THANH TRƯỢT THỜI GIAN NGANG (TRƯỚC / HIỆN TẠI / TƯƠNG LAI) - ĐỘNG 100%, KHÔNG HARDCODE */}
+      {timelineSliderTabs.length > 0 && (
+        <div className="bg-white rounded-2xl border border-[#ebdcc9]/70 shadow-xs px-2 py-1 overflow-hidden">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth">
+            {timelineSliderTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={tab.onSelect}
+                className={`px-3 py-1.5 rounded-xl text-xs uppercase font-bold whitespace-nowrap transition cursor-pointer shrink-0 flex flex-col items-center justify-center relative ${
+                  tab.isActive
+                    ? 'bg-[#fbf5eb] text-[#a25832] border border-[#d8c8b4] shadow-2xs font-extrabold'
+                    : 'text-[#8c7b69] hover:text-[#3e332a] hover:bg-[#faf7f2] border border-transparent'
+                }`}
+              >
+                <span className="leading-tight">{tab.label}</span>
+                {tab.subLabel && (
+                  <span
+                    className={`text-[9px] font-medium tracking-normal mt-0.5 normal-case ${
+                      tab.isActive ? 'text-[#a25832]/85' : 'text-[#a89886]'
+                    }`}
+                  >
+                    {tab.subLabel}
+                  </span>
+                )}
+                {tab.isActive && (
+                  <span className="w-6 h-0.5 bg-[#a25832] rounded-full mt-1" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Ô chọn khoảng ngày nhanh khi ở chế độ Tuỳ chỉnh */}
+      {filterMode === 'custom' && (
+        <div className="flex items-center gap-2 p-2.5 bg-white rounded-2xl border border-[#ebdcc9]/70 shadow-xs text-xs animate-in fade-in duration-150">
+          <div className="flex-1">
+            <label className="text-[10px] font-semibold text-[#7a6a58] block mb-0.5">
+              Từ ngày:
+            </label>
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] font-semibold text-[#7a6a58] block mb-0.5">
+              Đến ngày:
+            </label>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Ô chọn ngày cụ thể nhanh khi ở chế độ Ngày -> Chọn ngày... */}
+      {filterMode === 'day' && selectedDayKey === 'picker' && (
+        <div className="flex items-center gap-2 p-2.5 bg-white rounded-2xl border border-[#ebdcc9]/70 shadow-xs text-xs animate-in fade-in duration-150">
+          <label className="text-xs font-semibold text-[#7a6a58]">
+            Chọn ngày xem chi tiêu:
+          </label>
+          <input
+            type="date"
+            value={specificDate}
+            onChange={(e) => setSpecificDate(e.target.value)}
+            className="px-3 py-1.5 rounded-xl bg-[#fffdfa] border border-[#ebdcc9] text-xs font-bold text-[#a25832]"
+          />
+        </div>
+      )}
+
+      {/* 3. THANH TÓM TẮT TÀI CHÍNH TINH GỌN (TIỀN VÀO / TIỀN RA / CHÊNH LỆCH) */}
       <div className="bg-white p-3 rounded-2xl border border-[#ebdcc9]/70 shadow-xs grid grid-cols-3 divide-x divide-[#f0ece5] text-center">
         <div className="px-1">
           <div className="text-[10px] text-[#7a6a58] font-semibold uppercase tracking-wider">
@@ -598,24 +1070,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             {formatCurrency(windowSummary.net)}
           </div>
         </div>
-      </div>
-
-      {/* Thanh chip hiển thị mốc lọc hiện tại & số lượng giao dịch */}
-      <div className="flex items-center justify-between px-1 text-xs">
-        {/* Nút duy nhất: Bộ lọc Thời gian */}
-        <button
-          onClick={() => setIsFilterSheetOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-[#ebdcc9] hover:border-[#a25832] text-[#a25832] font-bold shadow-2xs hover:bg-[#fff9f4] transition cursor-pointer active:scale-95"
-          title="Bấm để mở Bộ lọc thời gian"
-        >
-          <Calendar className="w-3.5 h-3.5 text-[#a25832]" />
-          <span>{filterBadgeLabel}</span>
-          <span className="text-[10px] text-[#7a6a58] font-normal">▼</span>
-        </button>
-
-        <span className="font-medium text-[#8c7b69]">
-          {windowSummary.count} giao dịch
-        </span>
       </div>
 
       {/* 2. DANH SÁCH GIAO DỊCH (MODERN CARD STYLE)

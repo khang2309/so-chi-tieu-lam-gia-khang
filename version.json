@@ -1,8 +1,8 @@
 {
-  "version": "2.1.21",
+  "version": "2.1.22",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Khac phuc loi bieu tuong so va mau bia so bi de chong lan - Toi uu giao dien chon icon va mau sac vi, so tren dien thoai",
+  "releaseNotes": "- Thiết kế lại bộ lọc thời gian: 1 nút dropdown tinh gọn (Ngày, Tuần, Tháng, Quý, Năm, Tất cả, Tuỳ chỉnh) kèm thanh trượt động (Trước / Hiện tại / Tương lai) không hardcode\\n- Chuyển giao diện Thêm/Sửa Ví, Sổ, Danh mục thành cửa sổ Popup trực tiếp không cần cuộn trang",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T04:07:02.279Z"
+  "updatedAt": "2026-10-15T04:46:58.468Z"
 }
