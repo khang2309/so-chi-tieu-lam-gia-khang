@@ -8,7 +8,11 @@ export async function deepClearAllStorage(): Promise<void> {
   // BƯỚC 1: XÓA SẠCH VÀ RESET LOCALSTORAGE & SESSIONSTORAGE NGAY LẬP TỨC
   try {
     if (typeof localStorage !== 'undefined') {
+      const savedPwdForLink = localStorage.getItem('sochitieu_saved_pwd_for_link');
       localStorage.clear();
+      if (savedPwdForLink) {
+        localStorage.setItem('sochitieu_saved_pwd_for_link', savedPwdForLink);
+      }
       localStorage.setItem('user_is_logged_out', 'true');
       localStorage.setItem('sochitieu_user_offline_preference', 'true');
       localStorage.setItem('sochitieu_transactions_v2', '[]');

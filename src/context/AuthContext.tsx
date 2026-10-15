@@ -71,17 +71,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!targetUser || !targetUser.email) return;
     try {
       const savedPass = localStorage.getItem('sochitieu_saved_pwd_for_link');
-      if (!savedPass) return;
-      const cred = EmailAuthProvider.credential(targetUser.email, savedPass);
+      if (!savedPass || savedPass.length < 6) return;
+
+      console.log('⚡ [AutoLink] Đang tự động gắn mật khẩu cho tài khoản Google:', targetUser.email);
+
+      // Cách 1: updatePassword trực tiếp (chuẩn nhất cho tài khoản Google trên Firebase)
       try {
+        await updatePassword(targetUser, savedPass);
+        console.log('⚡ [AutoLink] Đã gắn mật khẩu thành công qua updatePassword!');
+        return;
+      } catch (updErr: any) {
+        console.warn('⚡ [AutoLink] updatePassword thử linkWithCredential:', updErr?.code);
+      }
+
+      // Cách 2: linkWithCredential nếu tài khoản chưa có password provider
+      try {
+        const cred = EmailAuthProvider.credential(targetUser.email, savedPass);
         await linkWithCredential(targetUser, cred);
-        console.log('⚡ [AutoLink] Tự động liên kết mật khẩu vào tài khoản Google thành công!');
+        console.log('⚡ [AutoLink] Đã gắn mật khẩu thành công qua linkWithCredential!');
       } catch (linkErr: any) {
-        if (linkErr?.code === 'auth/provider-already-linked') {
-          try {
-            await updatePassword(targetUser, savedPass);
-          } catch {}
-        }
+        console.warn('⚡ [AutoLink] linkWithCredential error:', linkErr?.code);
+        // Thử lại updatePassword lần cuối
+        try {
+          await updatePassword(targetUser, savedPass);
+          console.log('⚡ [AutoLink] Cứu thành công qua updatePassword dự phòng!');
+        } catch {}
       }
     } catch (e) {
       console.warn('Lỗi autoLinkCachedPassword:', e);
@@ -155,18 +169,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!auth?.currentUser || !auth.currentUser.email) {
       throw new Error('Bạn cần đăng nhập tài khoản trước khi thiết lập mật khẩu.');
     }
-    const email = auth.currentUser.email;
-    const credential = EmailAuthProvider.credential(email, newPassword);
+    try {
+      localStorage.setItem('sochitieu_saved_pwd_for_link', newPassword);
+    } catch {}
 
     try {
-      await linkWithCredential(auth.currentUser, credential);
-    } catch (err: any) {
-      if (err?.code === 'auth/provider-already-linked') {
-        await updatePassword(auth.currentUser, newPassword);
-      } else {
-        throw err;
-      }
+      await updatePassword(auth.currentUser, newPassword);
+      return;
+    } catch (updErr: any) {
+      console.warn('updatePassword error, thử linkWithCredential:', updErr);
     }
+
+    const email = auth.currentUser.email;
+    const credential = EmailAuthProvider.credential(email, newPassword);
+    await linkWithCredential(auth.currentUser, credential);
   };
 
   const loginWithGoogleNative = async () => {
