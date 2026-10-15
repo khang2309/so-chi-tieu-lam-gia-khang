@@ -61,7 +61,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
 
     // Count how many allowed meaningful characters were before the cursor
     const rawBeforeCursor = rawVal.slice(0, cursorPos);
-    const nonFormatCharsBefore = (rawBeforeCursor.match(/[0-9+\-*\/xX:÷−–—()]/g) || []).length;
+    const nonFormatCharsBefore = (rawBeforeCursor.match(/[0-9+\-*\/xX:÷−–—()×]/g) || []).length;
 
     // Format with dots every 3 digits and strictly strip all letters
     const formatted = formatExpressionWithDots(rawVal);
@@ -79,7 +79,7 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
         let count = 0;
         let newPos = formatted.length;
         for (let i = 0; i < formatted.length; i++) {
-          if (/[0-9+\-*\/xX:÷−–—()]/.test(formatted[i])) {
+          if (/[0-9+\-*\/xX:÷−–—()×]/.test(formatted[i])) {
             count++;
             if (count === nonFormatCharsBefore) {
               newPos = i + 1;

@@ -51,8 +51,8 @@ export const CustomCalculatorKeyboard: React.FC<CustomCalculatorKeyboardProps> =
 
     if (['+', '−', '×', '÷'].includes(key)) {
       const current = (value || '0').trimEnd();
-      if (/[+\-*\/xX:÷−–—]\s*$/.test(current)) {
-        const replaced = current.replace(/[+\-*\/xX:÷−–—]\s*$/, ` ${key} `);
+      if (/[+\-*\/xX:÷−–—×]\s*$/.test(current)) {
+        const replaced = current.replace(/[+\-*\/xX:÷−–—×]\s*$/, ` ${key} `);
         onChange(replaced);
       } else {
         onChange(`${current} ${key} `);

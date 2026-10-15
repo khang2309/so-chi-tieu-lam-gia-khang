@@ -78,12 +78,11 @@ export function preprocessMathExpression(raw: string): string {
  */
 export function formatExpressionWithDots(raw: string): string {
   if (!raw) return '';
-  // 1. Strip all alphabet letters (a-z, A-Z, Vietnamese text)
-  let clean = raw.replace(/[a-zA-Zà-ỹÀ-Ỹ]/g, '');
-  // Keep only digits, operators (+, -, *, /, x, X, :, ÷, −, –, —, (, )), and dots, commas, spaces
-  clean = clean.replace(/[^0-9+\-*\/xX:÷−–—().,\s]/g, '');
+  // Whitelist: Chỉ giữ lại chữ số, các toán tử (+, -, *, /, ×, ÷, −, –, —, x, X, :), ngoặc, chấm, phẩy, khoảng trắng
+  // Mọi chữ cái khác (tiếng Anh A-Z, tiếng Việt có dấu) đều tự động bị loại bỏ an toàn
+  const clean = raw.replace(/[^0-9+\-*\/×÷−–—xX:().,\s]/g, '');
 
-  // 2. Format every number group with thousand separator dots
+  // Format every number group with thousand separator dots
   return clean.replace(/([0-9][0-9.,]*)/g, (match) => {
     const pureDigits = match.replace(/[.,]/g, '');
     if (!pureDigits) return match;
@@ -96,7 +95,7 @@ export function formatExpressionWithDots(raw: string): string {
  */
 export function isMathExpression(str: string): boolean {
   if (!str) return false;
-  return /[+\-*\/()xX:÷−–—]/.test(str);
+  return /[+\-*\/()xX:÷−–—×]/.test(str);
 }
 
 /**
