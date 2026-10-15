@@ -125,14 +125,24 @@ export function getSavedReviewQueue(): ParsedBankNotificationItem[] {
 }
 
 export function convertBankItemToTransaction(
-  item: ParsedBankNotificationItem
+  item: ParsedBankNotificationItem,
+  categories?: Category[]
 ): Omit<Transaction, 'id' | 'createdAt'> {
+  let catId = item.categoryId;
+  if (categories && categories.length > 0) {
+    const verifiedCat = categories.find((c) => c.id === catId);
+    // Nếu categoryId cũ không tìm thấy hoặc bị trỏ nhầm vào Giữ xe khi nội dung không liên quan đến gửi xe
+    if (!verifiedCat || (verifiedCat.name.toLowerCase().includes('giữ xe') && !/(gui xe|gửi xe|giu xe|giữ xe|bãi xe)/i.test(item.note || item.rawText))) {
+      catId = guessCategory(item.note || item.rawText, item.type, categories);
+    }
+  }
+
   return {
     amount: item.amount,
     type: item.type,
     date: item.date,
     note: item.note,
-    categoryId: item.categoryId,
+    categoryId: catId,
     ledgerId: item.ledgerId,
     walletId: item.walletId,
     toWalletId: item.toWalletId,
@@ -161,11 +171,14 @@ function toLocalIsoMinute(ts: number): string {
 /**
  * Đoán danh mục tự động từ nội dung chuyển khoản
  */
-function guessCategory(
+export function guessCategory(
   content: string,
-  type: 'expense' | 'income',
+  type: 'expense' | 'income' | 'transfer',
   categories: Category[]
 ): string {
+  if (type === 'transfer') {
+    return categories[0]?.id || '';
+  }
   const lower = (content || '').toLowerCase();
   const valid = categories.filter((c) => c.type === type || c.type === 'both');
   if (valid.length === 0) return categories[0]?.id || 'cat-other';
@@ -174,30 +187,79 @@ function guessCategory(
     valid.find((c) => keywords.some((k) => c.name.toLowerCase().includes(k)));
 
   if (type === 'expense') {
-    if (/(an |bun|pho|com|cafe|coffee|highlands|tra sua|kfc|lotteria|nuoc|banh|quan)/.test(lower)) {
-      const m = findCat(['ăn', 'uống', 'thực phẩm']);
+    // 1. Giữ xe / Gửi xe (chỉ khớp khi nội dung thực sự có từ gửi/giữ xe, tránh nhầm từ 'xe' chung chung)
+    if (/(gui xe|gửi xe|giu xe|giữ xe|bãi xe|bai xe|vé xe tháng|ve xe thang|tiền giữ xe|tien gui xe)/.test(lower)) {
+      const m = findCat(['giữ xe', 'gửi xe', 'bãi xe']);
       if (m) return m.id;
     }
-    if (/(xang|grab|be |xanh sm|gsm|gui xe|ve xe|taxi)/.test(lower)) {
-      const m = findCat(['di chuyển', 'xăng', 'xe']);
+
+    // 2. Xăng xe / Đi lại (không dùng keyword 'xe' đơn độc để không dính vào Giữ xe)
+    if (/(xang|xăng|petrolimex|pvoil|pv oil|grab|be |xanh sm|gsm|taxi|tram thu phi|trạm thu phí|vetc|epass|xe buýt|xe bus|vé tàu|ve tau)/.test(lower)) {
+      const m = findCat(['xăng', 'di chuyển', 'đi lại']);
       if (m) return m.id;
     }
-    if (/(shopee|lazada|tiktok|mua|sieu thi|winmart|bach hoa|circle k)/.test(lower)) {
-      const m = findCat(['mua sắm', 'chợ']);
+
+    // 3. Ăn uống / Cà phê
+    if (/(an |ăn|bun|bún|pho|phở|com|cơm|cafe|cà phê|coffee|highlands|tra sua|trà sữa|kfc|lotteria|jollibee|mcdonald|starbucks|nuoc|nước|banh|bánh|quan an|quán ăn|nhà hàng|lẩu|nướng|pizza|bakery|food|shopeefood|grabfood)/.test(lower)) {
+      const m = findCat(['ăn', 'uống', 'thực phẩm', 'đồ ăn']);
       if (m) return m.id;
     }
-    if (/(tien nha|tien tro|dien|nuoc|wifi|internet|viettel|vnpt|fpt)/.test(lower)) {
-      const m = findCat(['trọ', 'nhà', 'hóa đơn', 'điện']);
+
+    // 4. Mua sắm / Siêu thị
+    if (/(shopee|lazada|tiktok|tiki|sieu thi|siêu thị|winmart|bach hoa|bách hóa|circle k|coop|topmarket|mega|mua sam|mua sắm|thoi trang|quần áo|giày)/.test(lower)) {
+      const m = findCat(['mua sắm', 'chợ', 'siêu thị']);
       if (m) return m.id;
     }
+
+    // 5. Hóa đơn / Dịch vụ / Trả sau / Điện nước mạng / Vay tín dụng
+    if (/(hoa don|hóa đơn|vi tra sau|ví trả sau|tra sau|trả sau|dien|điện|nuoc sinh hoat|nước sinh hoạt|wifi|internet|viettel|vnpt|fpt|tien nha|tiền nhà|tien tro|tiền trọ|chung cu|chung cư|phi quan ly|phí quản lý|tin dung|tín dụng|vay|fe credit|home credit|shinhan|kredivo|mua truoc tra sau|thanh toan|thanh toán)/.test(lower)) {
+      const m = findCat(['hóa đơn', 'tiền phòng', 'tiền trọ', 'dịch vụ', 'điện']);
+      if (m) return m.id;
+    }
+
+    // 6. Nếu là chuyển khoản hoặc chi tiêu không rõ cụ thể:
+    // Tuyệt đối KHÔNG trả về valid[0] (tránh nhầm vào Giữ xe)!
+    // Tìm danh mục "Chi tiêu khác" hoặc "Khác"
+    const otherCat = valid.find((c) =>
+      c.id === 'cat-other-expense' ||
+      c.name.toLowerCase().includes('chi tiêu khác') ||
+      c.name.toLowerCase().includes('khác') ||
+      c.name.toLowerCase().includes('chung')
+    );
+    if (otherCat) return otherCat.id;
+
+    // Tìm danh mục có isDefault
+    const defaultCat = valid.find((c) => c.isDefault && !c.name.toLowerCase().includes('giữ xe'));
+    if (defaultCat) return defaultCat.id;
   } else {
-    if (/(luong|salary|thuong|bonus)/.test(lower)) {
-      const m = findCat(['lương', 'thưởng']);
+    // Thu nhập:
+    if (/(luong|lương|salary|tam ung|tạm ứng)/.test(lower)) {
+      const m = findCat(['lương']);
       if (m) return m.id;
     }
+
+    if (/(thuong|thưởng|bonus|phu cap|phụ cấp|hoa hong|hoa hồng|lai tiet kiem|lãi|sinh loi|sinh lời|hoan tien|hoàn tiền)/.test(lower)) {
+      const m = findCat(['thưởng', 'phụ cấp']);
+      if (m) return m.id;
+    }
+
+    // Tìm danh mục "Thu nhập khác" hoặc "Khác"
+    const otherIncomeCat = valid.find((c) =>
+      c.id === 'cat-bonus' ||
+      c.id === 'cat-other-income' ||
+      c.name.toLowerCase().includes('thu nhập khác') ||
+      c.name.toLowerCase().includes('thưởng') ||
+      c.name.toLowerCase().includes('khác')
+    );
+    if (otherIncomeCat) return otherIncomeCat.id;
+
+    const defaultIncome = valid.find((c) => c.isDefault);
+    if (defaultIncome) return defaultIncome.id;
   }
 
-  return valid[0].id;
+  // Fallback an toàn cuối cùng: ưu tiên danh mục khác giữ xe
+  const safeFallback = valid.find((c) => !c.name.toLowerCase().includes('giữ xe')) || valid[0];
+  return safeFallback.id;
 }
 
 /**

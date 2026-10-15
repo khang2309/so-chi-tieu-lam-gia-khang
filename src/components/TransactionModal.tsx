@@ -445,11 +445,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 onChange={(e) => setLedgerId(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
               >
-                {ledgers.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
+                {ledgers.length === 0 ? (
+                  <option value="">(Chưa tạo sổ nào)</option>
+                ) : (
+                  ledgers.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -463,11 +467,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 onChange={(e) => setWalletId(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
               >
-                {wallets.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
+                {wallets.length === 0 ? (
+                  <option value="">(Chưa tạo ví nào)</option>
+                ) : (
+                  wallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>

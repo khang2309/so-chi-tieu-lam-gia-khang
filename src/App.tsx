@@ -24,6 +24,7 @@ import {
   getSavedReviewQueue,
   saveReviewQueue,
   convertBankItemToTransaction,
+  guessCategory,
   ParsedBankNotificationItem,
 } from './utils/bankNotificationService';
 import { exportTransactionsToExcel } from './utils/excelExporter';
@@ -143,7 +144,9 @@ export function App() {
       if (newParsed.length === 0) return;
 
       if (cfg.autoSave) {
-        const txsToSave = newParsed.map(convertBankItemToTransaction);
+        const txsToSave = newParsed.map((item) =>
+          convertBankItemToTransaction(item, manager.categories)
+        );
         manager.addBatchTransactions(txsToSave);
         const first = newParsed[0];
         const detailMsg =
@@ -185,7 +188,7 @@ export function App() {
   }, [manager.wallets, manager.ledgers, manager.categories]);
 
   const handleApproveBankItem = (itemToSave: ParsedBankNotificationItem) => {
-    manager.addTransaction(convertBankItemToTransaction(itemToSave));
+    manager.addTransaction(convertBankItemToTransaction(itemToSave, manager.categories));
     setPendingBankItems((prev) => {
       const updated = prev.filter((i) => i.id !== itemToSave.id);
       saveReviewQueue(updated);
@@ -204,11 +207,29 @@ export function App() {
     });
   };
 
+  const handleDismissAllBankItems = () => {
+    if (pendingBankItems.length === 0) return;
+    const count = pendingBankItems.length;
+    setPendingBankItems([]);
+    saveReviewQueue([]);
+    window.dispatchEvent(
+      new CustomEvent('show-app-toast', {
+        detail: `Đã xóa tất cả ${count} biến động số dư!`,
+      })
+    );
+  };
+
   const handleEditBankItem = (item: ParsedBankNotificationItem) => {
+    const verifiedCat = manager.categories.find((c) => c.id === item.categoryId);
+    const effectiveCatId =
+      verifiedCat && !verifiedCat.name.toLowerCase().includes('giữ xe')
+        ? item.categoryId
+        : guessCategory(item.note || item.rawText, item.type, manager.categories);
+
     setVoiceInitialValues({
       amount: item.amount,
       note: item.note,
-      categoryId: item.categoryId,
+      categoryId: effectiveCatId,
       type: item.type,
       walletId: item.walletId,
       ledgerId: item.ledgerId,
@@ -220,7 +241,9 @@ export function App() {
 
   const handleApproveAllBankItems = () => {
     if (pendingBankItems.length === 0) return;
-    const txs = pendingBankItems.map(convertBankItemToTransaction);
+    const txs = pendingBankItems.map((item) =>
+      convertBankItemToTransaction(item, manager.categories)
+    );
     manager.addBatchTransactions(txs);
     setPendingBankItems([]);
     saveReviewQueue([]);
@@ -324,7 +347,7 @@ export function App() {
         {/* Banner Biến Động Số Dư Chờ Duyệt (Chỉ hiển thị ở tab dashboard khi có thông báo chờ duyệt) */}
         {activeTab === 'dashboard' && pendingBankItems.length > 0 && (
           <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="flex h-2.5 w-2.5 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -334,77 +357,109 @@ export function App() {
                   🔔 Biến động số dư mới ({pendingBankItems.length})
                 </span>
               </div>
-              {pendingBankItems.length > 1 && (
+              <div className="flex items-center gap-2.5">
                 <button
+                  type="button"
+                  onClick={handleDismissAllBankItems}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                  title="Xóa bỏ tất cả biến động này"
+                >
+                  Xóa tất cả
+                </button>
+                <span className="text-amber-300">|</span>
+                <button
+                  type="button"
                   onClick={handleApproveAllBankItems}
-                  className="text-xs font-semibold text-[#a25832] hover:underline"
+                  className="text-xs font-bold text-[#a25832] hover:underline cursor-pointer"
+                  title="Lưu tất cả biến động vào sổ"
                 >
                   Lưu tất cả ({pendingBankItems.length})
                 </button>
-              )}
+              </div>
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {pendingBankItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white/90 border border-amber-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shadow-xs"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-[#a25832] bg-amber-100/60 px-1.5 py-0.5 rounded text-[11px]">
-                        {item.appName}
-                      </span>
-                      <span
-                        className={`font-bold ${
-                          item.type === 'expense'
-                            ? 'text-rose-600'
-                            : item.type === 'income'
-                            ? 'text-emerald-600'
-                            : 'text-blue-600'
-                        }`}
-                      >
-                        {item.type === 'expense'
-                          ? '-'
-                          : item.type === 'income'
-                          ? '+'
-                          : ''}
-                        {new Intl.NumberFormat('vi-VN').format(item.amount)} đ
-                      </span>
-                      <span className="text-[10px] text-[#7a6a58]">
-                        {new Date(item.date).toLocaleTimeString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-[#3e332a] truncate mt-1 text-[11px]" title={item.note}>
-                      {item.note}
-                    </p>
-                  </div>
+              {pendingBankItems.map((item) => {
+                const verifiedCat = manager.categories.find((c) => c.id === item.categoryId);
+                const effectiveCat =
+                  verifiedCat && !verifiedCat.name.toLowerCase().includes('giữ xe')
+                    ? verifiedCat
+                    : manager.categories.find(
+                        (c) => c.id === guessCategory(item.note || item.rawText, item.type, manager.categories)
+                      );
 
-                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                    <button
-                      onClick={() => handleApproveBankItem(item)}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-[11px] shadow-xs cursor-pointer active:scale-95 transition"
-                    >
-                      Lưu ngay
-                    </button>
-                    <button
-                      onClick={() => handleEditBankItem(item)}
-                      className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-[#a25832] rounded-lg font-medium text-[11px] cursor-pointer active:scale-95 transition"
-                    >
-                      Sửa
-                    </button>
-                    <button
-                      onClick={() => handleDismissBankItem(item.id)}
-                      className="px-2 py-1 text-stone-400 hover:text-stone-600 rounded-lg text-[11px] cursor-pointer transition"
-                    >
-                      Bỏ qua
-                    </button>
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-white/90 border border-amber-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shadow-xs"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-[#a25832] bg-amber-100/60 px-1.5 py-0.5 rounded text-[11px]">
+                          {item.appName}
+                        </span>
+                        <span
+                          className={`font-bold ${
+                            item.type === 'expense'
+                              ? 'text-rose-600'
+                              : item.type === 'income'
+                              ? 'text-emerald-600'
+                              : 'text-blue-600'
+                          }`}
+                        >
+                          {item.type === 'expense'
+                            ? '-'
+                            : item.type === 'income'
+                            ? '+'
+                            : ''}
+                          {new Intl.NumberFormat('vi-VN').format(item.amount)} đ
+                        </span>
+                        {effectiveCat && (
+                          <span
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                            style={{
+                              backgroundColor: `${effectiveCat.color || '#a25832'}18`,
+                              color: effectiveCat.color || '#a25832',
+                            }}
+                          >
+                            {effectiveCat.name}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-[#7a6a58]">
+                          {new Date(item.date).toLocaleTimeString('vi-VN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-[#3e332a] truncate mt-1 text-[11px]" title={item.note}>
+                        {item.note}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                      <button
+                        onClick={() => handleApproveBankItem(item)}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-[11px] shadow-xs cursor-pointer active:scale-95 transition"
+                      >
+                        Lưu ngay
+                      </button>
+                      <button
+                        onClick={() => handleEditBankItem(item)}
+                        className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-[#a25832] rounded-lg font-medium text-[11px] cursor-pointer active:scale-95 transition"
+                      >
+                        Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDismissBankItem(item.id)}
+                        className="px-2 py-1 text-stone-400 hover:text-stone-600 rounded-lg text-[11px] cursor-pointer transition"
+                      >
+                        Bỏ qua
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

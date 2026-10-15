@@ -1,8 +1,8 @@
 {
-  "version": "2.1.17",
+  "version": "2.1.18",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Dọn dẹp các nút xóa dư thừa, giữ lại cụm phím C và phím lùi chuẩn Money Lover\n- Tinh chỉnh bàn phím nhập ví không làm tối mờ màn hình (loại bỏ hiệu ứng chìm giao diện)",
+  "releaseNotes": "- Khắc phục lỗi biến động số dư tự lưu thành Giữ xe (tự động nhận diện chuẩn danh mục hoặc Chi tiêu khác)\n- Thêm nút Xóa tất cả trong khay biến động số dư mới\n- Nâng cấp tính năng Đặt lại trong Cài đặt: Reset sạch hoàn toàn toàn bộ ví, sổ và giao dịch",
   "allowSkip": true,
-  "updatedAt": "2026-10-14T14:32:18.655Z"
+  "updatedAt": "2026-10-15T03:10:53.836Z"
 }

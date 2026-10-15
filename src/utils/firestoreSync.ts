@@ -659,3 +659,35 @@ export async function uploadAllLocalDataToFirestore(
     return { success: false, count: 0, message: 'Lỗi Firebase: ' + (err?.message || String(err)) };
   }
 }
+
+/**
+ * Xóa sạch toàn bộ dữ liệu người dùng trên Firestore Cloud:
+ * Giao dịch (transactions), Ví tiền (wallets), Sổ chi tiêu (ledgers).
+ */
+export async function clearAllUserFirestoreData(uid: string): Promise<void> {
+  if (!db || !uid) return;
+  try {
+    const collections = ['transactions', 'wallets', 'ledgers'];
+    for (const collName of collections) {
+      const snap = await getDocs(collection(db, 'users', uid, collName));
+      if (!snap.empty) {
+        let batch = writeBatch(db);
+        let count = 0;
+        for (const docSnap of snap.docs) {
+          batch.delete(docSnap.ref);
+          count++;
+          if (count === 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+        if (count > 0) {
+          await batch.commit();
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Lỗi khi xóa sạch dữ liệu trên Firestore:', err);
+  }
+}

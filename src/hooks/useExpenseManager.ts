@@ -15,6 +15,7 @@ import {
   mergeEntitiesById,
   performTwoWaySync,
   sanitizeData,
+  clearAllUserFirestoreData,
 } from '../utils/firestoreSync';
 import { saveAndShareFile, utf8ToBase64 } from '../utils/fileExporter';
 
@@ -857,22 +858,47 @@ export function useExpenseManager() {
     }
   };
 
-  const resetToDefaults = () => {
-    if (window.confirm('Bạn có chắc chắn muốn đặt lại dữ liệu mẫu ban đầu? Mọi thay đổi hiện tại sẽ được thay thế.')) {
-      try {
-        localStorage.removeItem('user_is_logged_out');
-      } catch (_) {}
+  const resetToDefaults = async () => {
+    if (
+      window.confirm(
+        'Bạn có chắc chắn muốn ĐẶT LẠI TẤT CẢ? Toàn bộ giao dịch, ví tiền và sổ chi tiêu sẽ bị xóa sạch hoàn toàn (không còn ví hay sổ nào).'
+      )
+    ) {
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        try {
+          await clearAllUserFirestoreData(uid);
+        } catch (_) {}
+      }
+
       deletedWalletIdsRef.current.clear();
       deletedLedgerIdsRef.current.clear();
       deletedCategoryIdsRef.current.clear();
-      setLedgers(DEFAULT_LEDGERS);
-      setWallets(DEFAULT_WALLETS);
+
+      // Reset hoàn toàn: 0 giao dịch, 0 ví, 0 sổ
+      setTransactions([]);
+      setWallets([]);
+      setLedgers([]);
       setCategories(DEFAULT_CATEGORIES);
-      setTransactions(DEFAULT_TRANSACTIONS);
-      setActiveLedgerId('ledger-personal');
+      setActiveLedgerId('all');
       setActiveWalletId('all');
       setIncludeAllWallets(true);
       setTimeFilter('month');
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, '[]');
+        localStorage.setItem(STORAGE_KEYS.WALLETS, '[]');
+        localStorage.setItem(STORAGE_KEYS.LEDGERS, '[]');
+        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_LEDGER, 'all');
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_WALLET, 'all');
+      } catch (_) {}
+
+      window.dispatchEvent(
+        new CustomEvent('show-app-toast', {
+          detail: 'Đã đặt lại thành công: Đã xóa sạch toàn bộ ví, sổ và giao dịch!',
+        })
+      );
     }
   };
 
