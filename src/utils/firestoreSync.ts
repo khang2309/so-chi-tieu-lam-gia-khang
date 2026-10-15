@@ -141,6 +141,7 @@ export async function performTwoWaySync(
 
     const cloudWallets: Wallet[] = [];
     walletSnap.forEach((d) => cloudWallets.push(sanitizeData(d.data() as Wallet)));
+    cloudWallets.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
     const cloudLedgers: Ledger[] = [];
     ledgerSnap.forEach((d) => cloudLedgers.push(sanitizeData(d.data() as Ledger)));
@@ -157,10 +158,12 @@ export async function performTwoWaySync(
     // - Khi vừa đăng nhập hoặc mở app (preferCloudLists = true): Nếu Cloud đã có dữ liệu (> 0), ưu tiên danh sách trên Cloud.
     // - Khi người dùng bấm Đồng bộ thủ công (preferCloudLists = false): Lấy danh sách hiện tại trên máy làm chuẩn.
     // Tuyệt đối không fallback về DEFAULT_WALLETS hay DEFAULT_LEDGERS để không tự ý hồi sinh dữ liệu mẫu khi người dùng đã Đặt lại / Xóa hết.
-    const mergedWallets =
-      preferCloudLists && cloudWallets.length > 0
+    const mergedWallets = [
+      ...(preferCloudLists && cloudWallets.length > 0
         ? cloudWallets
-        : cleanLocalData.wallets;
+        : cleanLocalData.wallets),
+    ];
+    mergedWallets.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
     const mergedLedgers =
       preferCloudLists && cloudLedgers.length > 0
@@ -256,7 +259,8 @@ export async function performTwoWaySync(
         cw.accountNumber !== w.accountNumber ||
         cw.icon !== w.icon ||
         cw.color !== w.color ||
-        Boolean(cw.isDefault) !== Boolean(w.isDefault)
+        Boolean(cw.isDefault) !== Boolean(w.isDefault) ||
+        cw.order !== w.order
       ) {
         metaBatch.set(doc(db, 'users', uid, 'wallets', w.id), sanitizeData(w), { merge: true });
         metaOperationsCount++;
@@ -385,6 +389,24 @@ export async function syncWalletToFirestore(uid: string, wallet: Wallet): Promis
 }
 
 /**
+ * Cập nhật danh sách ví theo batch nguyên tử (Atomic Batch) để tránh snapshot dội ngược
+ */
+export async function syncWalletsBatchToFirestore(uid: string, walletsList: Wallet[]): Promise<void> {
+  if (!db || !uid || !walletsList.length) return;
+  try {
+    const batch = writeBatch(db);
+    for (const w of walletsList) {
+      const cleanWallet = sanitizeData(w);
+      const docRef = doc(db, 'users', uid, 'wallets', w.id);
+      batch.set(docRef, cleanWallet, { merge: true });
+    }
+    await batch.commit();
+  } catch (err: any) {
+    console.warn('Lỗi ghi batch ví lên Firestore:', err);
+  }
+}
+
+/**
  * Xóa một ví tiền trên Firestore
  */
 export async function removeWalletFromFirestore(uid: string, id: string): Promise<void> {
@@ -410,6 +432,24 @@ export async function syncLedgerToFirestore(uid: string, ledger: Ledger): Promis
   } catch (err: any) {
     console.warn('Lỗi ghi sổ lên Firestore:', err);
     alert('Lỗi Firebase: ' + (err?.message || String(err)));
+  }
+}
+
+/**
+ * Cập nhật danh sách sổ theo batch nguyên tử (Atomic Batch) để tránh snapshot dội ngược
+ */
+export async function syncLedgersBatchToFirestore(uid: string, ledgersList: Ledger[]): Promise<void> {
+  if (!db || !uid || !ledgersList.length) return;
+  try {
+    const batch = writeBatch(db);
+    for (const l of ledgersList) {
+      const cleanLedger = sanitizeData(l);
+      const docRef = doc(db, 'users', uid, 'ledgers', l.id);
+      batch.set(docRef, cleanLedger, { merge: true });
+    }
+    await batch.commit();
+  } catch (err: any) {
+    console.warn('Lỗi ghi batch sổ lên Firestore:', err);
   }
 }
 
@@ -499,6 +539,7 @@ export function subscribeToUserFirestoreData(
       (snapshot) => {
         const list: Wallet[] = [];
         snapshot.forEach((d) => list.push(sanitizeData(d.data() as Wallet)));
+        list.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
         callbacks.onWallets?.(list, snapshot.empty);
       },
       (error: any) => {
@@ -575,6 +616,7 @@ export async function pullUserDataFromFirestore(uid: string): Promise<{
 
     const wallets: Wallet[] = [];
     walletSnap.forEach((d) => wallets.push(sanitizeData(d.data() as Wallet)));
+    wallets.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
     const ledgers: Ledger[] = [];
     ledgerSnap.forEach((d) => ledgers.push(sanitizeData(d.data() as Ledger)));

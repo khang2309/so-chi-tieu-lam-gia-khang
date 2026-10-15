@@ -444,8 +444,11 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                           <button
                             type="button"
                             disabled={idx === 0}
-                            onClick={() => moveWallet(idx, idx - 1)}
-                            className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveWallet(idx, idx - 1);
+                            }}
+                            className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
                             title="Chuyển ví lên trên"
                           >
                             <ChevronUp className="w-3 h-3" />
@@ -453,8 +456,11 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                           <button
                             type="button"
                             disabled={idx === wallets.length - 1}
-                            onClick={() => moveWallet(idx, idx + 1)}
-                            className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveWallet(idx, idx + 1);
+                            }}
+                            className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
                             title="Chuyển ví xuống dưới"
                           >
                             <ChevronDown className="w-3 h-3" />

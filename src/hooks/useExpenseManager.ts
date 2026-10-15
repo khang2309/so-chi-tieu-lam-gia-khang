@@ -6,8 +6,10 @@ import { auth } from '../firebase';
 import {
   syncTransactionToFirestore,
   syncWalletToFirestore,
+  syncWalletsBatchToFirestore,
   removeWalletFromFirestore,
   syncLedgerToFirestore,
+  syncLedgersBatchToFirestore,
   removeLedgerFromFirestore,
   syncCategoryToFirestore,
   removeCategoryFromFirestore,
@@ -158,6 +160,8 @@ export function useExpenseManager() {
   const deletedLedgerIdsRef = useRef<Set<string>>(new Set());
   const deletedCategoryIdsRef = useRef<Set<string>>(new Set());
   const resetPromiseRef = useRef<Promise<void> | null>(null);
+  const isReorderingWalletsRef = useRef<boolean>(false);
+  const isReorderingLedgersRef = useRef<boolean>(false);
 
   // Hàm kéo ngay lập tức toàn bộ dữ liệu từ Cloud về và cập nhật vào State qua 2-Way Delta Diff Sync
   const fetchAndSyncUserData = async (targetUid?: string) => {
@@ -221,9 +225,13 @@ export function useExpenseManager() {
         const finalWallets = cleanMerged.wallets.filter(
           (w: Wallet) => !deletedWalletIdsRef.current.has(w.id)
         );
+        finalWallets.sort((a: Wallet, b: Wallet) => (a.order ?? 9999) - (b.order ?? 9999));
+
         const finalLedgers = cleanMerged.ledgers.filter(
           (l: Ledger) => !deletedLedgerIdsRef.current.has(l.id)
         );
+        finalLedgers.sort((a: Ledger, b: Ledger) => (a.order ?? 9999) - (b.order ?? 9999));
+
         const finalCategories = cleanMerged.categories.filter(
           (c: Category) => !deletedCategoryIdsRef.current.has(c.id)
         );
@@ -286,22 +294,26 @@ export function useExpenseManager() {
           },
           onWallets: (fireWallets, isEmpty) => {
             if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
+            if (isReorderingWalletsRef.current) return;
             if (!isEmpty) {
               const filtered = fireWallets.filter(
                 (w) => !deletedWalletIdsRef.current.has(w.id)
               );
               if (filtered.length > 0) {
+                filtered.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                 setWallets(sanitizeData(filtered));
               }
             }
           },
           onLedgers: (fireLedgers, isEmpty) => {
             if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
+            if (isReorderingLedgersRef.current) return;
             if (!isEmpty) {
               const filtered = fireLedgers.filter(
                 (l) => !deletedLedgerIdsRef.current.has(l.id)
               );
               if (filtered.length > 0) {
+                filtered.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                 setLedgers(sanitizeData(filtered));
               }
             }
@@ -642,7 +654,8 @@ export function useExpenseManager() {
     setActiveLedgerId(id);
   };
 
-  const reorderLedgers = (reordered: Ledger[]) => {
+  const reorderLedgers = async (reordered: Ledger[]) => {
+    isReorderingLedgersRef.current = true;
     const now = new Date().toISOString();
     const updated = reordered.map((l, idx) =>
       sanitizeData({
@@ -657,8 +670,11 @@ export function useExpenseManager() {
     } catch (_) {}
     const uid = auth?.currentUser?.uid;
     if (uid) {
-      updated.forEach((l) => syncLedgerToFirestore(uid, l));
+      await syncLedgersBatchToFirestore(uid, updated);
     }
+    setTimeout(() => {
+      isReorderingLedgersRef.current = false;
+    }, 1200);
   };
 
   const deleteLedger = (id: string) => {
@@ -759,7 +775,8 @@ export function useExpenseManager() {
     });
   };
 
-  const reorderWallets = (reordered: Wallet[]) => {
+  const reorderWallets = async (reordered: Wallet[]) => {
+    isReorderingWalletsRef.current = true;
     const now = new Date().toISOString();
     const updated = reordered.map((w, idx) =>
       sanitizeData({
@@ -774,8 +791,11 @@ export function useExpenseManager() {
     } catch (_) {}
     const uid = auth?.currentUser?.uid;
     if (uid) {
-      updated.forEach((w) => syncWalletToFirestore(uid, w));
+      await syncWalletsBatchToFirestore(uid, updated);
     }
+    setTimeout(() => {
+      isReorderingWalletsRef.current = false;
+    }, 1200);
   };
 
   const deleteWallet = (id: string) => {
