@@ -1,10 +1,10 @@
 {
-  "version": "2.1.30",
+  "version": "2.1.31",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Kiem tra truc quan nang luc native APK, sua loi lech tam va nhay thanh thoi gian, co dinh form vi",
+  "releaseNotes": "Sua loi lech tab khi chuyen che do thoi gian va load vo tan khong bao gio bi khung",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T10:21:52.595Z"
+  "updatedAt": "2026-10-15T10:40:01.641Z"
 }

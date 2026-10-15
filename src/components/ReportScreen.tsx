@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -111,19 +111,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   const [pastBufferCount, setPastBufferCount] = useState<number>(12);
   const isPrependingRef = useRef<boolean>(false);
   const prevScrollWidthRef = useRef<number>(0);
-  const isInitializedRef = useRef<boolean>(false);
   const isManualTabClickRef = useRef<boolean>(false);
   const lastPrependTimeRef = useRef<number>(0);
-
-  // Reset về vùng đệm ngắn mặc định khi đổi loại bộ lọc
-  useEffect(() => {
-    isInitializedRef.current = false;
-    if (periodType === 'month') setPastBufferCount(12);
-    else if (periodType === 'week') setPastBufferCount(12);
-    else if (periodType === 'day') setPastBufferCount(15);
-    else if (periodType === 'quarter') setPastBufferCount(8);
-    else if (periodType === 'year') setPastBufferCount(5);
-  }, [periodType]);
+  const isUserInteractingRef = useRef<boolean>(false);
+  const userInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>(() => {
     return toLocalMonthKey(currentDate);
@@ -182,14 +173,19 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     const now = new Date();
     if (mode === 'week') {
       setSelectedWeekKey('week_0');
+      setPastBufferCount(12);
     } else if (mode === 'month') {
       setSelectedMonthKey(toLocalMonthKey(now));
+      setPastBufferCount(12);
     } else if (mode === 'quarter') {
       setSelectedQuarterKey('q_curr');
+      setPastBufferCount(8);
     } else if (mode === 'year') {
       setSelectedYearKey('year_curr');
+      setPastBufferCount(6);
     } else if (mode === 'day') {
       setSelectedDayKey(toLocalDateKey(now));
+      setPastBufferCount(15);
     }
   };
 
@@ -198,9 +194,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
 
   const centerActiveTab = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    if (activeTabRef.current && sliderContainerRef.current) {
+    if (sliderContainerRef.current) {
       const container = sliderContainerRef.current;
-      const tab = activeTabRef.current;
+      const tab = activeTabRef.current || (container.querySelector('[data-active="true"]') as HTMLElement | null);
+      if (!tab) return;
       const containerRect = container.getBoundingClientRect();
       const tabRect = tab.getBoundingClientRect();
       if (containerRect.width === 0 || tabRect.width === 0) return;
@@ -231,13 +228,14 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
       centerActiveTab(isManual ? 'smooth' : 'auto');
 
       // Đảm bảo sau khi font chữ và kích thước phần tử render xong vẫn giữ chuẩn tâm
-      const rafId = requestAnimationFrame(() => {
+      const raf1 = requestAnimationFrame(() => {
         centerActiveTab(isManual ? 'smooth' : 'auto');
-        setTimeout(() => {
-          isInitializedRef.current = true;
-        }, 100);
+        const raf2 = requestAnimationFrame(() => {
+          centerActiveTab(isManual ? 'smooth' : 'auto');
+        });
+        return () => cancelAnimationFrame(raf2);
       });
-      return () => cancelAnimationFrame(rafId);
+      return () => cancelAnimationFrame(raf1);
     }
   }, [
     periodType,
@@ -246,6 +244,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
     selectedQuarterKey,
     selectedYearKey,
     selectedDayKey,
+    pastBufferCount,
     centerActiveTab,
   ]);
 
@@ -1302,36 +1301,58 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
           <div className="overflow-hidden border-b border-[#ebdcc9]/60">
             <div
               ref={sliderContainerRef}
+              onTouchStart={() => {
+                isUserInteractingRef.current = true;
+                if (userInteractionTimerRef.current) clearTimeout(userInteractionTimerRef.current);
+              }}
+              onTouchEnd={() => {
+                if (userInteractionTimerRef.current) clearTimeout(userInteractionTimerRef.current);
+                userInteractionTimerRef.current = setTimeout(() => {
+                  isUserInteractingRef.current = false;
+                }, 1000);
+              }}
+              onPointerDown={() => {
+                isUserInteractingRef.current = true;
+                if (userInteractionTimerRef.current) clearTimeout(userInteractionTimerRef.current);
+              }}
+              onPointerUp={() => {
+                if (userInteractionTimerRef.current) clearTimeout(userInteractionTimerRef.current);
+                userInteractionTimerRef.current = setTimeout(() => {
+                  isUserInteractingRef.current = false;
+                }, 1000);
+              }}
               onScroll={(e) => {
                 const el = e.currentTarget;
-                if (!isInitializedRef.current || isPrependingRef.current) return;
+                // Chỉ nạp thêm khi chính người dùng đang chủ động vuốt màn hình
+                if (!isUserInteractingRef.current || isPrependingRef.current) return;
 
-                // Chỉ kích hoạt tải thêm mốc quá khứ khi người dùng thực sự cuộn chạm mép trái (< 80px)
-                if (el.scrollLeft < 80) {
+                // Ngưỡng 260px giúp nạp trước từ xa, KHÔNG BAO GIỜ bị chạm mép 0px gây khựng momentum vuốt
+                if (el.scrollLeft < 260) {
                   const now = Date.now();
-                  if (now - lastPrependTimeRef.current < 250) return;
+                  if (now - lastPrependTimeRef.current < 200) return;
                   lastPrependTimeRef.current = now;
                   prevScrollWidthRef.current = el.scrollWidth;
                   isPrependingRef.current = true;
                   setPastBufferCount((prev) => {
-                    if (periodType === 'day') return Math.min(prev + 10, 365);
+                    if (periodType === 'day') return Math.min(prev + 12, 365);
                     if (periodType === 'week') return Math.min(prev + 8, 150);
                     if (periodType === 'month') return Math.min(prev + 6, 120);
                     if (periodType === 'quarter') return Math.min(prev + 4, 40);
-                    return Math.min(prev + 3, 20);
+                    return Math.min(prev + 4, 30);
                   });
                 }
               }}
-              className="flex items-center gap-7 overflow-x-auto no-scrollbar py-2.5"
+              className="flex items-center gap-7 overflow-x-auto no-scrollbar py-2.5 overscroll-x-contain"
               style={{
-                paddingLeft: 'calc(50% - 60px)',
-                paddingRight: 'calc(50% - 60px)',
+                paddingLeft: 'calc(50% - 36px)',
+                paddingRight: 'calc(50% - 36px)',
               }}
             >
               {timelineSliderTabs.map((tab) => (
                 <button
                   key={tab.key}
                   ref={tab.isActive ? activeTabRef : null}
+                  data-active={tab.isActive ? 'true' : 'false'}
                   type="button"
                   onClick={() => {
                     isManualTabClickRef.current = true;
