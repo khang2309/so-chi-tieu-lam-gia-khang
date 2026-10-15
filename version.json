@@ -1,10 +1,10 @@
 {
-  "version": "2.1.29",
+  "version": "2.1.30",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Khac phuc che giao dien form vi, toi uu thanh truot lich nap them tu xa 320px sieu muot, phat hanh OTA chuan cho may da cai APK",
+  "releaseNotes": "Kiem tra truc quan nang luc native APK, sua loi lech tam va nhay thanh thoi gian, co dinh form vi",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T09:56:41.807Z"
+  "updatedAt": "2026-10-15T10:21:52.595Z"
 }

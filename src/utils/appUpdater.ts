@@ -1,7 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export const BUILTIN_APP_VERSION = '2.1.29';
+export const BUILTIN_APP_VERSION = '2.1.30';
 
 export const GITHUB_VERSION_JSON_URL =
   'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/version.json';
@@ -67,13 +67,70 @@ export function getNativeApkVersion(): string {
   return BUILTIN_APP_VERSION;
 }
 
+export interface NativeCapabilitiesStatus {
+  isAndroidNative: boolean;
+  nativeApkVersion: string;
+  hasNativeUpdater: boolean;
+  hasNotificationListener: boolean;
+  hasHotReloadOta: boolean;
+  missingFeatures: string[];
+  isFullyCapable: boolean;
+}
+
+/**
+ * Kiểm tra trực quan toàn bộ năng lực native hệ điều hành của APK hiện tại trên máy.
+ * Không chỉ dựa vào số phiên bản, hàm này kiểm tra trực tiếp các cầu nối Java/Android runtime.
+ */
+export function inspectNativeCapabilities(): NativeCapabilitiesStatus {
+  const isAndroid = Boolean(window.AndroidUpdater);
+  const nativeVer = getNativeApkVersion();
+  const missing: string[] = [];
+
+  const hasNativeUpdater = Boolean(
+    window.AndroidUpdater &&
+    typeof window.AndroidUpdater.downloadAndInstallApk === 'function' &&
+    typeof window.AndroidUpdater.getNativeApkVersion === 'function'
+  );
+  if (isAndroid && !hasNativeUpdater) {
+    missing.push('Cầu nối cập nhật APK tự động (AndroidUpdater v2)');
+  }
+
+  const hasNotificationListener = Boolean(
+    window.AndroidUpdater &&
+    typeof window.AndroidUpdater.isNotificationPermissionGranted === 'function'
+  );
+  if (isAndroid && !hasNotificationListener) {
+    missing.push('Dịch vụ đọc biến động số dư ngân hàng (NotificationListener)');
+  }
+
+  const hasHotReloadOta = Boolean(
+    window.AndroidUpdater &&
+    typeof window.AndroidUpdater.downloadAndApplyOtaZip === 'function'
+  );
+  if (isAndroid && !hasHotReloadOta) {
+    missing.push('Cơ chế cập nhật OTA siêu tốc (Hot Reload)');
+  }
+
+  return {
+    isAndroidNative: isAndroid,
+    nativeApkVersion: nativeVer,
+    hasNativeUpdater,
+    hasNotificationListener,
+    hasHotReloadOta,
+    missingFeatures: missing,
+    isFullyCapable: !isAndroid || missing.length === 0,
+  };
+}
+
 /**
  * Kiểm tra xem APK gốc trên máy có bị cũ hơn mức yêu cầu tối thiểu không
  */
 export function isNativeApkOutdated(minApkVersion?: string): boolean {
+  const caps = inspectNativeCapabilities();
+  if (!caps.isAndroidNative) return false;
+  if (!caps.isFullyCapable) return true;
   if (!minApkVersion) return false;
-  const native = getNativeApkVersion();
-  return compareSemver(native, minApkVersion) < 0;
+  return compareSemver(caps.nativeApkVersion, minApkVersion) < 0;
 }
 
 /**
@@ -175,20 +232,28 @@ export async function checkAppUpdateFromCloud(): Promise<{
     return { hasUpdate: false, currentVersion };
   }
 
-  // Kiểm tra phiên bản APK gốc trên máy (native APK)
-  const nativeApk = getNativeApkVersion();
-  const needApkFirst =
+  // Kiểm tra toàn diện năng lực native APK trực tiếp trên máy
+  const caps = inspectNativeCapabilities();
+  const isSemverOutdated =
     Boolean(bestRelease.minApkVersion) &&
-    compareSemver(nativeApk, bestRelease.minApkVersion!) < 0;
+    compareSemver(caps.nativeApkVersion, bestRelease.minApkVersion!) < 0;
+
+  // Máy cần cài lại APK nếu:
+  // - Đang chạy Android native nhưng thiếu bất kỳ hàm nền tảng nào
+  // - HOẶC phiên bản APK thấp hơn minApkVersion yêu cầu
+  const needApkFirst = caps.isAndroidNative && (!caps.isFullyCapable || isSemverOutdated);
 
   if (needApkFirst) {
-    // Bắt buộc chuyển sang hình thức APK vì bản gốc trên máy đã quá cũ so với yêu cầu
+    // Bắt buộc chuyển sang hình thức APK vì bản gốc trên máy đã quá cũ hoặc thiếu hàm native
     bestRelease.updateType = 'apk';
     if (bestRelease.apkDownloadUrl) {
       bestRelease.downloadUrl = bestRelease.apkDownloadUrl;
     }
     bestRelease.allowSkip = false;
-    const alertPrefix = `[⚠️ CẦN CÀI ĐẶT LẠI APK GỐC]\nBản cài đặt gốc trên máy của bạn (v${nativeApk}) cần được nâng cấp lên bản APK mới (tối thiểu v${bestRelease.minApkVersion}) trước khi có thể áp dụng các bản cập nhật nhanh OTA tiếp theo.\n\n`;
+    const reasonText = !caps.isFullyCapable
+      ? `Thiếu tính năng nền tảng: ${caps.missingFeatures.join(', ')}`
+      : `Bản cài đặt gốc trên máy (v${caps.nativeApkVersion}) thấp hơn yêu cầu tối thiểu (v${bestRelease.minApkVersion})`;
+    const alertPrefix = `[⚠️ CẦN CÀI ĐẶT LẠI APK GỐC]\n${reasonText}.\nBạn cần cài đặt file APK mới để nâng cấp hệ thống. Sau khi cài xong, mọi bản cập nhật tiếp theo sẽ được tự động nâng cấp qua OTA nhanh trong 2 giây!\n\n`;
     if (!bestRelease.releaseNotes.includes('[⚠️ CẦN CÀI ĐẶT LẠI APK GỐC]')) {
       bestRelease.releaseNotes = alertPrefix + (bestRelease.releaseNotes || '');
     }

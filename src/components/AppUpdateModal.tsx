@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Sparkles,
   Download,
@@ -12,7 +12,7 @@ import {
 import {
   AppReleaseConfig,
   getCurrentRunningVersion,
-  getNativeApkVersion,
+  inspectNativeCapabilities,
   normalizeDownloadUrl,
 } from '../utils/appUpdater';
 
@@ -74,6 +74,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
   if (!isOpen) return null;
 
   const currentVersion = getCurrentRunningVersion();
+  const caps = useMemo(() => inspectNativeCapabilities(), [isOpen]);
   const canSkip = release?.allowSkip !== false;
 
   const handleStartUpdate = () => {
@@ -107,8 +108,8 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
           <div className="flex items-center gap-2.5">
@@ -121,7 +122,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
               </h3>
               <p className="text-xs text-[#7a6a58]">
                 Đang chạy: v{currentVersion}
-                {window.AndroidUpdater ? ` • APK gốc: v${getNativeApkVersion()}` : ''}
+                {window.AndroidUpdater ? ` • APK gốc: v${caps.nativeApkVersion}` : ''}
               </p>
             </div>
           </div>
@@ -140,15 +141,36 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
           {release ? (
             <>
               {release.updateType === 'apk' && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
-                  <Package className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="font-bold text-amber-950">
-                      Bắt buộc cài đặt file APK trước:
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Package className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-amber-950">
+                        Kiểm tra hệ thống: Cần cài đặt lại file APK
+                      </div>
+                      <div className="text-[11px] leading-relaxed text-amber-800 mt-0.5">
+                        Bản cài đặt gốc trên máy của bạn (v{caps.nativeApkVersion}) cần nâng cấp qua APK để tích hợp các tính năng hệ điều hành mới. Sau khi cài bản APK này, các bản cập nhật sau sẽ được nạp qua OTA trong 2 giây!
+                      </div>
                     </div>
-                    <div className="text-[11px] leading-relaxed text-amber-800">
-                      Bản cài đặt gốc trên máy của bạn (v{getNativeApkVersion()}) cần được nâng cấp qua file APK để cập nhật các thành phần hệ điều hành. Sau khi cài xong bản APK này, các bản cập nhật sau sẽ được tự động áp dụng qua OTA nhanh trong 2 giây.
+                  </div>
+                  {caps.missingFeatures.length > 0 && (
+                    <div className="p-2.5 rounded-lg bg-amber-100/60 border border-amber-200/80 text-[11px] space-y-1">
+                      <div className="font-semibold text-amber-950">Tính năng hệ điều hành cần bổ sung:</div>
+                      {caps.missingFeatures.map((feat: string, idx: number) => (
+                        <div key={idx} className="flex items-center gap-1.5 text-amber-900">
+                          <span className="text-amber-600 font-bold">•</span>
+                          <span>{feat}</span>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
+              )}
+              {release.updateType === 'ota' && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
+                  <Zap className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <div className="text-[11px] leading-relaxed text-emerald-800">
+                    <span className="font-bold text-emerald-950">Cập nhật OTA siêu tốc:</span> Thiết bị đã có APK nền tảng (v{caps.nativeApkVersion}), quá trình cập nhật sẽ nạp tức thì trong 2 giây mà không cần cài lại file APK!
                   </div>
                 </div>
               )}

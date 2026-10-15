@@ -133,7 +133,6 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [pastBufferCount, setPastBufferCount] = useState<number>(12);
   const isPrependingRef = useRef<boolean>(false);
   const prevScrollWidthRef = useRef<number>(0);
-  const prevScrollLeftRef = useRef<number>(0);
   const isInitializedRef = useRef<boolean>(false);
   const isManualTabClickRef = useRef<boolean>(false);
   const lastPrependTimeRef = useRef<number>(0);
@@ -412,26 +411,43 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     if (activeTabRef.current && sliderContainerRef.current) {
       const container = sliderContainerRef.current;
       const tab = activeTabRef.current;
-      const tabLeft = tab.offsetLeft;
-      const tabWidth = tab.offsetWidth;
-      const containerWidth = container.offsetWidth;
-      const targetScrollLeft = tabLeft - containerWidth / 2 + tabWidth / 2;
-      container.scrollTo({
-        left: Math.max(0, targetScrollLeft),
-        behavior,
-      });
+      const containerRect = container.getBoundingClientRect();
+      const tabRect = tab.getBoundingClientRect();
+      if (containerRect.width === 0 || tabRect.width === 0) return;
+
+      // Tính khoảng lệch giữa tâm của Tab và tâm của Khung chứa (chuẩn xác từng pixel, miễn nhiễm với margin/padding)
+      const tabCenter = tabRect.left + tabRect.width / 2;
+      const containerCenter = containerRect.left + containerRect.width / 2;
+      const diff = tabCenter - containerCenter;
+
+      if (Math.abs(diff) > 1) {
+        if (behavior === 'auto') {
+          container.scrollLeft += diff;
+        } else {
+          container.scrollTo({
+            left: container.scrollLeft + diff,
+            behavior: 'smooth',
+          });
+        }
+      }
     }
   }, []);
 
   // Tự động căn giữa tab đang chọn ngay trước khi trình duyệt vẽ (chuẩn vị trí ngay từ frame đầu tiên)
   useLayoutEffect(() => {
     if (!isPrependingRef.current) {
-      centerActiveTab(isManualTabClickRef.current ? 'smooth' : 'auto');
+      const isManual = isManualTabClickRef.current;
       isManualTabClickRef.current = false;
-      const timer = setTimeout(() => {
-        isInitializedRef.current = true;
-      }, 150);
-      return () => clearTimeout(timer);
+      centerActiveTab(isManual ? 'smooth' : 'auto');
+
+      // Đảm bảo sau khi font chữ và kích thước phần tử render xong vẫn giữ chuẩn tâm
+      const rafId = requestAnimationFrame(() => {
+        centerActiveTab(isManual ? 'smooth' : 'auto');
+        setTimeout(() => {
+          isInitializedRef.current = true;
+        }, 100);
+      });
+      return () => cancelAnimationFrame(rafId);
     }
   }, [
     filterMode,
@@ -747,7 +763,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       const container = sliderContainerRef.current;
       const deltaWidth = container.scrollWidth - prevScrollWidthRef.current;
       if (deltaWidth > 0) {
-        container.scrollLeft = prevScrollLeftRef.current + deltaWidth;
+        container.scrollLeft += deltaWidth;
       }
       isPrependingRef.current = false;
     }
@@ -1070,21 +1086,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               const el = e.currentTarget;
               if (!isInitializedRef.current || isPrependingRef.current) return;
 
-              const now = Date.now();
-              if (now - lastPrependTimeRef.current < 150) return;
-
-              // Tự động nạp thêm sớm từ xa (cách mép 320px) giúp cuộn mượt mà không khựng
-              if (el.scrollLeft < 320) {
+              // Chỉ kích hoạt tải thêm mốc quá khứ khi người dùng thực sự cuộn chạm mép trái (< 80px)
+              if (el.scrollLeft < 80) {
+                const now = Date.now();
+                if (now - lastPrependTimeRef.current < 250) return;
                 lastPrependTimeRef.current = now;
                 prevScrollWidthRef.current = el.scrollWidth;
-                prevScrollLeftRef.current = el.scrollLeft;
                 isPrependingRef.current = true;
                 setPastBufferCount((prev) => {
-                  if (filterMode === 'day') return Math.min(prev + 15, 365);
-                  if (filterMode === 'week') return Math.min(prev + 10, 150);
-                  if (filterMode === 'month') return Math.min(prev + 12, 120);
-                  if (filterMode === 'quarter') return Math.min(prev + 6, 40);
-                  return Math.min(prev + 4, 20);
+                  if (filterMode === 'day') return Math.min(prev + 10, 365);
+                  if (filterMode === 'week') return Math.min(prev + 8, 150);
+                  if (filterMode === 'month') return Math.min(prev + 6, 120);
+                  if (filterMode === 'quarter') return Math.min(prev + 4, 40);
+                  return Math.min(prev + 3, 20);
                 });
               }
             }}
