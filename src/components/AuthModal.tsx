@@ -30,6 +30,7 @@ export const AuthModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [suggestGoogleAutoLink, setSuggestGoogleAutoLink] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
@@ -110,6 +111,7 @@ export const AuthModal: React.FC = () => {
       return;
     }
     setError(null);
+    setSuggestGoogleAutoLink(false);
     setIsSubmitting(true);
 
     // Lưu mật khẩu người dùng vừa nhập để sẵn sàng tự động liên kết với Google ngầm
@@ -133,7 +135,8 @@ export const AuthModal: React.FC = () => {
         msg.includes('wrong-password') ||
         msg.includes('invalid-credential')
       ) {
-        msg = 'Email hoặc mật khẩu chưa khớp. Nếu bạn đã từng đăng nhập bằng Google, bạn chỉ cần bấm nút "Đăng nhập nhanh bằng Google" ở trên 1 lần, hệ thống sẽ tự động kết nối mật khẩu này cho bạn!';
+        setSuggestGoogleAutoLink(true);
+        msg = 'Email hoặc mật khẩu chưa khớp. Nếu bạn đã từng đăng nhập bằng Google, bấm nút đỏ bên dưới để vào app và kích hoạt mật khẩu này ngay lập tức!';
       } else if (msg.includes('email-already-in-use')) {
         msg = 'Email này đã được đăng ký trước đó. Vui lòng bấm Đăng nhập.';
       } else if (msg.includes('weak-password')) {
@@ -192,9 +195,24 @@ export const AuthModal: React.FC = () => {
           )}
 
           {error && (
-            <div className="p-3 rounded-xl bg-[#fee2e2] border border-[#fca5a5] flex items-start gap-2 text-xs text-[#991b1b]">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="p-3 rounded-xl bg-[#fee2e2] border border-[#fca5a5] space-y-2 text-xs text-[#991b1b]">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{error}</span>
+              </div>
+              {suggestGoogleAutoLink && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuggestGoogleAutoLink(false);
+                    handleGoogleSignIn();
+                  }}
+                  disabled={isGoogleSubmitting}
+                  className="w-full py-2 px-3 rounded-lg bg-[#b91c1c] hover:bg-[#991b1b] text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer active:scale-95"
+                >
+                  <span>👉 Bấm vào đây để Đăng nhập Google & Kích hoạt mật khẩu ngay</span>
+                </button>
+              )}
             </div>
           )}
 
