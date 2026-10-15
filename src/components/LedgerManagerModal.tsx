@@ -223,41 +223,42 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
               </div>
 
               {/* Icon & Color selector */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2.5 pt-1">
                 <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
+                  <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
                     Biểu tượng sổ:
                   </label>
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {availableIcons.map((ic) => (
                       <button
                         type="button"
                         key={ic.name}
                         onClick={() => setIcon(ic.name)}
-                        className={`p-1.5 rounded-md border transition ${
+                        className={`w-8 h-8 rounded-lg border transition flex items-center justify-center cursor-pointer ${
                           icon === ic.name
-                            ? 'bg-[#3e332a] text-white border-[#3e332a]'
-                            : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9]'
+                            ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
+                            : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
                         }`}
+                        title={ic.label}
                       >
-                        <DynamicIcon name={ic.name} className="w-3.5 h-3.5" />
+                        <DynamicIcon name={ic.name} className="w-4 h-4" />
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-[#7a6a58]">
+                  <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
                     Màu bìa sổ:
                   </label>
-                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     {availableColors.map((cl) => (
                       <button
                         type="button"
                         key={cl}
                         onClick={() => setColor(cl)}
-                        className={`w-5 h-5 rounded-full border transition ${
-                          color === cl ? 'ring-2 ring-[#3e332a] scale-110' : ''
+                        className={`w-6 h-6 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
+                          color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
                         }`}
                         style={{ backgroundColor: cl }}
                       />

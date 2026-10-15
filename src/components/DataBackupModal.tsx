@@ -435,6 +435,11 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     const perm = isNotificationPermissionGranted();
                     setNotifPermGranted(perm);
                     window.AndroidUpdater?.triggerActiveNotificationsScan?.();
+                    window.dispatchEvent(
+                      new CustomEvent('show-app-toast', {
+                        detail: 'Đang làm mới trạng thái & quét lại thông báo trên máy...',
+                      })
+                    );
                     setTimeout(() => {
                       setIsListenerConnected(Boolean(window.AndroidUpdater?.isListenerConnected?.()));
                       setNotifHistory(getBankNotifHistoryLog());
@@ -443,7 +448,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     }, 500);
                   }}
                   className="p-2 rounded-lg border border-[#d8c8b4] bg-[#fbf5eb] text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer"
-                  title="Quét lại thông báo đang có trên máy"
+                  title="Làm mới trạng thái & Quét lại thông báo trên máy"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>

@@ -1,8 +1,8 @@
 {
-  "version": "2.1.20",
-  "updateType": "apk",
-  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Xoa hoan toan du lieu mau ban dau: Tai app lan dau sach 100% (0 vi, 0 so, 0 giao dich) - Cho phep xoa vi hoac so cuoi cung neu muon xoa sach danh sach",
+  "version": "2.1.21",
+  "updateType": "ota",
+  "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
+  "releaseNotes": "- Khac phuc loi bieu tuong so va mau bia so bi de chong lan - Toi uu giao dien chon icon va mau sac vi, so tren dien thoai",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T03:59:35.966Z"
+  "updatedAt": "2026-10-15T04:07:02.279Z"
 }
