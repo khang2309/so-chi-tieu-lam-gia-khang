@@ -67,6 +67,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  const autoLinkCachedPassword = async (targetUser: User | null) => {
+    if (!targetUser || !targetUser.email) return;
+    try {
+      const savedPass = localStorage.getItem('sochitieu_saved_pwd_for_link');
+      if (!savedPass) return;
+      const cred = EmailAuthProvider.credential(targetUser.email, savedPass);
+      try {
+        await linkWithCredential(targetUser, cred);
+        console.log('⚡ [AutoLink] Tự động liên kết mật khẩu vào tài khoản Google thành công!');
+      } catch (linkErr: any) {
+        if (linkErr?.code === 'auth/provider-already-linked') {
+          try {
+            await updatePassword(targetUser, savedPass);
+          } catch {}
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi autoLinkCachedPassword:', e);
+    }
+  };
+
   // Lắng nghe Firebase Auth State
   useEffect(() => {
     if (!isFirebaseConfigured || !auth) {
@@ -74,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setLoading(false);
       if (currentUser) {
@@ -83,6 +104,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem(STORAGE_OFFLINE_KEY);
           localStorage.removeItem('user_is_logged_out');
         } catch {}
+        // Tự động liên kết mật khẩu ngầm nếu trước đó người dùng có lưu mật khẩu
+        await autoLinkCachedPassword(currentUser);
       }
     });
 
@@ -95,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem('sochitieu_saved_pwd_for_link', pass);
     } catch {}
     await signInWithEmailAndPassword(auth, email, pass);
     try {
@@ -110,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem('sochitieu_saved_pwd_for_link', pass);
     } catch {}
     await createUserWithEmailAndPassword(auth, email, pass);
     try {
@@ -160,6 +185,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         await signInWithPopup(auth, provider);
+        // Tự động liên kết ngầm mật khẩu nếu trước đó người dùng từng nhập mật khẩu
+        await autoLinkCachedPassword(auth.currentUser);
         try {
           localStorage.removeItem('user_is_logged_out');
           localStorage.setItem('hasSeenLoginPopup', 'true');
@@ -183,6 +210,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const credential = GoogleAuthProvider.credential(idToken);
       await signInWithCredential(auth, credential);
+      // Tự động liên kết ngầm mật khẩu nếu trước đó người dùng từng nhập mật khẩu
+      await autoLinkCachedPassword(auth.currentUser);
       try {
         localStorage.removeItem('user_is_logged_out');
         localStorage.setItem('hasSeenLoginPopup', 'true');

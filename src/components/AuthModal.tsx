@@ -112,6 +112,11 @@ export const AuthModal: React.FC = () => {
     setError(null);
     setIsSubmitting(true);
 
+    // Lưu mật khẩu người dùng vừa nhập để sẵn sàng tự động liên kết với Google ngầm
+    try {
+      localStorage.setItem('sochitieu_saved_pwd_for_link', cleanPassword);
+    } catch {}
+
     try {
       if (mode === 'login') {
         await loginWithEmail(cleanEmail, cleanPassword);
@@ -128,7 +133,7 @@ export const AuthModal: React.FC = () => {
         msg.includes('wrong-password') ||
         msg.includes('invalid-credential')
       ) {
-        msg = 'Email hoặc mật khẩu không chính xác. Nếu trước đó bạn đã từng đăng nhập bằng Google, hãy bấm "Đăng nhập nhanh bằng Google" hoặc bấm "Quên mật khẩu" bên dưới để đặt mật khẩu.';
+        msg = 'Email hoặc mật khẩu chưa khớp. Nếu bạn đã từng đăng nhập bằng Google, bạn chỉ cần bấm nút "Đăng nhập nhanh bằng Google" ở trên 1 lần, hệ thống sẽ tự động kết nối mật khẩu này cho bạn!';
       } else if (msg.includes('email-already-in-use')) {
         msg = 'Email này đã được đăng ký trước đó. Vui lòng bấm Đăng nhập.';
       } else if (msg.includes('weak-password')) {
