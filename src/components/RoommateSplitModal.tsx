@@ -31,24 +31,20 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
   onAddTransaction,
   onAddBatchTransactions,
 }) => {
-  // Toàn bộ các con số đều để rỗng "" mặc định theo yêu cầu
-  const [roomRent, setRoomRent] = useState<number | ''>('');
+  // ---- Trường tiền (string) — tự định dạng dấu chấm mỗi 3 chữ số ----
+  const [roomRent, setRoomRent] = useState<string>('');
+  const [electricPrice, setElectricPrice] = useState<string>('');
+  const [waterPrice, setWaterPrice] = useState<string>('');
+  const [internetFee, setInternetFee] = useState<string>('');
+  const [garbageFee, setGarbageFee] = useState<string>('');
 
-  // Điện
+  // ---- Chỉ số đồng hồ (number) — không cần định dạng ----
   const [electricOld, setElectricOld] = useState<number | ''>('');
   const [electricNew, setElectricNew] = useState<number | ''>('');
-  const [electricPrice, setElectricPrice] = useState<number | ''>('');
-
-  // Nước
   const [waterOld, setWaterOld] = useState<number | ''>('');
   const [waterNew, setWaterNew] = useState<number | ''>('');
-  const [waterPrice, setWaterPrice] = useState<number | ''>('');
 
-  // Wifi & Rác
-  const [internetFee, setInternetFee] = useState<number | ''>('');
-  const [garbageFee, setGarbageFee] = useState<number | ''>('');
-
-  // Số người chia tiền (mặc định 1 người)
+  // Số người chia tiền
   const [roommatesCount, setRoommatesCount] = useState<number>(1);
 
   // Sổ và Ví
@@ -60,12 +56,50 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
     wallets[0]?.id || ''
   );
 
+  // maxHeight điều chỉnh theo visualViewport (tránh bàn phím ảo che footer)
+  const [modalMaxHeight, setModalMaxHeight] = useState<string>(
+    'calc(100dvh - env(safe-area-inset-top, 0px) - 8px)'
+  );
+
+  // ---- Helpers định dạng số tiền VN ----
+  const formatNum = (val: string): string =>
+    val.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const parseNum = (val: string): number => Number(val.replace(/\./g, '')) || 0;
+
+  // ---- Cập nhật sổ + ví khi mở modal ----
   useEffect(() => {
     if (isOpen) {
       const roomL = ledgers.find((l) => l.id === 'ledger-room') || ledgers[0];
       setSelectedLedgerId(roomL?.id || '');
+      // Ưu tiên: MoMo > MB Bank > ví đầu tiên
+      const preferredWallet =
+        wallets.find(
+          (w) =>
+            w.name?.toLowerCase().includes('momo') ||
+            w.name?.toLowerCase().includes('mb')
+        ) || wallets[0];
+      setSelectedWalletId(preferredWallet?.id || '');
     }
-  }, [isOpen, ledgers]);
+  }, [isOpen, ledgers, wallets]);
+
+  // ---- Lắng nghe visualViewport để tránh bàn phím che modal ----
+  useEffect(() => {
+    if (!isOpen) return;
+    const vv = window.visualViewport;
+    const updateHeight = () => {
+      if (vv) {
+        // Chừa 8px padding ở trên để không sát mép màn hình
+        setModalMaxHeight(`${vv.height - 8}px`);
+      }
+    };
+    updateHeight();
+    vv?.addEventListener('resize', updateHeight);
+    vv?.addEventListener('scroll', updateHeight);
+    return () => {
+      vv?.removeEventListener('resize', updateHeight);
+      vv?.removeEventListener('scroll', updateHeight);
+    };
+  }, [isOpen]);
 
   const selectedLedger = ledgers.find((l) => l.id === selectedLedgerId) || defaultRoomLedger;
 
@@ -74,16 +108,16 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Tính toán
-  const numRoomRent = Number(roomRent) || 0;
+  // ---- Tính toán ----
+  const numRoomRent = parseNum(roomRent);
   const numElectricOld = Number(electricOld) || 0;
   const numElectricNew = Number(electricNew) || 0;
-  const numElectricPrice = Number(electricPrice) || 0;
+  const numElectricPrice = parseNum(electricPrice);
   const numWaterOld = Number(waterOld) || 0;
   const numWaterNew = Number(waterNew) || 0;
-  const numWaterPrice = Number(waterPrice) || 0;
-  const numInternetFee = Number(internetFee) || 0;
-  const numGarbageFee = Number(garbageFee) || 0;
+  const numWaterPrice = parseNum(waterPrice);
+  const numInternetFee = parseNum(internetFee);
+  const numGarbageFee = parseNum(garbageFee);
 
   const electricKwh = Math.max(0, numElectricNew - numElectricOld);
   const totalElectric = electricKwh * numElectricPrice;
@@ -210,8 +244,9 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full sm:max-w-lg sm:m-3 rounded-t-2xl sm:rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg flex flex-col"
-        style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - 8px)' }}
+      <div
+        className="relative w-full sm:max-w-lg sm:m-3 rounded-t-2xl sm:rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg flex flex-col"
+        style={{ maxHeight: modalMaxHeight }}
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] rounded-t-2xl shrink-0">
@@ -238,7 +273,6 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
 
         {/* Content Body — scrollable, grows between header and footer */}
         <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
-          {/* ===== phần nội dung giữ nguyên, không đổi bất cứ thứ gì ===== */}
           {/* Room Rent */}
           <div className="p-3 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-1.5">
             <div className="flex items-center justify-between">
@@ -251,9 +285,10 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
               </span>
             </div>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={roomRent}
-              onChange={(e) => setRoomRent(e.target.value === '' ? '' : Number(e.target.value))}
+              onChange={(e) => setRoomRent(formatNum(e.target.value))}
               placeholder="Nhập tiền phòng..."
               className="w-full px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] focus:outline-none focus:border-[#a25832]"
             />
@@ -275,6 +310,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 <span className="text-[10px] text-[#7a6a58]">Số cũ:</span>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={electricOld}
                   onChange={(e) => setElectricOld(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="0"
@@ -285,6 +321,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 <span className="text-[10px] text-[#7a6a58]">Số mới:</span>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={electricNew}
                   onChange={(e) => setElectricNew(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="0"
@@ -294,10 +331,11 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
               <div>
                 <span className="text-[10px] text-[#7a6a58]">Đơn giá/kWh:</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={electricPrice}
-                  onChange={(e) => setElectricPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="3500"
+                  onChange={(e) => setElectricPrice(formatNum(e.target.value))}
+                  placeholder="3.500"
                   className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
                 />
               </div>
@@ -320,6 +358,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 <span className="text-[10px] text-[#7a6a58]">Chỉ số cũ:</span>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={waterOld}
                   onChange={(e) => setWaterOld(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="0"
@@ -330,6 +369,7 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 <span className="text-[10px] text-[#7a6a58]">Chỉ số mới:</span>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={waterNew}
                   onChange={(e) => setWaterNew(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="0"
@@ -339,10 +379,11 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
               <div>
                 <span className="text-[10px] text-[#7a6a58]">Đơn giá/khối:</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={waterPrice}
-                  onChange={(e) => setWaterPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="25000"
+                  onChange={(e) => setWaterPrice(formatNum(e.target.value))}
+                  placeholder="25.000"
                   className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
                 />
               </div>
@@ -357,9 +398,10 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
                 Tiền Wifi / Mạng
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={internetFee}
-                onChange={(e) => setInternetFee(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) => setInternetFee(formatNum(e.target.value))}
                 placeholder="0"
                 className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
               />
@@ -367,12 +409,13 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
             <div className="p-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] space-y-1">
               <label className="text-[11px] font-semibold text-[#3e332a] flex items-center gap-1">
                 <Receipt className="w-3.5 h-3.5 text-[#6b7280]" />
-                Rác & Dịch vụ
+                Rác &amp; Dịch vụ
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={garbageFee}
-                onChange={(e) => setGarbageFee(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) => setGarbageFee(formatNum(e.target.value))}
                 placeholder="0"
                 className="w-full px-2 py-1 rounded bg-[#fffdfa] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a]"
               />
