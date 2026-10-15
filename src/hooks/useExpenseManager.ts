@@ -157,6 +157,7 @@ export function useExpenseManager() {
   const deletedWalletIdsRef = useRef<Set<string>>(new Set());
   const deletedLedgerIdsRef = useRef<Set<string>>(new Set());
   const deletedCategoryIdsRef = useRef<Set<string>>(new Set());
+  const resetPromiseRef = useRef<Promise<void> | null>(null);
 
   // Hàm kéo ngay lập tức toàn bộ dữ liệu từ Cloud về và cập nhật vào State qua 2-Way Delta Diff Sync
   const fetchAndSyncUserData = async (targetUid?: string) => {
@@ -168,6 +169,12 @@ export function useExpenseManager() {
   // Hàm tự động đồng bộ 2 chiều (Auto-Sync) ngầm khi đăng nhập (Delta Diff Sync Siêu Tốc)
   const runAutoSync = async (uid: string) => {
     if (autoSyncRunningRef.current) return;
+    if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
+    if (resetPromiseRef.current) {
+      try {
+        await resetPromiseRef.current;
+      } catch (_) {}
+    }
     if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
     autoSyncRunningRef.current = true;
     setIsAutoSyncing(true);
@@ -864,18 +871,11 @@ export function useExpenseManager() {
         'Bạn có chắc chắn muốn ĐẶT LẠI TẤT CẢ? Toàn bộ giao dịch, ví tiền và sổ chi tiêu sẽ bị xóa sạch hoàn toàn (không còn ví hay sổ nào).'
       )
     ) {
-      const uid = auth.currentUser?.uid;
-      if (uid) {
-        try {
-          await clearAllUserFirestoreData(uid);
-        } catch (_) {}
-      }
-
       deletedWalletIdsRef.current.clear();
       deletedLedgerIdsRef.current.clear();
       deletedCategoryIdsRef.current.clear();
 
-      // Reset hoàn toàn: 0 giao dịch, 0 ví, 0 sổ
+      // Reset hoàn toàn NGAY LẬP TỨC (0ms phản hồi): 0 giao dịch, 0 ví, 0 sổ
       setTransactions([]);
       setWallets([]);
       setLedgers([]);
@@ -899,6 +899,21 @@ export function useExpenseManager() {
           detail: 'Đã đặt lại thành công: Đã xóa sạch toàn bộ ví, sổ và giao dịch!',
         })
       );
+
+      // Xóa đồng thời trên Firestore Cloud ở chế độ chạy ngầm (không làm đơ/chậm giao diện)
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        const wipePromise = clearAllUserFirestoreData(uid)
+          .catch((err) => {
+            console.warn('Lỗi khi xóa dữ liệu ngầm trên Firestore:', err);
+          })
+          .finally(() => {
+            if (resetPromiseRef.current === wipePromise) {
+              resetPromiseRef.current = null;
+            }
+          });
+        resetPromiseRef.current = wipePromise;
+      }
     }
   };
 
@@ -968,6 +983,14 @@ export function useExpenseManager() {
       alert('Lỗi Firebase: ' + msg);
       return { success: false, count: 0, message: msg };
     }
+
+    // Nếu có tiến trình Đặt lại đang xóa ngầm trên Cloud, đợi nó hoàn tất để không đồng bộ dữ liệu cũ
+    if (resetPromiseRef.current) {
+      try {
+        await resetPromiseRef.current;
+      } catch (_) {}
+    }
+
     const res = await performTwoWaySync(auth.currentUser.uid, {
       transactions,
       wallets,
@@ -981,6 +1004,15 @@ export function useExpenseManager() {
       setWallets(res.mergedData.wallets);
       setLedgers(res.mergedData.ledgers);
       setCategories(res.mergedData.categories);
+
+      if (res.mergedData.ledgers.length === 0) {
+        setActiveLedgerId('all');
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_LEDGER, 'all');
+      }
+      if (res.mergedData.wallets.length === 0) {
+        setActiveWalletId('all');
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_WALLET, 'all');
+      }
 
       localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(res.mergedData.transactions));
       localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(res.mergedData.wallets));

@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Transaction, Wallet, Ledger, Category } from '../types';
-import { DEFAULT_WALLETS, DEFAULT_LEDGERS, DEFAULT_CATEGORIES } from '../data/initialData';
+import { DEFAULT_CATEGORIES } from '../data/initialData';
 
 /**
  * Sạch hóa dữ liệu tuyệt đối (Deep Sanitize):
@@ -154,27 +154,18 @@ export async function performTwoWaySync(
     mergedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     // Đối với Ví, Sổ, Danh mục:
-    // - Khi vừa đăng nhập (preferCloudLists = true): Nếu Cloud đã có dữ liệu (> 0), ưu tiên danh sách trên Cloud
-    //   để không bao giờ khôi phục nhầm các Ví/Sổ mặc định đã bị người dùng xóa trước đó.
-    // - Khi đang đăng nhập và bấm Đồng bộ thủ công (preferCloudLists = false): Lấy danh sách hiện tại trên máy làm chuẩn
-    //   và xóa các Ví/Sổ thừa trên Cloud.
+    // - Khi vừa đăng nhập hoặc mở app (preferCloudLists = true): Nếu Cloud đã có dữ liệu (> 0), ưu tiên danh sách trên Cloud.
+    // - Khi người dùng bấm Đồng bộ thủ công (preferCloudLists = false): Lấy danh sách hiện tại trên máy làm chuẩn.
+    // Tuyệt đối không fallback về DEFAULT_WALLETS hay DEFAULT_LEDGERS để không tự ý hồi sinh dữ liệu mẫu khi người dùng đã Đặt lại / Xóa hết.
     const mergedWallets =
       preferCloudLists && cloudWallets.length > 0
         ? cloudWallets
-        : cleanLocalData.wallets.length > 0
-        ? cleanLocalData.wallets
-        : cloudWallets.length > 0
-        ? cloudWallets
-        : DEFAULT_WALLETS;
+        : cleanLocalData.wallets;
 
     const mergedLedgers =
       preferCloudLists && cloudLedgers.length > 0
         ? cloudLedgers
-        : cleanLocalData.ledgers.length > 0
-        ? cleanLocalData.ledgers
-        : cloudLedgers.length > 0
-        ? cloudLedgers
-        : DEFAULT_LEDGERS;
+        : cleanLocalData.ledgers;
 
     const mergedCategories =
       preferCloudLists && cloudCategories.length > 0
@@ -663,30 +654,36 @@ export async function uploadAllLocalDataToFirestore(
 /**
  * Xóa sạch toàn bộ dữ liệu người dùng trên Firestore Cloud:
  * Giao dịch (transactions), Ví tiền (wallets), Sổ chi tiêu (ledgers).
+ * Chạy song song Promise.all qua từng collection và từng batch để xóa siêu tốc trong vài trăm mili-giây.
  */
 export async function clearAllUserFirestoreData(uid: string): Promise<void> {
-  if (!db || !uid) return;
+  const firestore = db;
+  if (!firestore || !uid) return;
   try {
     const collections = ['transactions', 'wallets', 'ledgers'];
-    for (const collName of collections) {
-      const snap = await getDocs(collection(db, 'users', uid, collName));
-      if (!snap.empty) {
-        let batch = writeBatch(db);
-        let count = 0;
-        for (const docSnap of snap.docs) {
-          batch.delete(docSnap.ref);
-          count++;
-          if (count === 450) {
-            await batch.commit();
-            batch = writeBatch(db);
-            count = 0;
+    await Promise.all(
+      collections.map(async (collName) => {
+        const snap = await getDocs(collection(firestore, 'users', uid, collName));
+        if (!snap.empty) {
+          const commitPromises: Promise<void>[] = [];
+          let batch = writeBatch(firestore);
+          let count = 0;
+          for (const docSnap of snap.docs) {
+            batch.delete(docSnap.ref);
+            count++;
+            if (count === 450) {
+              commitPromises.push(batch.commit());
+              batch = writeBatch(firestore);
+              count = 0;
+            }
           }
+          if (count > 0) {
+            commitPromises.push(batch.commit());
+          }
+          await Promise.all(commitPromises);
         }
-        if (count > 0) {
-          await batch.commit();
-        }
-      }
-    }
+      })
+    );
   } catch (err) {
     console.warn('Lỗi khi xóa sạch dữ liệu trên Firestore:', err);
   }

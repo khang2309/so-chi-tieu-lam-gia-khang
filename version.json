@@ -1,8 +1,8 @@
 {
-  "version": "2.1.18",
+  "version": "2.1.19",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
-  "releaseNotes": "- Khắc phục lỗi biến động số dư tự lưu thành Giữ xe (tự động nhận diện chuẩn danh mục hoặc Chi tiêu khác)\n- Thêm nút Xóa tất cả trong khay biến động số dư mới\n- Nâng cấp tính năng Đặt lại trong Cài đặt: Reset sạch hoàn toàn toàn bộ ví, sổ và giao dịch",
+  "releaseNotes": "- Tối ưu phản hồi Đặt lại ngay lập tức (0ms delay) - Sửa lỗi Đồng bộ tự động nạp lại ví và sổ dữ liệu mẫu sau khi đặt lại",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T03:10:53.836Z"
+  "updatedAt": "2026-10-15T03:44:55.681Z"
 }
