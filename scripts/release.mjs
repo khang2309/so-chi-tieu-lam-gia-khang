@@ -10,17 +10,39 @@ const appUpdaterPath = path.join(rootDir, 'src', 'utils', 'appUpdater.ts');
 const args = process.argv.slice(2);
 const isForceApk = args.includes('--force-apk');
 const isApkMode = args.includes('--apk') || isForceApk;
-const customNotesArg = args.find((a) => !a.startsWith('--'));
 
-// 1. Đọc phiên bản hiện tại và tự động tăng thêm +0.0.1
+// Nhận tham số --version=<ver> hoặc --version <ver> nếu người dùng muốn chỉ định phiên bản
+const versionFlagIndex = args.findIndex((a) => a === '--version' || a.startsWith('--version='));
+let targetVersion = null;
+if (versionFlagIndex !== -1) {
+  const arg = args[versionFlagIndex];
+  if (arg.startsWith('--version=')) {
+    targetVersion = arg.split('=')[1].trim();
+  } else if (args[versionFlagIndex + 1] && !args[versionFlagIndex + 1].startsWith('--')) {
+    targetVersion = args[versionFlagIndex + 1].trim();
+  }
+}
+
+const customNotesArg = args.find((a, idx) => {
+  if (a.startsWith('--')) return false;
+  if (versionFlagIndex !== -1 && idx === versionFlagIndex + 1 && !args[versionFlagIndex].startsWith('--version=')) {
+    return false;
+  }
+  return true;
+});
+
+// 1. Đọc phiên bản hiện tại hoặc dùng version được chỉ định
 const currentConfig = JSON.parse(fs.readFileSync(versionJsonPath, 'utf8'));
-const parts = (currentConfig.version || '2.1.0')
-  .replace(/^v/i, '')
-  .split('.')
-  .map((n) => parseInt(n, 10) || 0);
-while (parts.length < 3) parts.push(0);
-parts[2] += 1;
-const nextVersion = parts.join('.');
+let nextVersion = targetVersion;
+if (!nextVersion) {
+  const parts = (currentConfig.version || '2.1.0')
+    .replace(/^v/i, '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+  parts[2] += 1;
+  nextVersion = parts.join('.');
+}
 
 const defaultNotes =
   '- Thêm tính năng chọn và đổi ví mặc định khi ghi chép giao dịch\n' +
@@ -70,10 +92,11 @@ if (isApkMode) {
   console.log('🤖 Đang đồng bộ và biên dịch Android APK (Cách 2: APK)...');
   execSync('npx cap sync', { stdio: 'inherit' });
   execSync('.\\gradlew.bat assembleDebug', { cwd: path.join(rootDir, 'android'), stdio: 'inherit' });
-  fs.copyFileSync(
-    path.join(rootDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
-    path.join(rootDir, 'app-debug.apk')
-  );
+  const builtApk = path.join(rootDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+  fs.copyFileSync(builtApk, path.join(rootDir, 'app-debug.apk'));
+  const namedApkName = `so-chi-tieu-${nextVersion}.apk`;
+  fs.copyFileSync(builtApk, path.join(rootDir, namedApkName));
+  console.log(`📱 Đã xuất file APK: ${namedApkName} & app-debug.apk`);
 } else {
   console.log('⚡ Đang đồng bộ tài nguyên giao diện cho Android (Cách 1: OTA Nhanh)...');
   execSync('npx cap copy web', { stdio: 'inherit' });
@@ -104,6 +127,10 @@ try {
   execSync('git add -f ota-bundle.zip', { stdio: 'inherit' });
   if (isApkMode) {
     execSync('git add -f app-debug.apk', { stdio: 'inherit' });
+    const namedApkName = `so-chi-tieu-${nextVersion}.apk`;
+    if (fs.existsSync(path.join(rootDir, namedApkName))) {
+      execSync(`git add -f "${namedApkName}"`, { stdio: 'inherit' });
+    }
   }
   execSync(`git commit -m "chore(release): publish update v${nextVersion} (${isApkMode ? 'APK' : 'OTA'})"`, {
     stdio: 'inherit',

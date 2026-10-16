@@ -1,10 +1,10 @@
 {
-  "version": "2.1.53",
+  "version": "4.0",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Khắc phục triệt để lỗi phải bấm Đặt lại 2 lần: chặn xung đột Firestore Snapshot hồi sinh dữ liệu khi đang xóa\n- Đảm bảo 1 chạm Đặt lại duy nhất xóa sạch 100% Giao dịch, Ví tiền, Sổ chi tiêu cả ở máy lẫn trên Cloud",
+  "releaseNotes": "Phát hành phiên bản chính thức 4.0 - Sổ Chi Tiêu. Tự động bảo vệ dữ liệu khi đăng nhập, tối ưu tính năng đặt lại 1 chạm, hoàn thiện giao diện.",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T10:21:09.474Z"
+  "updatedAt": "2026-10-16T10:32:06.394Z"
 }
