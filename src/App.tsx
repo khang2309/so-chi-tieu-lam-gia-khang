@@ -680,17 +680,6 @@ export function App() {
         </div>
       </nav>
 
-      {/* Floating Action Button on Desktop */}
-      <div className="hidden sm:flex fixed bottom-6 right-6 z-30 items-center gap-2.5">
-        <button
-          onClick={handleOpenNewTransaction}
-          className="px-5 py-3 rounded-full bg-[#a25832] hover:bg-[#8c4623] active:scale-95 text-white font-semibold text-sm shadow-paper-lg transition flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Ghi chép mới</span>
-        </button>
-      </div>
-
       {/* Modals */}
       <TransactionModal
         isOpen={isTransactionModalOpen}

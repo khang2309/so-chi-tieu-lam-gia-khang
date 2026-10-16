@@ -15,6 +15,7 @@ import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
 import { sanitizeData } from '../utils/firestoreSync';
 import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
+import { DynamicIcon } from './DynamicIcon';
 import {
   formatExpressionWithDots,
   evaluateMathExpression,
@@ -128,7 +129,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
@@ -270,24 +271,43 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
             />
           </div>
 
-          {/* 4. Danh mục (nếu không phải chuyển tiền) */}
+          {/* 4. Danh mục (nếu không phải chuyển tiền) - Dạng lưới icon chuẩn TransactionModal */}
           {type !== 'transfer' && (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#7a6a58] flex items-center gap-1">
                 <Tag className="w-3.5 h-3.5 text-[#7a6a58]" />
-                <span>Danh mục:</span>
+                <span>Danh mục <span className="text-[#b94a3b]">*</span></span>
               </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-semibold text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-              >
-                {filteredCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1 border border-[#ebdcc9] rounded-xl bg-[#fbf5eb]/60">
+                {filteredCategories.map((cat) => {
+                  const isSelected = categoryId === cat.id;
+                  return (
+                    <button
+                      type="button"
+                      key={cat.id}
+                      onClick={() => {
+                        setCategoryId(cat.id);
+                        setShowKeypad(false);
+                      }}
+                      className={`p-2 rounded-xl border text-center transition flex flex-col items-center gap-1 cursor-pointer ${
+                        isSelected
+                          ? 'border-[#a25832] bg-[#fffdfa] ring-2 ring-[#a25832]'
+                          : 'border-transparent hover:bg-[#f5ebe0]'
+                      }`}
+                    >
+                      <span
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
+                        style={{ backgroundColor: cat.color }}
+                      >
+                        <DynamicIcon name={cat.icon} className="w-4 h-4" />
+                      </span>
+                      <span className="text-[11px] font-medium text-[#3e332a] truncate w-full">
+                        {cat.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

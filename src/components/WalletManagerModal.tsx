@@ -185,311 +185,302 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
-              <WalletIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-[#3e332a]">
-                Quản Lý Nguồn Tiền & Ví
-              </h3>
-              <p className="text-xs text-[#7a6a58]">
-                Tiền mặt, Ngân hàng, Ví điện tử
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-          {/* Action Toolbar */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-[#7a6a58]">
-              Danh sách ví hiện có ({wallets.length})
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  onClose();
-                  onOpenTransferModal();
-                }}
-                className="px-2.5 py-1.5 rounded-lg border border-[#ebdcc9] bg-[#fbf5eb] text-xs font-medium text-[#7a6a58] hover:text-[#3e332a] transition flex items-center gap-1"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5 text-[#a25832]" />
-                <span>Chuyển tiền</span>
-              </button>
-              {!isAdding && !editingWallet && (
+        {isAdding || editingWallet ? (
+          <>
+            {/* Header cho Form Thêm/Sửa Ví */}
+            <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={handleStartAdd}
-                  className="px-3 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs"
+                  type="button"
+                  onClick={() => {
+                    setIsAdding(false);
+                    setEditingWallet(null);
+                    setShowKeypad(false);
+                  }}
+                  className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Thêm ví mới</span>
+                  <X className="w-5 h-5" />
                 </button>
-              )}
+                <h3 className="text-base font-bold text-[#3e332a]">
+                  {editingWallet ? `Chỉnh sửa ví: ${editingWallet.name}` : 'Thêm Ví / Nguồn tiền mới'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-4 py-1.5 rounded-xl bg-[#2e7d32] text-white text-xs font-bold hover:bg-[#256629] active:scale-95 transition shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <Check className="w-4 h-4" />
+                <span>{editingWallet ? 'Lưu' : 'Thêm'}</span>
+              </button>
             </div>
-          </div>
 
-          {/* Add / Edit Form Modal (Chuẩn hóa đồng bộ giao diện như TransactionModal) */}
-          {(isAdding || editingWallet) && (
-            <div className="fixed inset-0 z-60 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col">
-                {/* Header cố định */}
-                <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
-                  <div className="flex items-center gap-2">
+            {/* Form Body (Scrollable) */}
+            <form
+              onSubmit={handleSave}
+              className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 overscroll-contain"
+            >
+              {/* 1. Amount Input (Money Lover Style) */}
+              <div className="pt-1 pb-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] flex items-center gap-1.5">
+                    <span>{editingWallet ? 'Số dư hiện tại' : 'Số dư ban đầu'} (VNĐ)</span>
+                    <span className="text-[#b94a3b]">*</span>
+                    {editingWallet && (
+                      <span className="text-[10px] text-amber-700 font-normal lowercase">
+                        (tự cân đối)
+                      </span>
+                    )}
+                  </label>
+                  {!showKeypad && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsAdding(false);
-                        setEditingWallet(null);
-                        setShowKeypad(false);
-                      }}
-                      className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                    <h3 className="text-base font-bold text-[#3e332a]">
-                      {editingWallet ? `Chỉnh sửa ví: ${editingWallet.name}` : 'Thêm Ví / Nguồn tiền mới'}
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    className="px-4 py-1.5 rounded-xl bg-[#2e7d32] text-white text-xs font-bold hover:bg-[#256629] active:scale-95 transition shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>{editingWallet ? 'Lưu' : 'Thêm'}</span>
-                  </button>
-                </div>
-
-                {/* Form Body (Scrollable) */}
-                <form
-                  onSubmit={handleSave}
-                  className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1"
-                >
-                  {/* 1. Amount Input (Money Lover Style) - Đặt lên đầu giống TransactionModal */}
-                  <div className="pt-1 pb-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] flex items-center gap-1.5">
-                        <span>{editingWallet ? 'Số dư hiện tại' : 'Số dư ban đầu'} (VNĐ)</span>
-                        <span className="text-[#b94a3b]">*</span>
-                        {editingWallet && (
-                          <span className="text-[10px] text-amber-700 font-normal lowercase">
-                            (tự cân đối)
-                          </span>
-                        )}
-                      </label>
-                      {!showKeypad && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (document.activeElement instanceof HTMLElement) {
-                              document.activeElement.blur();
-                            }
-                            setShowKeypad(true);
-                          }}
-                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 transition cursor-pointer"
-                        >
-                          <Calculator className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Mở bàn phím số</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Money Lover Amount Bar with clean green underline */}
-                    <div
                       onClick={() => {
                         if (document.activeElement instanceof HTMLElement) {
                           document.activeElement.blur();
                         }
                         setShowKeypad(true);
                       }}
-                      className="mt-1.5 flex items-center justify-between gap-2.5 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
+                      className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 transition cursor-pointer"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
-                          VND
-                        </span>
-                        <div
-                          ref={amountScrollRef}
-                          className="flex-1 min-w-0 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth flex items-center"
-                        >
-                          <span className={`${getAmountFontSize(initialBalance)} font-extrabold text-[#16a34a] tracking-tight inline-block`}>
-                            {initialBalance || '0'}
-                          </span>
-                        </div>
-                      </div>
-                      {hasBalanceExpression && evaluatedBalance !== null && (
-                        <span className="text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg shrink-0 shadow-2xs whitespace-nowrap">
-                          = {formatCurrency(Math.round(evaluatedBalance))}
-                        </span>
-                      )}
-                    </div>
+                      <Calculator className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Mở bàn phím số</span>
+                    </button>
+                  )}
+                </div>
 
-                    {editingWallet && (
-                      <p className="text-[10px] text-[#7a6a58] mt-1.5 leading-tight">
-                        💡 Nhập số tiền hiện có. Ứng dụng tự động cân đối số dư ban đầu để khớp thực tế mà không làm mất lịch sử thu chi.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* 2. Tên ví */}
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
-                      Tên ví / Ngân hàng <span className="text-[#b94a3b]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onFocus={() => setShowKeypad(false)}
-                      placeholder="VD: Techcombank, VNPAY, Tiền mặt..."
-                      required
-                      className="w-full mt-1.5 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-                    />
-                  </div>
-
-                  {/* 3. Số tài khoản */}
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
-                      Số tài khoản / Ghi chú số thẻ
-                    </label>
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      onFocus={() => setShowKeypad(false)}
-                      placeholder="VD: 1903xxx hoặc Tiền mặt trong ví"
-                      className="w-full mt-1.5 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Icon & Color selector */}
-                  <div className="space-y-2.5 pt-1">
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
-                        Icon nhận diện
-                      </label>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {availableIcons.map((ic) => (
-                          <button
-                            type="button"
-                            key={ic.name}
-                            onClick={() => setIcon(ic.name)}
-                            className={`w-8 h-8 rounded-lg border transition flex items-center justify-center cursor-pointer ${
-                              icon === ic.name
-                                ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
-                                : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
-                            }`}
-                            title={ic.label}
-                          >
-                            <DynamicIcon name={ic.name} className="w-4 h-4" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
-                        Màu sắc ví
-                      </label>
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        {availableColors.map((cl) => (
-                          <button
-                            type="button"
-                            key={cl}
-                            onClick={() => setColor(cl)}
-                            className={`w-6 h-6 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
-                              color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
-                            }`}
-                            style={{ backgroundColor: cl }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isDefault}
-                      onChange={(e) => setIsDefault(e.target.checked)}
-                      className="w-4 h-4 rounded accent-[#a25832]"
-                    />
-                    <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                      <span>Đặt làm ví mặc định khi ghi chép giao dịch</span>
+                {/* Money Lover Amount Bar */}
+                <div
+                  onClick={() => {
+                    if (document.activeElement instanceof HTMLElement) {
+                      document.activeElement.blur();
+                    }
+                    setShowKeypad(true);
+                  }}
+                  className="mt-1.5 flex items-center justify-between gap-2.5 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
+                      VND
                     </span>
-                  </label>
-                </form>
-
-                {/* Custom Calculator Keypad Docked at Bottom */}
-                {showKeypad && (
-                  <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
-                    <CustomCalculatorKeyboard
-                      value={initialBalance}
-                      onChange={setInitialBalance}
-                      quickAmounts={[50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000]}
-                      onDone={() => {
-                        const ev = evaluateMathExpression(initialBalance);
-                        if (ev !== null && isMathExpression(initialBalance)) {
-                          setInitialBalance(formatExpressionWithDots(Math.round(ev).toString()));
-                        }
-                        setShowKeypad(false);
-                      }}
-                    />
+                    <div
+                      ref={amountScrollRef}
+                      className="flex-1 min-w-0 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth flex items-center"
+                    >
+                      <span className={`${getAmountFontSize(initialBalance)} font-extrabold text-[#16a34a] tracking-tight inline-block`}>
+                        {initialBalance || '0'}
+                      </span>
+                    </div>
                   </div>
+                  {hasBalanceExpression && evaluatedBalance !== null && (
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg shrink-0 shadow-2xs whitespace-nowrap">
+                      = {formatCurrency(Math.round(evaluatedBalance))}
+                    </span>
+                  )}
+                </div>
+
+                {editingWallet && (
+                  <p className="text-[10px] text-[#7a6a58] mt-1.5 leading-tight">
+                    💡 Nhập số tiền hiện có. Ứng dụng tự động cân đối số dư ban đầu để khớp thực tế mà không làm mất lịch sử thu chi.
+                  </p>
                 )}
               </div>
-            </div>
-          )}
 
-          {/* Wallets List */}
-          <div className="divide-y divide-[#ebdcc9] border border-[#ebdcc9] rounded-xl bg-[#fffdfa] overflow-hidden">
-            {wallets.map((wallet, idx) => {
-              const currentBalance = walletBalances[wallet.id] || 0;
-              const isDragging = draggingId === wallet.id;
-              return (
-                <div
-                  key={wallet.id}
-                  data-wallet-index={idx}
-                  draggable={Boolean(onReorderWallets && wallets.length > 1)}
-                  onDragStart={() => {
-                    dragIndexRef.current = idx;
-                    setDraggingId(wallet.id);
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (dragIndexRef.current !== null && dragIndexRef.current !== idx) {
-                      moveWallet(dragIndexRef.current, idx);
+              {/* 2. Tên ví */}
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
+                  Tên ví / Ngân hàng <span className="text-[#b94a3b]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onFocus={() => setShowKeypad(false)}
+                  placeholder="VD: Techcombank, VNPAY, Tiền mặt..."
+                  required
+                  className="w-full mt-1.5 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                />
+              </div>
+
+              {/* 3. Số tài khoản */}
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
+                  Số tài khoản / Ghi chú số thẻ
+                </label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  onFocus={() => setShowKeypad(false)}
+                  placeholder="VD: 1903xxx hoặc Tiền mặt trong ví"
+                  className="w-full mt-1.5 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                />
+              </div>
+
+              {/* Icon & Color selector */}
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
+                    Icon nhận diện
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {availableIcons.map((ic) => (
+                      <button
+                        type="button"
+                        key={ic.name}
+                        onClick={() => setIcon(ic.name)}
+                        className={`w-9 h-9 rounded-xl border transition flex items-center justify-center cursor-pointer ${
+                          icon === ic.name
+                            ? 'bg-[#3e332a] text-white border-[#3e332a] shadow-xs scale-105'
+                            : 'bg-[#fffdfa] text-[#7a6a58] border-[#ebdcc9] hover:bg-[#f5ebe0]'
+                        }`}
+                        title={ic.label}
+                      >
+                        <DynamicIcon name={ic.name} className="w-4 h-4" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
+                    Màu sắc ví
+                  </label>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {availableColors.map((cl) => (
+                      <button
+                        type="button"
+                        key={cl}
+                        onClick={() => setColor(cl)}
+                        className={`w-7 h-7 rounded-full border border-white/60 transition cursor-pointer shadow-2xs ${
+                          color === cl ? 'ring-2 ring-offset-2 ring-[#3e332a] scale-110' : 'hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: cl }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 pt-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isDefault}
+                  onChange={(e) => setIsDefault(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[#a25832]"
+                />
+                <span className="text-xs font-semibold text-[#3e332a] flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Đặt làm ví mặc định khi ghi chép giao dịch</span>
+                </span>
+              </label>
+            </form>
+
+            {/* Custom Calculator Keypad Docked at Bottom */}
+            {showKeypad && (
+              <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
+                <CustomCalculatorKeyboard
+                  value={initialBalance}
+                  onChange={setInitialBalance}
+                  quickAmounts={[50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000]}
+                  onDone={() => {
+                    const ev = evaluateMathExpression(initialBalance);
+                    if (ev !== null && isMathExpression(initialBalance)) {
+                      setInitialBalance(formatExpressionWithDots(Math.round(ev).toString()));
                     }
-                    dragIndexRef.current = null;
-                    setDraggingId(null);
+                    setShowKeypad(false);
                   }}
-                  onDragEnd={() => {
-                    dragIndexRef.current = null;
-                    setDraggingId(null);
-                  }}
-                  className={`p-3 flex items-center justify-between gap-2.5 transition select-none ${
-                    isDragging
-                      ? 'bg-[#f5ebe0] ring-2 ring-[#a25832]/30'
-                      : 'hover:bg-[#fbf5eb]/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {/* Reorder Grip Handle & Chevron Up/Down */}
-                    {wallets.length > 1 && onReorderWallets && (
-                      <div className="flex items-center gap-0.5 shrink-0">
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Header cho Danh sách Ví */}
+            <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
+                  <WalletIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#3e332a]">
+                    Quản Lý Nguồn Tiền & Ví
+                  </h3>
+                  <p className="text-xs text-[#7a6a58]">
+                    Tiền mặt, Ngân hàng, Ví điện tử
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Action Toolbar */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-[#7a6a58]">
+                  Danh sách ví hiện có ({wallets.length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenTransferModal();
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg border border-[#ebdcc9] bg-[#fbf5eb] text-xs font-medium text-[#7a6a58] hover:text-[#3e332a] transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5 text-[#a25832]" />
+                    <span>Chuyển tiền</span>
+                  </button>
+                  <button
+                    onClick={handleStartAdd}
+                    className="px-3 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm ví mới</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Wallets List */}
+              <div className="divide-y divide-[#ebdcc9] border border-[#ebdcc9] rounded-xl bg-[#fffdfa] overflow-hidden">
+                {wallets.map((wallet, idx) => {
+                  const currentBalance = walletBalances[wallet.id] || 0;
+                  const isDragging = draggingId === wallet.id;
+                  return (
+                    <div
+                      key={wallet.id}
+                      data-wallet-index={idx}
+                      draggable={Boolean(onReorderWallets && wallets.length > 1)}
+                      onDragStart={() => {
+                        dragIndexRef.current = idx;
+                        setDraggingId(wallet.id);
+                      }}
+                      onDragEnter={() => {
+                        const fromIdx = dragIndexRef.current;
+                        if (fromIdx !== null && fromIdx !== idx) {
+                          moveWallet(fromIdx, idx);
+                          dragIndexRef.current = idx;
+                        }
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnd={() => {
+                        dragIndexRef.current = null;
+                        setDraggingId(null);
+                      }}
+                      className={`p-3 sm:p-3.5 flex items-center justify-between gap-3 transition select-none ${
+                        isDragging ? 'bg-[#f5ebe0] ring-2 ring-[#a25832] z-10' : 'hover:bg-[#fbf5eb]/50'
+                      }`}
+                    >
+                      {/* Drag Handle (Touch + Mouse) */}
+                      {wallets.length > 1 && onReorderWallets && (
                         <div
                           onTouchStart={() => {
                             dragIndexRef.current = idx;
@@ -500,9 +491,9 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                             const touch = e.touches[0];
                             if (!touch) return;
                             const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                            const card = el?.closest('[data-wallet-index]');
-                            if (card) {
-                              const targetIdx = Number(card.getAttribute('data-wallet-index'));
+                            const row = el?.closest('[data-wallet-index]');
+                            if (row) {
+                              const targetIdx = Number(row.getAttribute('data-wallet-index'));
                               if (!isNaN(targetIdx) && targetIdx !== dragIndexRef.current) {
                                 moveWallet(dragIndexRef.current, targetIdx);
                                 dragIndexRef.current = targetIdx;
@@ -513,119 +504,116 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                             dragIndexRef.current = null;
                             setDraggingId(null);
                           }}
-                          className="p-1 -ml-1 text-[#a89886] hover:text-[#3e332a] active:text-[#a25832] cursor-grab active:cursor-grabbing touch-none"
+                          className="p-1 -ml-1 rounded-lg text-[#a89886] hover:text-[#3e332a] active:text-[#a25832] cursor-grab active:cursor-grabbing touch-none shrink-0"
                           title="Giữ và kéo để đổi vị trí ví"
                         >
-                          <GripVertical className="w-3.5 h-3.5" />
+                          <GripVertical className="w-4 h-4" />
                         </div>
-                        <div className="flex flex-col">
+                      )}
+
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
+                          style={{ backgroundColor: wallet.color }}
+                        >
+                          <DynamicIcon name={wallet.icon} className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-xs sm:text-sm text-[#3e332a] truncate">
+                              {wallet.name}
+                            </span>
+                            {wallet.isDefault && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
+                                <span>Mặc định</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs">
+                            <span className="font-bold text-[#2e7d32]">
+                              {formatCurrency(currentBalance)}
+                            </span>
+                            {wallet.accountNumber && (
+                              <span className="text-[#7a6a58] text-[11px] truncate">
+                                • {wallet.accountNumber}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {wallets.length > 1 && onReorderWallets && (
+                          <div className="flex flex-col mr-1">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => moveWallet(idx, idx - 1)}
+                              className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] disabled:opacity-25 disabled:pointer-events-none transition"
+                              title="Chuyển lên trên"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === wallets.length - 1}
+                              onClick={() => moveWallet(idx, idx + 1)}
+                              className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] disabled:opacity-25 disabled:pointer-events-none transition"
+                              title="Chuyển xuống dưới"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                        {!wallet.isDefault && onSetDefaultWallet && (
                           <button
                             type="button"
-                            disabled={idx === 0}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              moveWallet(idx, idx - 1);
-                            }}
-                            className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
-                            title="Chuyển ví lên trên"
+                            onClick={() => onSetDefaultWallet(wallet.id)}
+                            className="px-2 py-1 rounded-lg border border-[#ebdcc9] bg-[#fffdfa] hover:bg-amber-50 hover:border-amber-300 text-[11px] font-semibold text-[#7a6a58] hover:text-amber-800 transition flex items-center gap-1 cursor-pointer"
+                            title="Đặt làm ví mặc định"
                           >
-                            <ChevronUp className="w-3 h-3" />
+                            <Star className="w-3 h-3 text-amber-500" />
+                            <span className="hidden sm:inline">Đặt mặc định</span>
                           </button>
-                          <button
-                            type="button"
-                            disabled={idx === wallets.length - 1}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              moveWallet(idx, idx + 1);
-                            }}
-                            className="p-0.5 rounded text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
-                            title="Chuyển ví xuống dưới"
-                          >
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
-                      style={{ backgroundColor: wallet.color }}
-                    >
-                      <DynamicIcon name={wallet.icon} className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold text-xs sm:text-sm text-[#3e332a] truncate">
-                          {wallet.name}
-                        </span>
-                        {wallet.isDefault && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                            <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
-                            <span>Mặc định</span>
-                          </span>
                         )}
-                      </div>
-                      <div className="text-[11px] text-[#7a6a58]">
-                        Số dư hiện tại:{' '}
-                        <strong className="text-[#3e332a]">
-                          {formatCurrency(currentBalance)}
-                        </strong>
-                        {wallet.accountNumber && (
-                          <span className="text-[#a89886] ml-1.5">
-                            • {wallet.accountNumber}
-                          </span>
-                        )}
+                        <button
+                          onClick={() => handleStartEdit(wallet)}
+                          className="p-1.5 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition cursor-pointer"
+                          title="Chỉnh sửa ví"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
+                              onDeleteWallet(wallet.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#f5ebe0] transition cursor-pointer"
+                          title="Xóa ví"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {!wallet.isDefault && onSetDefaultWallet && (
-                      <button
-                        type="button"
-                        onClick={() => onSetDefaultWallet(wallet.id)}
-                        className="px-2 py-1 rounded-lg border border-[#ebdcc9] bg-[#fffdfa] hover:bg-amber-50 hover:border-amber-300 text-[11px] font-semibold text-[#7a6a58] hover:text-amber-800 transition flex items-center gap-1 cursor-pointer"
-                        title="Đặt làm ví mặc định"
-                      >
-                        <Star className="w-3 h-3 text-amber-500" />
-                        <span className="hidden sm:inline">Đặt mặc định</span>
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleStartEdit(wallet)}
-                      className="p-1.5 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#f5ebe0] transition"
-                      title="Chỉnh sửa ví"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Xóa ví "${wallet.name}"?`)) {
-                          onDeleteWallet(wallet.id);
-                        }
-                      }}
-                      className="p-1.5 rounded-lg text-[#a89886] hover:text-[#b94a3b] hover:bg-[#f5ebe0] transition"
-                      title="Xóa ví"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-[#3e332a] text-[#fdf8f0] text-xs font-semibold hover:bg-[#2c241d] transition"
-          >
-            Đóng
-          </button>
-        </div>
+            {/* Footer */}
+            <div className="p-4 border-t border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-end shrink-0">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl bg-[#3e332a] text-[#fdf8f0] text-xs font-semibold hover:bg-[#2c241d] transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

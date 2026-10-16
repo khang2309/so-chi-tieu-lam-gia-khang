@@ -1,7 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export const BUILTIN_APP_VERSION = '2.1.45';
+export const BUILTIN_APP_VERSION = '2.1.46';
 
 export const GITHUB_VERSION_JSON_URL =
   'https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/version.json';
@@ -191,6 +191,14 @@ export async function checkAppUpdateFromCloud(): Promise<{
   release?: AppReleaseConfig;
 }> {
   const currentVersion = getCurrentRunningVersion();
+
+  // Trên nền tảng trình duyệt Web (Vercel, Safari, Chrome...), người dùng chỉ cần F5 làm mới trang web.
+  // Hoàn toàn tắt việc hiển thị popup và kiểm tra cập nhật phiên bản trên Web.
+  const caps = inspectNativeCapabilities();
+  if (!caps.isAndroidNative) {
+    return { hasUpdate: false, currentVersion };
+  }
+
   let bestRelease: AppReleaseConfig | null = null;
 
   // 1. Kiểm tra từ GitHub repo (nhanh, không cần đăng nhập)
@@ -233,7 +241,6 @@ export async function checkAppUpdateFromCloud(): Promise<{
   }
 
   // Kiểm tra toàn diện năng lực native APK trực tiếp trên máy
-  const caps = inspectNativeCapabilities();
   const isSemverOutdated =
     Boolean(bestRelease.minApkVersion) &&
     compareSemver(caps.nativeApkVersion, bestRelease.minApkVersion!) < 0;

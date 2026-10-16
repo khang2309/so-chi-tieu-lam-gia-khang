@@ -26,7 +26,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
 import { getSavedVisionConfig, saveVisionConfig } from '../utils/cloudVisionService';
-import { getCurrentRunningVersion } from '../utils/appUpdater';
+import { getCurrentRunningVersion, inspectNativeCapabilities } from '../utils/appUpdater';
 import {
   getBankNotifConfig,
   saveBankNotifConfig,
@@ -865,12 +865,14 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   Sổ Chi Tiêu — v{getCurrentRunningVersion()}
                 </div>
                 <div className="text-[11px] text-[#7a6a58] truncate">
-                  Cập nhật thông minh 2 trong 1
+                  {inspectNativeCapabilities().isAndroidNative
+                    ? 'Cập nhật thông minh 2 trong 1'
+                    : 'Phiên bản Web trực tuyến (tự động cập nhật khi tải lại)'}
                 </div>
               </div>
             </div>
 
-            {onCheckUpdate && (
+            {inspectNativeCapabilities().isAndroidNative && onCheckUpdate && (
               <button
                 type="button"
                 onClick={() => {
