@@ -53,6 +53,13 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
     }
   }, [amount]);
 
+  const handleOpenKeypad = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setShowKeypad(true);
+  };
+
   // Tự động khởi tạo 2 ví khác nhau và xóa trắng form mỗi khi mở modal
   useEffect(() => {
     if (isOpen && wallets.length > 0) {
@@ -253,7 +260,7 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
 
           {/* Amount Box */}
           <div
-            onClick={() => setShowKeypad(true)}
+            onClick={handleOpenKeypad}
             className={`p-3 rounded-xl border transition cursor-pointer select-none ${
               showKeypad
                 ? 'bg-white border-[#3b6e8c] ring-2 ring-[#3b6e8c]/25 shadow-xs'
@@ -311,6 +318,7 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              onFocus={() => setShowKeypad(false)}
               placeholder="VD: Rút ATM, nạp ví MoMo, chuyển tiền nhà..."
               className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#3b6e8c] focus:outline-none"
             />

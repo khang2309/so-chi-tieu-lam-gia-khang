@@ -77,6 +77,13 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   const evaluatedAmount = evaluateMathExpression(amount);
   const hasExpression = isMathExpression(amount);
 
+  const handleOpenKeypad = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setShowKeypad(true);
+  };
+
   const getAmountFontSize = (val: string) => {
     const len = (val || '').length;
     if (len <= 8) return 'text-2xl sm:text-3xl';
@@ -168,6 +175,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value || toLocalDateTimeInput(new Date()))}
+              onFocus={() => setShowKeypad(false)}
               className="w-full px-3 py-2 rounded-lg bg-white border border-[#fdba74] text-sm font-bold text-[#7c2d12] focus:outline-none focus:ring-2 focus:ring-[#ea580c]"
               required
             />
@@ -191,7 +199,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowKeypad(true)}
+                  onClick={handleOpenKeypad}
                   className="flex items-center gap-1 text-[11px] font-bold text-[#a25832] hover:text-[#8c4623] bg-[#fbf5eb] border border-[#ebdcc9] px-2.5 py-0.5 rounded-full transition cursor-pointer"
                 >
                   <Calculator className="w-3.5 h-3.5 text-[#a25832]" />
@@ -202,7 +210,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
 
             {/* Money Lover Style Amount Bar */}
             <div
-              onClick={() => setShowKeypad(true)}
+              onClick={handleOpenKeypad}
               className={`mt-1 flex items-center justify-between gap-2.5 pb-2 border-b-2 cursor-pointer select-none transition ${
                 type === 'expense'
                   ? 'border-[#b94a3b]'
@@ -250,6 +258,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              onFocus={() => setShowKeypad(false)}
               placeholder="Nhập ghi chú giao dịch..."
               className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none resize-y min-h-[72px]"
             />

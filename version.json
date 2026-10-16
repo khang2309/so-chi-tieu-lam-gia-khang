@@ -1,10 +1,10 @@
 {
-  "version": "2.1.41",
+  "version": "2.1.42",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Khac phuc triet de loi sai so so thuc khi chinh sua vi tien khien so du hien thi thanh hang nghin ty; lam tron chuan so nguyen VND toan bo he thong",
+  "releaseNotes": "- Khac phuc xung dot ban phim: tu dong an ban phim may tinh khi go ghi chu hoac chon ngay gio trong Nhan Ban Giao Dich va Chuyen Tien; dong bo cau hinh Vercel",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T05:58:11.997Z"
+  "updatedAt": "2026-10-16T06:09:31.868Z"
 }
