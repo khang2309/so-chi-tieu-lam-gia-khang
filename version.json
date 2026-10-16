@@ -1,10 +1,10 @@
 {
-  "version": "2.1.46",
+  "version": "2.1.47",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Toi uu danh muc nhan ban, tat update tren web, sua layout so va vi, xoa nut thua",
+  "releaseNotes": "Thay the select bang bo chon So va Vi co icon mau sac sinh dong tren ca Giao dich va Nhan ban",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T07:50:14.951Z"
+  "updatedAt": "2026-10-16T08:02:56.356Z"
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Check, Calculator, Plus, Sparkles, Zap } from 'lucide-react';
+import { X, Check, Calculator, Plus, Sparkles, Zap, BookOpen, Wallet as WalletIcon, ChevronDown } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
@@ -75,6 +75,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [showQuickCreateWallet, setShowQuickCreateWallet] = useState<boolean>(false);
   const [newWalletName, setNewWalletName] = useState<string>('');
   const [newWalletBalance, setNewWalletBalance] = useState<string>('');
+  const [showLedgerPicker, setShowLedgerPicker] = useState<boolean>(false);
+  const [showWalletPicker, setShowWalletPicker] = useState<boolean>(false);
 
   // Lấy các gợi ý từ lịch sử giao dịch (loại trừ đã xóa mềm) kèm giao dịch gốc tương ứng
   const noteSuggestions = useMemo(() => {
@@ -323,6 +325,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     );
     onClose();
   };
+
+  const selectedLedger = ledgers.find((l) => l.id === ledgerId);
+  const selectedWallet = wallets.find((w) => w.id === walletId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
@@ -642,31 +647,31 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 </div>
               )}
 
-              <select
-                value={ledgerId}
-                onChange={(e) => {
-                  if (e.target.value === '__CREATE__') {
-                    setShowQuickCreateLedger(true);
-                    setShowKeypad(false);
-                    return;
-                  }
-                  setLedgerId(e.target.value);
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLedgerPicker(true);
+                  setShowKeypad(false);
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] flex items-center justify-between gap-2 hover:bg-[#f5ebe0] transition cursor-pointer"
               >
-                {ledgers.length === 0 ? (
-                  <option value="">(Chưa tạo sổ - Bấm Tạo sổ)</option>
-                ) : (
-                  ledgers.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))
-                )}
-                {onAddLedger && (
-                  <option value="__CREATE__">+ Tạo sổ mới...</option>
-                )}
-              </select>
+                <div className="flex items-center gap-2 min-w-0">
+                  {selectedLedger ? (
+                    <>
+                      <div
+                        className="w-5 h-5 rounded-md flex items-center justify-center text-white shrink-0 shadow-2xs"
+                        style={{ backgroundColor: selectedLedger.color || '#a25832' }}
+                      >
+                        <DynamicIcon name={selectedLedger.icon || 'BookOpen'} className="w-3 h-3 text-white" />
+                      </div>
+                      <span className="font-semibold text-xs text-[#3e332a] truncate">{selectedLedger.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-[#a89886] italic">Chưa chọn sổ</span>
+                  )}
+                </div>
+                <ChevronDown className="w-4 h-4 text-[#7a6a58] shrink-0" />
+              </button>
             </div>
 
             {/* Wallet */}
@@ -736,31 +741,31 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 </div>
               )}
 
-              <select
-                value={walletId}
-                onChange={(e) => {
-                  if (e.target.value === '__CREATE__') {
-                    setShowQuickCreateWallet(true);
-                    setShowKeypad(false);
-                    return;
-                  }
-                  setWalletId(e.target.value);
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWalletPicker(true);
+                  setShowKeypad(false);
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] flex items-center justify-between gap-2 hover:bg-[#f5ebe0] transition cursor-pointer"
               >
-                {wallets.length === 0 ? (
-                  <option value="">(Chưa tạo ví - Bấm Tạo ví)</option>
-                ) : (
-                  wallets.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))
-                )}
-                {onAddWallet && (
-                  <option value="__CREATE__">+ Tạo ví mới...</option>
-                )}
-              </select>
+                <div className="flex items-center gap-2 min-w-0">
+                  {selectedWallet ? (
+                    <>
+                      <div
+                        className="w-5 h-5 rounded-md flex items-center justify-center text-white shrink-0 shadow-2xs"
+                        style={{ backgroundColor: selectedWallet.color || '#2e7d32' }}
+                      >
+                        <DynamicIcon name={selectedWallet.icon || 'Landmark'} className="w-3 h-3 text-white" />
+                      </div>
+                      <span className="font-semibold text-xs text-[#3e332a] truncate">{selectedWallet.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-[#a89886] italic">Chưa chọn ví</span>
+                  )}
+                </div>
+                <ChevronDown className="w-4 h-4 text-[#7a6a58] shrink-0" />
+              </button>
             </div>
           </div>
 
@@ -790,6 +795,160 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 setShowKeypad(false);
               }}
             />
+          </div>
+        )}
+
+        {/* Modal / Popup chọn Sổ có đầy đủ icon & màu sắc */}
+        {showLedgerPicker && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-150">
+              <div className="px-4 py-3 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <span className="text-sm font-bold text-[#3e332a]">Chọn Sổ Chi Tiêu</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLedgerPicker(false)}
+                  className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
+                {ledgers.map((l) => {
+                  const isSelected = ledgerId === l.id;
+                  return (
+                    <button
+                      type="button"
+                      key={l.id}
+                      onClick={() => {
+                        setLedgerId(l.id);
+                        setShowLedgerPicker(false);
+                      }}
+                      className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
+                        isSelected
+                          ? 'border-[#a25832] bg-[#fbf5eb] ring-1 ring-[#a25832]'
+                          : 'border-[#ebdcc9] hover:bg-[#fbf5eb]/60 bg-[#fffdfa]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
+                          style={{ backgroundColor: l.color || '#a25832' }}
+                        >
+                          <DynamicIcon name={l.icon || 'BookOpen'} className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#3e332a] truncate">{l.name}</div>
+                          {l.description ? (
+                            <div className="text-[11px] text-[#7a6a58] truncate">{l.description}</div>
+                          ) : (
+                            <div className="text-[10px] text-[#a89886] italic">Sổ chi tiêu</div>
+                          )}
+                        </div>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />}
+                    </button>
+                  );
+                })}
+
+                {onAddLedger && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLedgerPicker(false);
+                      setShowQuickCreateLedger(true);
+                      setShowKeypad(false);
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#a25832] bg-[#fff8ed] text-xs font-bold text-[#a25832] hover:bg-[#faebd7] transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tạo sổ mới...</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal / Popup chọn Ví có đầy đủ icon & màu sắc */}
+        {showWalletPicker && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-150">
+              <div className="px-4 py-3 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#2e7d32]/10 text-[#2e7d32] flex items-center justify-center">
+                    <WalletIcon className="w-4 h-4" />
+                  </div>
+                  <span className="text-sm font-bold text-[#3e332a]">Chọn Nguồn Tiền / Ví</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowWalletPicker(false)}
+                  className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
+                {wallets.map((w) => {
+                  const isSelected = walletId === w.id;
+                  return (
+                    <button
+                      type="button"
+                      key={w.id}
+                      onClick={() => {
+                        setWalletId(w.id);
+                        setShowWalletPicker(false);
+                      }}
+                      className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
+                        isSelected
+                          ? 'border-[#2e7d32] bg-[#f0fdf4] ring-1 ring-[#2e7d32]'
+                          : 'border-[#ebdcc9] hover:bg-[#fbf5eb]/60 bg-[#fffdfa]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
+                          style={{ backgroundColor: w.color || '#2e7d32' }}
+                        >
+                          <DynamicIcon name={w.icon || 'Landmark'} className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#3e332a] truncate">{w.name}</div>
+                          {w.accountNumber ? (
+                            <div className="text-[11px] text-[#7a6a58] truncate">{w.accountNumber}</div>
+                          ) : (
+                            <div className="text-[10px] text-[#a89886] italic">Ví tiền</div>
+                          )}
+                        </div>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />}
+                    </button>
+                  );
+                })}
+
+                {onAddWallet && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowWalletPicker(false);
+                      setShowQuickCreateWallet(true);
+                      setShowKeypad(false);
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#2e7d32] bg-[#f0fdf4] text-xs font-bold text-[#2e7d32] hover:bg-emerald-100/60 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tạo ví mới...</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
