@@ -741,6 +741,8 @@ export function App() {
         wallets={manager.wallets}
         categories={manager.categories}
         onConfirm={(data) => manager.addTransaction(data)}
+        onAddLedger={manager.addLedger}
+        onAddWallet={manager.addWallet}
       />
 
       <LedgerManagerModal

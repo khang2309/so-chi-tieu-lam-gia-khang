@@ -1,10 +1,10 @@
 {
-  "version": "2.1.47",
+  "version": "2.1.48",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Thay the select bang bo chon So va Vi co icon mau sac sinh dong tren ca Giao dich va Nhan ban",
+  "releaseNotes": "Fix transaction modal sticky header and quick create layout",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T08:02:56.356Z"
+  "updatedAt": "2026-10-16T08:16:17.199Z"
 }

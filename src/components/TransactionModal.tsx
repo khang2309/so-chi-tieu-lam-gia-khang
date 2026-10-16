@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Check, Calculator, Plus, Sparkles, Zap, BookOpen, Wallet as WalletIcon, ChevronDown } from 'lucide-react';
+import { X, Check, Calculator, Plus, Sparkles, Zap, BookOpen, Wallet as WalletIcon, ChevronDown, ArrowLeft } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
@@ -54,6 +54,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [showKeypad, setShowKeypad] = useState<boolean>(true);
 
   const amountScrollRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (amountScrollRef.current) {
@@ -69,10 +70,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     return 'text-lg sm:text-xl';
   };
 
-  // Quick inline creation state for Ledgers & Wallets
-  const [showQuickCreateLedger, setShowQuickCreateLedger] = useState<boolean>(false);
+  // Creation state inside Ledgers & Wallets pickers
+  const [isCreatingLedgerInPicker, setIsCreatingLedgerInPicker] = useState<boolean>(false);
   const [newLedgerName, setNewLedgerName] = useState<string>('');
-  const [showQuickCreateWallet, setShowQuickCreateWallet] = useState<boolean>(false);
+  const [isCreatingWalletInPicker, setIsCreatingWalletInPicker] = useState<boolean>(false);
   const [newWalletName, setNewWalletName] = useState<string>('');
   const [newWalletBalance, setNewWalletBalance] = useState<string>('');
   const [showLedgerPicker, setShowLedgerPicker] = useState<boolean>(false);
@@ -140,6 +141,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setShowKeypad(true);
+      setIsCreatingLedgerInPicker(false);
+      setIsCreatingWalletInPicker(false);
+      setNewLedgerName('');
+      setNewWalletName('');
+      setNewWalletBalance('');
+      if (formRef.current) {
+        formRef.current.scrollTop = 0;
+      }
     }
     if (editingTransaction) {
       setType(editingTransaction.type);
@@ -241,7 +250,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       });
       setLedgerId(created.id);
     }
-    setShowQuickCreateLedger(false);
+    setIsCreatingLedgerInPicker(false);
     setNewLedgerName('');
   };
 
@@ -259,7 +268,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       });
       setWalletId(created.id);
     }
-    setShowQuickCreateWallet(false);
+    setIsCreatingWalletInPicker(false);
     setNewWalletName('');
     setNewWalletBalance('');
   };
@@ -356,8 +365,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </button>
         </div>
 
-        {/* Form Body (Scrollable) */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+        {/* Sticky Top: Type Toggle & Amount */}
+        <div className="px-5 pt-3 pb-2.5 bg-[#fffdfa] border-b border-[#f0e4d5] shrink-0 space-y-2.5">
           {/* Type Toggle: Chi tiêu / Thu nhập */}
           <div className="grid grid-cols-2 p-1 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] text-xs font-semibold">
             <button
@@ -367,7 +376,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 const firstExp = categories.find((c) => c.type === 'expense');
                 if (firstExp) setCategoryId(firstExp.id);
               }}
-              className={`py-2 rounded-lg transition ${
+              className={`py-2 rounded-lg transition cursor-pointer ${
                 type === 'expense'
                   ? 'bg-[#b94a3b] text-white shadow-xs'
                   : 'text-[#7a6a58] hover:text-[#3e332a]'
@@ -382,7 +391,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 const firstInc = categories.find((c) => c.type === 'income');
                 if (firstInc) setCategoryId(firstInc.id);
               }}
-              className={`py-2 rounded-lg transition ${
+              className={`py-2 rounded-lg transition cursor-pointer ${
                 type === 'income'
                   ? 'bg-[#2e7d32] text-white shadow-xs'
                   : 'text-[#7a6a58] hover:text-[#3e332a]'
@@ -393,7 +402,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
 
           {/* Amount Input (Money Lover Style) */}
-          <div className="pt-1 pb-1">
+          <div className="pt-0.5">
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
                 Số tiền (VNĐ) <span className="text-[#b94a3b]">*</span>
@@ -402,7 +411,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowKeypad(true)}
-                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 transition"
+                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 transition cursor-pointer"
                 >
                   <Calculator className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Mở bàn phím số</span>
@@ -410,10 +419,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               )}
             </div>
 
-            {/* Money Lover Amount Bar with clean green underline */}
+            {/* Money Lover Amount Bar with clean color-coded underline */}
             <div
               onClick={() => setShowKeypad(true)}
-              className="mt-1.5 flex items-center justify-between gap-2.5 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
+              className={`mt-1 flex items-center justify-between gap-2.5 pb-1.5 border-b-2 cursor-pointer select-none transition ${
+                type === 'expense' ? 'border-[#b94a3b]' : 'border-[#2e7d32]'
+              }`}
             >
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
@@ -423,7 +434,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   ref={amountScrollRef}
                   className="flex-1 min-w-0 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth flex items-center"
                 >
-                  <span className={`${getAmountFontSize(amount)} font-extrabold text-[#16a34a] tracking-tight inline-block`}>
+                  <span className={`${getAmountFontSize(amount)} font-extrabold ${type === 'expense' ? 'text-[#b94a3b]' : 'text-[#2e7d32]'} tracking-tight inline-block`}>
                     {amount || '0'}
                   </span>
                 </div>
@@ -435,6 +446,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Form Body (Scrollable) */}
+        <form ref={formRef} onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
 
           {/* Note Input with Autocomplete */}
           <div className="space-y-1.5 relative">
@@ -597,7 +612,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setShowQuickCreateLedger((prev) => !prev);
+                      setShowLedgerPicker(true);
+                      setIsCreatingLedgerInPicker(true);
                       setShowKeypad(false);
                     }}
                     className="text-[11px] text-[#a25832] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
@@ -608,49 +624,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 )}
               </div>
 
-              {showQuickCreateLedger && (
-                <div className="p-2 rounded-xl bg-[#fffdfa] border border-[#a25832] shadow-xs space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-[#a25832]">
-                    <span>Tên Sổ ghi chép mới:</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickCreateLedger(false)}
-                      className="text-[#7a6a58] hover:text-[#b94a3b] cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={newLedgerName}
-                      onChange={(e) => setNewLedgerName(e.target.value)}
-                      placeholder="VD: Chi tiêu cá nhân"
-                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCreateNewLedger(newLedgerName);
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCreateNewLedger(newLedgerName)}
-                      disabled={!newLedgerName.trim()}
-                      className="px-2.5 py-1.5 rounded-lg bg-[#a25832] disabled:opacity-50 text-white text-xs font-bold shrink-0 hover:bg-[#8c4623] active:scale-95 transition cursor-pointer"
-                    >
-                      Tạo & Chọn
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <button
                 type="button"
                 onClick={() => {
                   setShowLedgerPicker(true);
+                  setIsCreatingLedgerInPicker(false);
                   setShowKeypad(false);
                 }}
                 className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] flex items-center justify-between gap-2 hover:bg-[#f5ebe0] transition cursor-pointer"
@@ -684,7 +662,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setShowQuickCreateWallet((prev) => !prev);
+                      setShowWalletPicker(true);
+                      setIsCreatingWalletInPicker(true);
                       setShowKeypad(false);
                     }}
                     className="text-[11px] text-[#a25832] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
@@ -695,56 +674,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 )}
               </div>
 
-              {showQuickCreateWallet && (
-                <div className="p-2 rounded-xl bg-[#fffdfa] border border-[#a25832] shadow-xs space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-[#a25832]">
-                    <span>Tạo Ví tiền mới:</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuickCreateWallet(false)}
-                      className="text-[#7a6a58] hover:text-[#b94a3b] cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={newWalletName}
-                    onChange={(e) => setNewWalletName(e.target.value)}
-                    placeholder="Tên ví (VD: Tiền mặt, MB Bank...)"
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
-                    autoFocus
-                  />
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={newWalletBalance}
-                      onChange={(e) => setNewWalletBalance(formatExpressionWithDots(e.target.value))}
-                      placeholder="Số dư (0đ)"
-                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCreateNewWallet(newWalletName, newWalletBalance);
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCreateNewWallet(newWalletName, newWalletBalance)}
-                      disabled={!newWalletName.trim()}
-                      className="px-2.5 py-1.5 rounded-lg bg-[#a25832] disabled:opacity-50 text-white text-xs font-bold shrink-0 hover:bg-[#8c4623] active:scale-95 transition cursor-pointer"
-                    >
-                      Tạo & Chọn
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <button
                 type="button"
                 onClick={() => {
                   setShowWalletPicker(true);
+                  setIsCreatingWalletInPicker(false);
                   setShowKeypad(false);
                 }}
                 className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] flex items-center justify-between gap-2 hover:bg-[#f5ebe0] transition cursor-pointer"
@@ -798,156 +732,289 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         )}
 
-        {/* Modal / Popup chọn Sổ có đầy đủ icon & màu sắc */}
+        {/* Modal / Popup chọn Sổ có đầy đủ icon & màu sắc và hỗ trợ tạo mới ngay tại modal */}
         {showLedgerPicker && (
           <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-150">
+            <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150">
               <div className="px-4 py-3 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
-                    <BookOpen className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-bold text-[#3e332a]">Chọn Sổ Chi Tiêu</span>
+                  {isCreatingLedgerInPicker ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingLedgerInPicker(false)}
+                      className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <div className="w-7 h-7 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                  )}
+                  <span className="text-sm font-bold text-[#3e332a]">
+                    {isCreatingLedgerInPicker ? 'Tạo Sổ Ghi Chép Mới' : 'Chọn Sổ Chi Tiêu'}
+                  </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowLedgerPicker(false)}
+                  onClick={() => {
+                    setShowLedgerPicker(false);
+                    setIsCreatingLedgerInPicker(false);
+                  }}
                   className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
-                {ledgers.map((l) => {
-                  const isSelected = ledgerId === l.id;
-                  return (
+              {isCreatingLedgerInPicker ? (
+                <div className="p-4 space-y-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#7a6a58]">
+                      Tên sổ ghi chép <span className="text-[#b94a3b]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newLedgerName}
+                      onChange={(e) => setNewLedgerName(e.target.value)}
+                      placeholder="VD: Chi tiêu cá nhân, Du lịch..."
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#a25832] focus:outline-none"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (newLedgerName.trim()) {
+                            handleCreateNewLedger(newLedgerName);
+                            setIsCreatingLedgerInPicker(false);
+                            setShowLedgerPicker(false);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
                     <button
                       type="button"
-                      key={l.id}
+                      onClick={() => setIsCreatingLedgerInPicker(false)}
+                      className="flex-1 py-2.5 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#fbf5eb] transition cursor-pointer"
+                    >
+                      Quay lại
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!newLedgerName.trim()}
                       onClick={() => {
-                        setLedgerId(l.id);
+                        handleCreateNewLedger(newLedgerName);
+                        setIsCreatingLedgerInPicker(false);
                         setShowLedgerPicker(false);
                       }}
-                      className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
-                        isSelected
-                          ? 'border-[#a25832] bg-[#fbf5eb] ring-1 ring-[#a25832]'
-                          : 'border-[#ebdcc9] hover:bg-[#fbf5eb]/60 bg-[#fffdfa]'
-                      }`}
+                      className="flex-1 py-2.5 rounded-xl bg-[#a25832] disabled:opacity-50 text-white text-xs font-bold hover:bg-[#8c4623] active:scale-95 transition cursor-pointer shadow-xs"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
-                          style={{ backgroundColor: l.color || '#a25832' }}
-                        >
-                          <DynamicIcon name={l.icon || 'BookOpen'} className="w-4 h-4 text-white" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-[#3e332a] truncate">{l.name}</div>
-                          {l.description ? (
-                            <div className="text-[11px] text-[#7a6a58] truncate">{l.description}</div>
-                          ) : (
-                            <div className="text-[10px] text-[#a89886] italic">Sổ chi tiêu</div>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />}
+                      Tạo & Chọn ngay
                     </button>
-                  );
-                })}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
+                  {ledgers.map((l) => {
+                    const isSelected = ledgerId === l.id;
+                    return (
+                      <button
+                        type="button"
+                        key={l.id}
+                        onClick={() => {
+                          setLedgerId(l.id);
+                          setShowLedgerPicker(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
+                          isSelected
+                            ? 'border-[#a25832] bg-[#fbf5eb] ring-1 ring-[#a25832]'
+                            : 'border-[#ebdcc9] hover:bg-[#fbf5eb]/60 bg-[#fffdfa]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
+                            style={{ backgroundColor: l.color || '#a25832' }}
+                          >
+                            <DynamicIcon name={l.icon || 'BookOpen'} className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#3e332a] truncate">{l.name}</div>
+                            {l.description ? (
+                              <div className="text-[11px] text-[#7a6a58] truncate">{l.description}</div>
+                            ) : (
+                              <div className="text-[10px] text-[#a89886] italic">Sổ chi tiêu</div>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />}
+                      </button>
+                    );
+                  })}
 
-                {onAddLedger && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowLedgerPicker(false);
-                      setShowQuickCreateLedger(true);
-                      setShowKeypad(false);
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#a25832] bg-[#fff8ed] text-xs font-bold text-[#a25832] hover:bg-[#faebd7] transition flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Tạo sổ mới...</span>
-                  </button>
-                )}
-              </div>
+                  {onAddLedger && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingLedgerInPicker(true)}
+                      className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#a25832] bg-[#fff8ed] text-xs font-bold text-[#a25832] hover:bg-[#faebd7] transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Tạo sổ mới...</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Modal / Popup chọn Ví có đầy đủ icon & màu sắc */}
+        {/* Modal / Popup chọn Ví có đầy đủ icon & màu sắc và hỗ trợ tạo mới ngay tại modal */}
         {showWalletPicker && (
           <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-150">
+            <div className="relative w-full max-w-sm rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150">
               <div className="px-4 py-3 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#2e7d32]/10 text-[#2e7d32] flex items-center justify-center">
-                    <WalletIcon className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-bold text-[#3e332a]">Chọn Nguồn Tiền / Ví</span>
+                  {isCreatingWalletInPicker ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingWalletInPicker(false)}
+                      className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <div className="w-7 h-7 rounded-lg bg-[#2e7d32]/10 text-[#2e7d32] flex items-center justify-center">
+                      <WalletIcon className="w-4 h-4" />
+                    </div>
+                  )}
+                  <span className="text-sm font-bold text-[#3e332a]">
+                    {isCreatingWalletInPicker ? 'Tạo Ví Tiền Mới' : 'Chọn Nguồn Tiền / Ví'}
+                  </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowWalletPicker(false)}
+                  onClick={() => {
+                    setShowWalletPicker(false);
+                    setIsCreatingWalletInPicker(false);
+                  }}
                   className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
-                {wallets.map((w) => {
-                  const isSelected = walletId === w.id;
-                  return (
+              {isCreatingWalletInPicker ? (
+                <div className="p-4 space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-[#7a6a58]">
+                      Tên ví tiền <span className="text-[#b94a3b]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newWalletName}
+                      onChange={(e) => setNewWalletName(e.target.value)}
+                      placeholder="VD: Tiền mặt, Techcombank, MoMo..."
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#2e7d32] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-[#7a6a58]">
+                      Số dư khởi tạo (VNĐ)
+                    </label>
+                    <input
+                      type="text"
+                      value={newWalletBalance}
+                      onChange={(e) => setNewWalletBalance(formatExpressionWithDots(e.target.value))}
+                      placeholder="0"
+                      className="w-full px-3 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-white focus:border-[#2e7d32] focus:outline-none"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (newWalletName.trim()) {
+                            handleCreateNewWallet(newWalletName, newWalletBalance);
+                            setIsCreatingWalletInPicker(false);
+                            setShowWalletPicker(false);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-1.5">
                     <button
                       type="button"
-                      key={w.id}
+                      onClick={() => setIsCreatingWalletInPicker(false)}
+                      className="flex-1 py-2.5 rounded-xl border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#fbf5eb] transition cursor-pointer"
+                    >
+                      Quay lại
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!newWalletName.trim()}
                       onClick={() => {
-                        setWalletId(w.id);
+                        handleCreateNewWallet(newWalletName, newWalletBalance);
+                        setIsCreatingWalletInPicker(false);
                         setShowWalletPicker(false);
                       }}
-                      className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
-                        isSelected
-                          ? 'border-[#2e7d32] bg-[#f0fdf4] ring-1 ring-[#2e7d32]'
-                          : 'border-[#ebdcc9] hover:bg-[#fbf5eb]/60 bg-[#fffdfa]'
-                      }`}
+                      className="flex-1 py-2.5 rounded-xl bg-[#2e7d32] disabled:opacity-50 text-white text-xs font-bold hover:bg-[#256629] active:scale-95 transition cursor-pointer shadow-xs"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
-                          style={{ backgroundColor: w.color || '#2e7d32' }}
-                        >
-                          <DynamicIcon name={w.icon || 'Landmark'} className="w-4 h-4 text-white" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-[#3e332a] truncate">{w.name}</div>
-                          {w.accountNumber ? (
-                            <div className="text-[11px] text-[#7a6a58] truncate">{w.accountNumber}</div>
-                          ) : (
-                            <div className="text-[10px] text-[#a89886] italic">Ví tiền</div>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />}
+                      Tạo & Chọn ngay
                     </button>
-                  );
-                })}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
+                  {wallets.map((w) => {
+                    const isSelected = walletId === w.id;
+                    return (
+                      <button
+                        type="button"
+                        key={w.id}
+                        onClick={() => {
+                          setWalletId(w.id);
+                          setShowWalletPicker(false);
+                        }}
+                        className={`w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-3 cursor-pointer ${
+                          isSelected
+                            ? 'border-[#2e7d32] bg-[#f0fdf4] ring-1 ring-[#2e7d32]'
+                            : 'border-[#ebdcc9] hover:bg-[#fbf5eb]/60 bg-[#fffdfa]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
+                            style={{ backgroundColor: w.color || '#2e7d32' }}
+                          >
+                            <DynamicIcon name={w.icon || 'Landmark'} className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#3e332a] truncate">{w.name}</div>
+                            {w.accountNumber ? (
+                              <div className="text-[11px] text-[#7a6a58] truncate">{w.accountNumber}</div>
+                            ) : (
+                              <div className="text-[10px] text-[#a89886] italic">Ví tiền</div>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-[#2e7d32] shrink-0" />}
+                      </button>
+                    );
+                  })}
 
-                {onAddWallet && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowWalletPicker(false);
-                      setShowQuickCreateWallet(true);
-                      setShowKeypad(false);
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#2e7d32] bg-[#f0fdf4] text-xs font-bold text-[#2e7d32] hover:bg-emerald-100/60 transition flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Tạo ví mới...</span>
-                  </button>
-                )}
-              </div>
+                  {onAddWallet && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingWalletInPicker(true)}
+                      className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#2e7d32] bg-[#f0fdf4] text-xs font-bold text-[#2e7d32] hover:bg-emerald-100/60 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Tạo ví mới...</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
