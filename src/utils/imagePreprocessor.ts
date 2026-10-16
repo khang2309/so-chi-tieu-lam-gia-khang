@@ -6,10 +6,11 @@
  */
 
 export interface PreprocessOptions {
-  contrast?: number; // Độ tăng tương phản (-255 đến 255), khuyên dùng 50 - 70 cho hóa đơn
+  contrast?: number; // Độ tăng tương phản (-255 đến 255), 0 là giữ nguyên
   sharpen?: boolean; // Bật/tắt bộ lọc làm nét
-  maxDimension?: number; // Giới hạn kích thước tối đa (chuẩn 1024px để tối ưu tốc độ upload và AI xử lý)
-  quality?: number; // Chất lượng nén ảnh JPEG (chuẩn 0.7 để giữ vài trăm KB)
+  maxDimension?: number; // Giới hạn kích thước tối đa (chuẩn 1600px để giữ nét chữ nhỏ trên phiếu giao hàng)
+  quality?: number; // Chất lượng nén ảnh JPEG (chuẩn 0.8 để tối ưu tốc độ upload và AI nhận diện)
+  grayscale?: boolean; // Chuyển thang độ xám (khuyên dùng false cho Gemini Vision để giữ nhận thức màu)
 }
 
 /**
@@ -23,10 +24,11 @@ export async function preprocessImage(
   options: PreprocessOptions = {}
 ): Promise<string> {
   const {
-    contrast = 60,
-    sharpen = true,
-    maxDimension = 1024,
-    quality = 0.7,
+    contrast = 0,
+    sharpen = false,
+    maxDimension = 1600,
+    quality = 0.8,
+    grayscale = false,
   } = options;
 
   return new Promise((resolve) => {
@@ -64,34 +66,41 @@ export async function preprocessImage(
         // Bước 1: Vẽ ảnh gốc lên canvas
         ctx.drawImage(img, 0, 0, width, height);
 
+        // Nếu không cần grayscale và không cần chỉnh contrast, chỉ cần nén canvas
+        if (!grayscale && contrast === 0 && !sharpen) {
+          const resultDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(resultDataUrl);
+          return;
+        }
+
         // Lấy dữ liệu điểm ảnh (Pixels Data)
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         const len = data.length;
 
         // Tính hệ số tăng tương phản (Contrast factor)
-        // Công thức chuẩn: factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
         const contrastClamped = Math.max(-255, Math.min(255, contrast));
         const factor = (259 * (contrastClamped + 255)) / (255 * (259 - contrastClamped));
 
-        // Bước 2: Chuyển đổi thang độ xám (Grayscale) & Tăng tương phản (Contrast Enhancement)
+        // Bước 2: Xử lý màu sắc & Tương phản
         for (let i = 0; i < len; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
+          let r = data[i];
+          let g = data[i + 1];
+          let b = data[i + 2];
 
-          // Chuyển sang thang độ xám theo chuẩn nhận thức thị giác ITU-R BT.601
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-          // Áp dụng tăng độ tương phản lên giá trị xám
-          let enhanced = factor * (gray - 128) + 128;
-          if (enhanced < 0) enhanced = 0;
-          if (enhanced > 255) enhanced = 255;
-
-          data[i] = enhanced;     // R
-          data[i + 1] = enhanced; // G
-          data[i + 2] = enhanced; // B
-          // data[i + 3] (Alpha) giữ nguyên
+          if (grayscale) {
+            // Chuyển sang thang độ xám theo chuẩn nhận thức thị giác ITU-R BT.601
+            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            let enhanced = factor * (gray - 128) + 128;
+            enhanced = Math.max(0, Math.min(255, enhanced));
+            data[i] = enhanced;
+            data[i + 1] = enhanced;
+            data[i + 2] = enhanced;
+          } else if (contrast !== 0) {
+            data[i] = Math.max(0, Math.min(255, factor * (r - 128) + 128));
+            data[i + 1] = Math.max(0, Math.min(255, factor * (g - 128) + 128));
+            data[i + 2] = Math.max(0, Math.min(255, factor * (b - 128) + 128));
+          }
         }
 
         ctx.putImageData(imageData, 0, 0);
@@ -176,20 +185,21 @@ export async function preprocessImage(
 
 /**
  * Hàm nén ảnh cục bộ siêu tốc trước khi gửi lên Gemini API:
- * - Đưa kích thước ảnh về tối đa 1024px (giữ nguyên tỷ lệ khung hình)
- * - Giảm chất lượng (quality) JPEG xuống 0.7
- * - Giúp dung lượng ảnh chỉ còn 100KB - 300KB, upload chớp nhoáng và AI xử lý cực nhanh
+ * - Đưa kích thước ảnh về tối đa 1600px (giữ nguyên tỷ lệ khung hình và độ sắc nét của chữ nhỏ trên phiếu giao hàng)
+ * - Giữ nguyên màu sắc tự nhiên (chất lượng 0.8) để Gemini Multimodal Vision nhận diện chính xác nhất
+ * - Giúp dung lượng ảnh chỉ còn 150KB - 350KB, upload chớp nhoáng và AI xử lý cực nhanh
  */
 export async function compressImageForOcr(
   imageSource: string,
-  maxDimension = 1024,
-  quality = 0.7
+  maxDimension = 1600,
+  quality = 0.8
 ): Promise<string> {
   return preprocessImage(imageSource, {
     maxDimension,
     quality,
-    contrast: 50,
-    sharpen: true,
+    contrast: 0,
+    sharpen: false,
+    grayscale: false,
   });
 }
 

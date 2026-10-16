@@ -1,4 +1,4 @@
-export type InvoiceType = 'TYPE_A_TABLE' | 'TYPE_B_TRANSFER' | 'TYPE_C_FREE_TEXT';
+export type InvoiceType = 'TYPE_A_TABLE' | 'TYPE_B_TRANSFER' | 'TYPE_C_FREE_TEXT' | 'TYPE_D_DELIVERY';
 
 export interface ExtractedBatchItem {
   id: string;
@@ -43,7 +43,7 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'cat-shopping': [
     'áo', 'quần', 'shopee', 'lazada', 'tiki', 'mua', 'giày', 'dép',
     'váy', 'túi', 'sắm', 'siêu thị', 'quần áo', 'mỹ phẩm', 'đầm', 'nón',
-    'balo', 'thời trang'
+    'balo', 'thời trang', 'tất', 'vớ', 'jean', 'bootcut', 'quà tặng', 'cotton'
   ],
   'cat-haircut': [
     'cắt tóc', 'gội đầu', 'barber', '30shine', 'cắt', 'uốn tóc', 'nhuộm', 'tóc'
@@ -83,6 +83,27 @@ export function predictCategory(text: string): string {
 // =========================================================================
 export function classifyInvoice(rawText: string): InvoiceType {
   const text = (rawText || '').toLowerCase();
+
+  // Kiểm tra Loại D: Phiếu giao hàng / Vận đơn TMĐT (Shopee, SPX, TikTok, Lazada, GHN, GHTK...)
+  const deliveryKeywords = [
+    'spx express', 'shopee', 'lazada', 'tiktok shop', 'tiki', 'phiếu giao hàng',
+    'mã vận đơn', 'mã đơn hàng', 'tiền thu người nhận', 'ghtk', 'ghn',
+    'giao hàng nhanh', 'giao hàng tiết kiệm', 'viettel post', 'j&t express',
+    'nội dung hàng', 'chi tiết hàng hóa', 'người gửi', 'người nhận'
+  ];
+  let deliveryScore = 0;
+  for (const kw of deliveryKeywords) {
+    if (text.includes(kw)) deliveryScore++;
+  }
+  if (
+    deliveryScore >= 2 ||
+    text.includes('spx express') ||
+    text.includes('mã vận đơn') ||
+    text.includes('tiền thu người nhận') ||
+    text.includes('phiếu giao hàng')
+  ) {
+    return 'TYPE_D_DELIVERY';
+  }
 
   // Kiểm tra Loại B: Biên lai chuyển khoản ngân hàng
   const transferKeywords = [
@@ -462,6 +483,98 @@ export function extractFreeTextReceipt(rawText: string): ExtractedBatchItem[] {
   return items;
 }
 
+/**
+ * CHIẾN LƯỢC CHO LOẠI D: Phiếu giao hàng / Vận đơn TMĐT (Shopee, SPX Express, TikTok, Lazada...)
+ * Trích xuất người gửi/shop, các mặt hàng trong phần "Nội dung hàng", ngày đặt hàng và số tiền COD (nếu có)
+ */
+export function extractDeliverySlipReceipt(rawText: string): ExtractedBatchItem[] {
+  const lines = (rawText || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const orderDate = extractDateFromText(rawText, todayStr);
+
+  // 1. Tìm tên Shop / Người gửi
+  let shopName = '';
+  for (let i = 0; i < Math.min(lines.length, 14); i++) {
+    const line = lines[i];
+    const shopMatch = line.match(/(?:người\s*gửi|shop|từ|sender)[\s:\.]*(.+)/i);
+    if (shopMatch && shopMatch[1] && shopMatch[1].trim().length > 1) {
+      shopName = cleanNoteText(shopMatch[1].trim());
+      break;
+    }
+  }
+
+  // 2. Tìm số tiền COD (Tiền thu Người nhận)
+  let codAmount = 0;
+  for (const line of lines) {
+    if (/tiền\s*thu\s*người\s*nhận|cod\b/i.test(line)) {
+      const parsed = parseMoneyNumber(line);
+      if (parsed !== null) {
+        codAmount = parsed;
+        break;
+      }
+    }
+  }
+
+  // 3. Tìm các dòng sản phẩm trong "Nội dung hàng" hoặc bắt đầu bằng 1., 2., -, +
+  const items: ExtractedBatchItem[] = [];
+  let inContentSection = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (/nội\s*dung\s*hàng|chi\s*tiết\s*hàng\s*hóa|sản\s*phẩm/i.test(line)) {
+      inContentSection = true;
+      continue;
+    }
+
+    if (inContentSection && /chữ\s*ký|tiền\s*thu|kiểm\s*tra\s*hàng|người\s*nhận/i.test(line)) {
+      inContentSection = false;
+    }
+
+    const isNumberedItem = /^\d+[\.\/\-)\s]+(.+)/.test(line) || /^[•\-*]\s*(.+)/.test(line);
+
+    if ((inContentSection || isNumberedItem) && !isGarbageOcrText(line)) {
+      // Bỏ qua dòng tiêu đề phụ
+      if (/^(tổng\s*sl|sl\b|mã\s*vận\s*đơn|mã\s*đơn)/i.test(line)) continue;
+
+      let cleanName = line.replace(/^\d+[\.\/\-)\s]+/, '').replace(/^[•\-*]\s*/, '').trim();
+      cleanName = cleanNoteText(cleanName);
+      if (cleanName.length > 2 && !isGarbageOcrText(cleanName)) {
+        const itemNote = shopName ? `[${shopName}] ${cleanName}` : cleanName;
+        items.push({
+          id: 'item-delivery-' + Date.now() + '-' + items.length,
+          date: orderDate,
+          amount: 0, // Mặc định 0 cho đến khi chia COD hoặc người dùng nhập
+          note: itemNote,
+          categoryId: predictCategory(cleanName),
+          rawLine: line,
+        });
+      }
+    }
+  }
+
+  // Nếu tìm thấy tiền COD > 0 và có items, gán COD cho món đầu tiên (hoặc món không phải quà tặng)
+  if (codAmount > 0 && items.length > 0) {
+    const mainItem = items.find((it) => !it.note.toLowerCase().includes('quà tặng')) || items[0];
+    mainItem.amount = codAmount;
+  }
+
+  // Fallback nếu không tách được dòng riêng lẻ nào
+  if (items.length === 0) {
+    const fallbackNote = shopName ? `[${shopName}] Đơn hàng TMĐT` : 'Đơn hàng giao nhận TMĐT';
+    items.push({
+      id: 'item-delivery-' + Date.now(),
+      date: orderDate,
+      amount: codAmount,
+      note: fallbackNote,
+      categoryId: 'cat-shopping',
+      rawLine: rawText.slice(0, 80),
+    });
+  }
+
+  return items;
+}
+
 // =========================================================================
 // 3. HÀM CHÍNH ĐIỀU PHỐI (EXTRACT INVOICE DATA)
 // Hỗ trợ cả chuỗi JSON từ Cloud/LLM Vision và văn bản phân tích dòng
@@ -612,13 +725,29 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
   ) {
     try {
       const parsed = JSON.parse(cleanJson);
+      const rawTextLower = rawText.toLowerCase();
+      const isDeliveryJson =
+        rawTextLower.includes('spx') ||
+        rawTextLower.includes('shopee') ||
+        rawTextLower.includes('phiếu giao hàng') ||
+        rawTextLower.includes('mã vận đơn') ||
+        rawTextLower.includes('mã đơn hàng') ||
+        rawTextLower.includes('tiền thu người nhận') ||
+        rawTextLower.includes('lazada') ||
+        rawTextLower.includes('tiktok') ||
+        rawTextLower.includes('tiki') ||
+        rawTextLower.includes('ghtk') ||
+        rawTextLower.includes('ghn');
+
       const invoiceType: InvoiceType =
         (typeof parsed === 'object' && !Array.isArray(parsed) && parsed.invoiceType) ||
-        'TYPE_A_TABLE';
+        (isDeliveryJson ? 'TYPE_D_DELIVERY' : 'TYPE_A_TABLE');
 
       const invoiceTypeName =
         (typeof parsed === 'object' && !Array.isArray(parsed) && parsed.invoiceTypeName) ||
-        (invoiceType === 'TYPE_A_TABLE'
+        (invoiceType === 'TYPE_D_DELIVERY'
+          ? 'Phiếu giao hàng / Vận đơn TMĐT'
+          : invoiceType === 'TYPE_A_TABLE'
           ? 'Hóa đơn in / Bảng (Siêu thị, Cửa hàng)'
           : invoiceType === 'TYPE_B_TRANSFER'
           ? 'Biên lai Chuyển khoản Ngân hàng'
@@ -635,9 +764,14 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
         : [];
 
       const items: ExtractedBatchItem[] = rawItems
-        .filter((item: any) => item && (Number(item.amount) > 0 || Number(item.price) > 0))
+        .filter((item: any) => {
+          if (!item) return false;
+          const amt = Number(item.amount ?? item.price ?? 0);
+          const name = String(item.name || item.title || item.note || '').trim();
+          return amt > 0 || name.length > 2;
+        })
         .map((item: any, idx: number) => {
-          const amt = Number(item.amount || item.price || 0);
+          const amt = Math.max(0, Number(item.amount ?? item.price ?? 0));
           const name = String(item.name || item.title || item.note || `Món hàng ${idx + 1}`).trim();
           const itemDate = item.date || defaultDate;
           const categoryId = item.categoryId || predictCategory(item.categorySuggestion || item.category || name);
@@ -671,7 +805,9 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
   const invoiceType = classifyInvoice(rawText);
   let items: ExtractedBatchItem[] = [];
 
-  if (invoiceType === 'TYPE_B_TRANSFER') {
+  if (invoiceType === 'TYPE_D_DELIVERY') {
+    items = extractDeliverySlipReceipt(rawText);
+  } else if (invoiceType === 'TYPE_B_TRANSFER') {
     items = extractBankTransferReceipt(rawText);
   } else if (invoiceType === 'TYPE_A_TABLE') {
     items = extractThermalReceipt(rawText);
@@ -687,6 +823,7 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
     TYPE_A_TABLE: 'Hóa đơn in / Bảng (Siêu thị, Cửa hàng)',
     TYPE_B_TRANSFER: 'Biên lai Chuyển khoản Ngân hàng',
     TYPE_C_FREE_TEXT: 'Giấy ghi chép tự do / Ghi tay',
+    TYPE_D_DELIVERY: 'Phiếu giao hàng / Vận đơn TMĐT',
   };
 
   const totalAmount = items.reduce((acc, it) => acc + it.amount, 0);

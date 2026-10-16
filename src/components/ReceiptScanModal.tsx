@@ -46,11 +46,12 @@ interface ReceiptScanModalProps {
 const BatchItemAmountInput: React.FC<{
   initialAmount: number;
   onCommit: (val: number) => void;
-}> = ({ initialAmount, onCommit }) => {
-  const [val, setVal] = useState(initialAmount.toString());
+  isZero?: boolean;
+}> = ({ initialAmount, onCommit, isZero }) => {
+  const [val, setVal] = useState(initialAmount === 0 ? '' : initialAmount.toString());
 
   useEffect(() => {
-    setVal(initialAmount.toString());
+    setVal(initialAmount === 0 ? '' : initialAmount.toString());
   }, [initialAmount]);
 
   return (
@@ -59,8 +60,10 @@ const BatchItemAmountInput: React.FC<{
       onChange={setVal}
       onEvaluated={onCommit}
       size="compact"
-      placeholder="0"
-      className="text-right font-bold text-[#b94a3b]"
+      placeholder="Nhập số tiền..."
+      className={`text-right font-bold transition ${
+        isZero ? 'text-amber-800 bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/60' : 'text-[#b94a3b]'
+      }`}
     />
   );
 };
@@ -319,6 +322,14 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
       return;
     }
 
+    const zeroItems = batchItems.filter((it) => (Number(it.amount) || 0) === 0);
+    if (zeroItems.length > 0) {
+      const confirmSave = window.confirm(
+        `Phát hiện ${zeroItems.length} món hàng đang có số tiền là 0 đ (do phiếu giao hàng không in sẵn giá tiền).\n\nBạn có muốn tiếp tục lưu các khoản này với số tiền 0 đ không? (Nhấn Hủy nếu bạn muốn chạm vào để nhập giá tiền thực tế)`
+      );
+      if (!confirmSave) return;
+    }
+
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
@@ -561,25 +572,40 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                   <span className="text-[#7a6a58] font-medium text-[11px]">Kiểu nhận diện:</span>
                   <span
                     className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                      invoiceType === 'TYPE_A_TABLE'
+                      invoiceType === 'TYPE_D_DELIVERY'
+                        ? 'bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]'
+                        : invoiceType === 'TYPE_A_TABLE'
                         ? 'bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd]'
                         : invoiceType === 'TYPE_B_TRANSFER'
                         ? 'bg-[#dcfce7] text-[#15803d] border border-[#bbf7d0]'
                         : 'bg-[#fef3c7] text-[#b45309] border border-[#fde68a]'
                     }`}
                   >
-                    {invoiceTypeName || 'Hóa đơn tự do'}
+                    {invoiceTypeName || (invoiceType === 'TYPE_D_DELIVERY' ? 'Phiếu giao hàng / Vận đơn TMĐT' : 'Hóa đơn in / Bảng')}
                   </span>
                 </div>
 
                 {processedImageUrl && (
                   <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#e0f2fe] text-[#0369a1] text-[10px] font-semibold border border-[#bae6fd]">
                     <Wand2 className="w-3 h-3 text-[#0284c7]" />
-                    <span>Đã tiền xử lý: Grayscale + Tương phản 70% + Làm nét</span>
+                    <span>Đã nén tối ưu & làm nét chất lượng cao</span>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Cảnh báo nhắc nhở nếu có món hàng 0 đ (Đơn Shopee trả trước) */}
+            {batchItems.some((it) => (Number(it.amount) || 0) === 0) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <span className="text-base shrink-0">💡</span>
+                <div className="flex-1">
+                  <strong className="font-bold text-amber-950">Đơn hàng Shopee/TMĐT trả trước (0 đ):</strong>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    Phiếu giao hàng không in sẵn giá tiền từng món. Vui lòng bấm vào ô số tiền màu vàng bên dưới để nhập giá thực tế bạn đã thanh toán trước khi lưu.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Bộ chọn chung: Sổ và Ví áp dụng cho toàn bộ đợt quét */}
             <div className="p-3.5 rounded-xl bg-[#f5ebe0] border border-[#ebdcc9] space-y-2">
@@ -697,7 +723,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                     >
                       {/* Top row: Order, Date & Delete Button */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-1">
+                        <div className="flex items-center gap-2 flex-1 flex-wrap">
                           <span className="w-5 h-5 rounded-full bg-[#f5ebe0] text-[#7a6a58] text-[10px] font-bold flex items-center justify-center shrink-0">
                             {index + 1}
                           </span>
@@ -713,6 +739,12 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                               className="text-xs bg-transparent text-[#3e332a] font-medium focus:outline-none"
                             />
                           </div>
+
+                          {(Number(item.amount) || 0) === 0 && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold">
+                              Chưa có giá / Đã trả trước
+                            </span>
+                          )}
                         </div>
 
                         {/* Nút xóa dòng bị nhận diện nhầm */}
@@ -745,6 +777,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
                         <div>
                           <BatchItemAmountInput
                             initialAmount={item.amount}
+                            isZero={(Number(item.amount) || 0) === 0}
                             onCommit={(val) => handleUpdateItem(item.id, 'amount', val)}
                           />
                         </div>

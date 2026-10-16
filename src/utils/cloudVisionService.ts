@@ -27,12 +27,7 @@ export const GEMINI_FALLBACK_MODELS = [
   'gemini-3.7-flash',      // Ưu tiên #5: Gemini 3.7 Flash, xử lý nhanh & chính xác
   'gemini-3.6-flash',      // Ưu tiên #6: Gemini 3.6 Flash
   'gemini-3-flash',        // Ưu tiên #7: Gemini 3 Flash
-  'gemini-2.5-flash-lite', // Ưu tiên #8: Dòng Lite 2.5 (10 RPM / 20 RPD)
-  'gemini-2.5-flash',      // Ưu tiên #9: Dòng Flash 2.5
-  'gemini-2.0-flash',      // Ưu tiên #10: Dòng Flash 2.0
-  'gemini-flash-latest',   // Ưu tiên #11: Alias tự động trỏ model Flash mới nhất
-  'gemini-1.5-flash',      // Ưu tiên #12: Fallback thế hệ 1.5
-  'gemini-1.5-flash-8b',   // Ưu tiên #13: Fallback siêu nhẹ 8B
+  'gemini-flash-latest',   // Ưu tiên #8: Alias tự động trỏ model Flash mới nhất
 ];
 
 // Danh sách các model hỗ trợ Audio multimodal theo thứ tự ưu tiên Tốc độ & Độ chính xác
@@ -44,12 +39,7 @@ export const GEMINI_AUDIO_MODELS = [
   'gemini-3.7-flash',      // Xử lý audio nhanh & chính xác
   'gemini-3.6-flash',      // Audio đa phương thức
   'gemini-3-flash',        // Multimodal Audio 3.0
-  'gemini-2.5-flash-lite', // Audio 2.5 Lite
-  'gemini-2.5-flash',      // Audio 2.5 Flash
-  'gemini-2.0-flash',      // Audio 2.0 Flash
   'gemini-flash-latest',   // Audio Flash Latest
-  'gemini-1.5-flash',      // Audio 1.5 Flash
-  'gemini-1.5-flash-8b',   // Audio 1.5 Flash 8B
 ];
 
 /**
@@ -116,9 +106,28 @@ function mapCategoryNameToId(name: string): string {
   if (normalized.includes('uống') || normalized.includes('cafe') || normalized.includes('trà') || normalized.includes('nước')) return 'cat-drink';
   if (normalized.includes('xăng') || normalized.includes('xe') || normalized.includes('janus')) return 'cat-gas';
   if (normalized.includes('hóa đơn') || normalized.includes('điện') || normalized.includes('nước') || normalized.includes('trọ') || normalized.includes('mạng')) return 'cat-bills';
-  if (normalized.includes('mua sắm') || normalized.includes('quần áo') || normalized.includes('áo') || normalized.includes('shopee')) return 'cat-shopping';
+  if (
+    normalized.includes('mua sắm') ||
+    normalized.includes('quần áo') ||
+    normalized.includes('quần') ||
+    normalized.includes('áo') ||
+    normalized.includes('tất') ||
+    normalized.includes('vớ') ||
+    normalized.includes('váy') ||
+    normalized.includes('đầm') ||
+    normalized.includes('giày') ||
+    normalized.includes('dép') ||
+    normalized.includes('shopee') ||
+    normalized.includes('lazada') ||
+    normalized.includes('tiktok') ||
+    normalized.includes('tiki') ||
+    normalized.includes('thời trang') ||
+    normalized.includes('jean') ||
+    normalized.includes('bootcut') ||
+    normalized.includes('quà tặng')
+  ) return 'cat-shopping';
   if (normalized.includes('cắt tóc') || normalized.includes('gội đầu') || normalized.includes('tóc')) return 'cat-haircut';
-  if (normalized.includes('điện tử') || normalized.includes('điện thoại') || normalized.includes('laptop')) return 'cat-electronics';
+  if (normalized.includes('điện tử') || normalized.includes('điện thoại') || normalized.includes('laptop') || normalized.includes('tai nghe') || normalized.includes('sạc')) return 'cat-electronics';
   if (normalized.includes('gia dụng') || normalized.includes('nồi') || normalized.includes('chảo')) return 'cat-furniture';
   if (normalized.includes('lương') || normalized.includes('thưởng') || normalized.includes('thu nhập')) return 'cat-salary';
   return predictCategory(name);
@@ -127,35 +136,46 @@ function mapCategoryNameToId(name: string): string {
 /**
  * Prompt 1: Tách từng món (Mặc định)
  */
-export const VISION_INVOICE_PROMPT_SPLIT = `Đọc hóa đơn/biên lai và trích xuất các khoản chi tiêu từng món.
-Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ định dạng bắt buộc: [ { "name": "Món 1", "amount": 100 }, { "name": "Món 2", "amount": 200 } ]. Không trả về các object rời rạc.
+export const VISION_INVOICE_PROMPT_SPLIT = `Đọc hóa đơn/biên lai/phiếu giao hàng/vận đơn TMĐT và trích xuất các khoản chi tiêu từng món.
+Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ: [ { "name": "Món 1", "amount": 100 }, { "name": "Món 2", "amount": 200 } ]. Không trả về các object rời rạc.
 
 Mỗi phần tử gồm:
-- "name": tên món hoặc người nhận chuyển khoản
-- "amount": số tiền nguyên dương (VD: 50k -> 50000, 1.2tr -> 1200000)
-- "date": YYYY-MM-DD (mặc định 2026 nếu thiếu năm)
-- "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác"
+- "name": tên món, sản phẩm hoặc người nhận chuyển khoản. Nếu là đơn hàng sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki...), hãy gắn kèm tên Shop (VD: "[Shopee - HAVENSA] Quần jean form bootcut Haven's").
+- "amount": số tiền (số nguyên >= 0).
+  + Nếu có giá in trên từng món: lấy đúng giá.
+  + Nếu là phiếu giao hàng có tiền COD thu người nhận > 0: gán số tiền COD (nếu có quà tặng 0đ kèm theo, gán COD cho món chính).
+  + Nếu là phiếu giao hàng Shopee/Lazada trả trước ghi "Tiền thu Người nhận: 0 VND" hoặc không in giá tiền từng món: BẮT BUỘC để amount = 0, TUYỆT ĐỐI KHÔNG BỎ QUA sản phẩm!
+- "date": YYYY-MM-DD (ngày hóa đơn hoặc ngày đặt hàng, mặc định 2026 nếu thiếu năm).
+- "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác".
 
-Quy tắc:
-1. Không lấy dòng VAT, Tổng cộng, Tiền thối.
-2. Biên lai ngân hàng: xuất 1 phần tử gồm nội dung/người nhận và số tiền.
-3. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc ký tự khác bên ngoài.`;
+Quy tắc bắt buộc:
+1. Với phiếu giao hàng / vận đơn sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki, GHN, GHTK, Viettel Post, J&T...):
+   - Trích xuất TOÀN BỘ từng sản phẩm trong phần "Nội dung hàng" hoặc "Chi tiết hàng hóa" (kể cả quà tặng kèm, sản phẩm 0đ).
+   - Tên món cần ngắn gọn, rõ ràng, giữ lại phân loại size/màu và số lượng (bỏ bớt các mã SKU rườm rà).
+2. Không lấy dòng VAT, Tổng cộng, Tiền thối.
+3. Biên lai ngân hàng: xuất 1 phần tử gồm nội dung/người nhận và số tiền.
+4. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc ký tự khác bên ngoài.`;
 
 /**
  * Prompt 2: Gộp thành 1 giao dịch duy nhất
  */
-export const VISION_INVOICE_PROMPT_MERGE = `Phân tích hóa đơn này và trả về 1 giao dịch duy nhất. Khóa totalAmount là tổng tiền hóa đơn. Khóa note (Ghi chú) bắt buộc phải bắt đầu bằng [Tên Cửa Hàng], sau đó liệt kê chi tiết từng món hàng và giá tiền tương ứng bên dưới theo định dạng: [Tên Cửa Hàng]\\n- Món A: giá\\n- Món B: giá.
+export const VISION_INVOICE_PROMPT_MERGE = `Phân tích hóa đơn hoặc phiếu giao hàng này và trả về 1 giao dịch duy nhất.
+Khóa totalAmount là tổng tiền hóa đơn hoặc số tiền thu COD (nếu đơn trả trước ghi 0 VND hoặc không có giá thì để 0).
+Khóa note (Ghi chú) bắt buộc phải bắt đầu bằng [Tên Cửa Hàng / Tên Shop / Đơn vị giao hàng], sau đó liệt kê chi tiết từng món hàng kèm số lượng theo định dạng:
+[Tên Cửa Hàng / Shop]
+- Món A (SL: 1)
+- Món B (SL: 1)
 
 BẮT BUỘC: Trả về DUY NHẤT một chuỗi JSON hợp lệ. Ví dụ:
-{"totalAmount": 100000, "note": "Tên Cửa Hàng\\n- Món 1: 50.000\\n- Món 2: 50.000", "categorySuggestion": "Ăn uống", "date": "YYYY-MM-DD"}
+{"totalAmount": 100000, "note": "[Shopee - HAVENSA]\\n- Quần jean form bootcut (SL: 1)\\n- Tất thể thao (SL: 1)", "categorySuggestion": "Mua sắm", "date": "2026-10-10"}
 
 ĐẶC BIỆT LƯU Ý: Phải dùng ký tự escape \\n để xuống dòng bên trong giá trị string của note, tuyệt đối không dùng dấu xuống dòng thực tế (literal unescaped newline) gây lỗi JSON.
 
 Quy tắc bắt buộc:
-1. "totalAmount": Số nguyên tổng tiền cả hóa đơn (Total / Tổng thanh toán). Không lấy tiền thối hay giảm giá.
-2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và giá (VD: "[Tên Cửa Hàng]\\n- Món A: 50.000\\n- Món B: 50.000").
+1. "totalAmount": Số nguyên tổng tiền cả hóa đơn hoặc tiền thu COD (nếu đơn Shopee/Lazada trả trước ghi 0 VND thì để 0, không được bỏ qua).
+2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng / Shop], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và số lượng.
 3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
-4. "date": YYYY-MM-DD từ hóa đơn (mặc định 2026 nếu thiếu).
+4. "date": YYYY-MM-DD từ hóa đơn hoặc ngày đặt hàng (mặc định 2026 nếu thiếu).
 5. Chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không bọc markdown (\`\`\`json) hay văn bản giải thích nào khác.`;
 
 
@@ -182,11 +202,11 @@ export const GEMINI_MERGE_SCHEMA = {
   properties: {
     totalAmount: {
       type: 'INTEGER',
-      description: 'Tổng số tiền thanh toán cả hóa đơn (số nguyên dương)',
+      description: 'Tổng số tiền thanh toán cả hóa đơn hoặc tiền COD thu hộ (số nguyên >= 0, để 0 nếu đơn trả trước 0 VND)',
     },
     note: {
       type: 'STRING',
-      description: 'Ghi chú bắt đầu bằng [Tên Cửa Hàng], sau đó liệt kê từng món và giá tiền ngăn cách bằng \\n',
+      description: 'Ghi chú bắt đầu bằng [Tên Cửa Hàng / Shop], sau đó liệt kê từng món kèm số lượng ngăn cách bằng \\n',
     },
     categorySuggestion: {
       type: 'STRING',
@@ -194,7 +214,7 @@ export const GEMINI_MERGE_SCHEMA = {
     },
     date: {
       type: 'STRING',
-      description: 'Ngày lập hóa đơn theo định dạng YYYY-MM-DD',
+      description: 'Ngày lập hóa đơn hoặc ngày đặt hàng theo định dạng YYYY-MM-DD',
     },
   },
   required: ['totalAmount', 'note', 'categorySuggestion', 'date'],
@@ -205,17 +225,17 @@ export const GEMINI_MERGE_SCHEMA = {
  */
 export const GEMINI_SPLIT_SCHEMA = {
   type: 'ARRAY',
-  description: 'Danh sách các món hàng/dịch vụ trong hóa đơn',
+  description: 'Danh sách các món hàng/dịch vụ/sản phẩm trong hóa đơn hoặc phiếu giao hàng',
   items: {
     type: 'OBJECT',
     properties: {
       name: {
         type: 'STRING',
-        description: 'Tên món hàng hoặc dịch vụ',
+        description: 'Tên món hàng, dịch vụ hoặc sản phẩm trên phiếu giao hàng',
       },
       amount: {
         type: 'INTEGER',
-        description: 'Số tiền của món hàng/dịch vụ (số nguyên dương)',
+        description: 'Số tiền của món hàng/sản phẩm (số nguyên >= 0, nếu là phiếu giao hàng Shopee/Lazada đã trả trước hoặc không ghi giá thì để 0)',
       },
       categorySuggestion: {
         type: 'STRING',
@@ -223,7 +243,7 @@ export const GEMINI_SPLIT_SCHEMA = {
       },
       date: {
         type: 'STRING',
-        description: 'Ngày lập hóa đơn định dạng YYYY-MM-DD',
+        description: 'Ngày lập hóa đơn hoặc ngày đặt hàng định dạng YYYY-MM-DD',
       },
     },
     required: ['name', 'amount', 'categorySuggestion', 'date'],
@@ -825,16 +845,46 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
     }
   }
 
-  const invoiceType: InvoiceType =
+  const textToCheck = (responseText + ' ' + JSON.stringify(parsed)).toLowerCase();
+  const isDelivery =
+    textToCheck.includes('spx') ||
+    textToCheck.includes('shopee') ||
+    textToCheck.includes('phiếu giao hàng') ||
+    textToCheck.includes('mã vận đơn') ||
+    textToCheck.includes('mã đơn hàng') ||
+    textToCheck.includes('tiền thu người nhận') ||
+    textToCheck.includes('lazada') ||
+    textToCheck.includes('tiktok') ||
+    textToCheck.includes('tiki') ||
+    textToCheck.includes('ghtk') ||
+    textToCheck.includes('ghn') ||
+    textToCheck.includes('viettel post') ||
+    textToCheck.includes('j&t') ||
+    textToCheck.includes('giao hàng');
+
+  const isTransfer =
+    textToCheck.includes('chuyển khoản') ||
+    textToCheck.includes('giao dịch thành công') ||
+    textToCheck.includes('người thụ hưởng');
+
+  let invoiceType: InvoiceType =
     (typeof parsed === 'object' && !Array.isArray(parsed) && parsed.invoiceType) ||
-    'TYPE_A_TABLE';
+    (isDelivery ? 'TYPE_D_DELIVERY' : isTransfer ? 'TYPE_B_TRANSFER' : 'TYPE_A_TABLE');
+
+  if (isDelivery) {
+    invoiceType = 'TYPE_D_DELIVERY';
+  } else if (isTransfer && invoiceType !== 'TYPE_D_DELIVERY') {
+    invoiceType = 'TYPE_B_TRANSFER';
+  }
 
   const invoiceTypeName =
     (typeof parsed === 'object' && !Array.isArray(parsed) && parsed.invoiceTypeName) ||
-    (invoiceType === 'TYPE_A_TABLE'
-      ? 'Hóa đơn in / Bảng (Siêu thị)'
+    (invoiceType === 'TYPE_D_DELIVERY'
+      ? 'Phiếu giao hàng / Vận đơn TMĐT'
       : invoiceType === 'TYPE_B_TRANSFER'
       ? 'Biên lai Chuyển khoản'
+      : invoiceType === 'TYPE_A_TABLE'
+      ? 'Hóa đơn in / Bảng (Siêu thị)'
       : 'Giấy ghi chép tự do');
 
   const defaultDate =
@@ -848,13 +898,13 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
     rawItems = parsed.items;
   } else if (typeof parsed === 'object' && parsed !== null) {
     // Nếu AI trả về 1 object đơn lẻ (nhất là trong chế độ gộp 1 giao dịch)
-    const singleAmt = Number(parsed.totalAmount || parsed.total || parsed.amount || parsed.price || 0);
+    const singleAmt = Math.max(0, Number(parsed.totalAmount ?? parsed.total ?? parsed.amount ?? parsed.price ?? 0));
     const singleNote = String(
       parsed.note || parsed.name || parsed.storeName || parsed.merchant || parsed.title || 'Chi tiêu hóa đơn'
     )
       .trim()
       .replace(/\\n/g, '\n');
-    if (singleAmt > 0) {
+    if (singleAmt > 0 || singleNote.length > 2) {
       rawItems = [
         {
           note: singleNote,
@@ -869,9 +919,15 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
   }
 
   const items: ExtractedBatchItem[] = rawItems
-    .filter((item: any) => item && (Number(item.totalAmount) > 0 || Number(item.amount) > 0 || Number(item.price) > 0))
+    .filter((item: any) => {
+      if (!item) return false;
+      const amt = Number(item.totalAmount ?? item.amount ?? item.price ?? 0);
+      const note = String(item.note || item.name || item.title || '').trim();
+      // Giữ lại món nếu có số tiền > 0, HOẶC nếu có tên món hàng hợp lệ (cho phép amount === 0 đối với đơn hàng TMĐT / phiếu giao hàng trả trước)
+      return amt > 0 || note.length > 2;
+    })
     .map((item: any, idx: number) => {
-      const amt = Number(item.totalAmount || item.amount || item.price || 0);
+      const amt = Math.max(0, Number(item.totalAmount ?? item.amount ?? item.price ?? 0));
       const noteText = String(item.note || item.name || item.title || `Món hàng ${idx + 1}`)
         .trim()
         .replace(/\\n/g, '\n');
