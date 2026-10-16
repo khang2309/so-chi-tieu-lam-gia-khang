@@ -184,7 +184,7 @@ export function useExpenseManager() {
     setIsAutoSyncing(true);
 
     try {
-      // Đọc dữ liệu local mới nhất từ LocalStorage để không bị stale closure
+      // Đọc dữ liệu local mới nhất từ LocalStorage kết hợp State để không bị mất dữ liệu
       let localTxs: Transaction[] = transactions;
       let localWallets: Wallet[] = wallets;
       let localLedgers: Ledger[] = ledgers;
@@ -192,13 +192,25 @@ export function useExpenseManager() {
 
       try {
         const rawTxs = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-        if (rawTxs) localTxs = JSON.parse(rawTxs);
+        if (rawTxs) {
+          const parsedTxs = JSON.parse(rawTxs);
+          localTxs = mergeEntitiesById(transactions, parsedTxs);
+        }
         const rawW = localStorage.getItem(STORAGE_KEYS.WALLETS);
-        if (rawW) localWallets = JSON.parse(rawW);
+        if (rawW) {
+          const parsedW = JSON.parse(rawW);
+          localWallets = mergeEntitiesById(wallets, parsedW);
+        }
         const rawL = localStorage.getItem(STORAGE_KEYS.LEDGERS);
-        if (rawL) localLedgers = JSON.parse(rawL);
+        if (rawL) {
+          const parsedL = JSON.parse(rawL);
+          localLedgers = mergeEntitiesById(ledgers, parsedL);
+        }
         const rawC = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-        if (rawC) localCategories = JSON.parse(rawC);
+        if (rawC) {
+          const parsedC = JSON.parse(rawC);
+          localCategories = mergeEntitiesById(categories, parsedC);
+        }
       } catch (err) {
         console.warn('Lỗi phân tích LocalStorage khi Auto-Sync:', err);
       }
@@ -236,7 +248,26 @@ export function useExpenseManager() {
           (c: Category) => !deletedCategoryIdsRef.current.has(c.id)
         );
 
-        setTransactions(cleanMerged.transactions);
+        // Khắc phục giao dịch bị mồ côi sổ hoặc ví (gán vào sổ/ví mặc định để luôn hiển thị)
+        const defaultLedgerId = finalLedgers.length > 0
+          ? (finalLedgers.find((l: Ledger) => l.isDefault) || finalLedgers[0]).id
+          : '';
+        const defaultWalletId = finalWallets.length > 0
+          ? (finalWallets.find((w: Wallet) => w.isDefault) || finalWallets[0]).id
+          : '';
+
+        const repairedTransactions = cleanMerged.transactions.map((tx: Transaction) => {
+          let updated = tx;
+          if (defaultLedgerId && (!updated.ledgerId || !finalLedgers.some((l: Ledger) => l.id === updated.ledgerId))) {
+            updated = { ...updated, ledgerId: defaultLedgerId };
+          }
+          if (defaultWalletId && (!updated.walletId || !finalWallets.some((w: Wallet) => w.id === updated.walletId))) {
+            updated = { ...updated, walletId: defaultWalletId };
+          }
+          return updated;
+        });
+
+        setTransactions(repairedTransactions);
         setWallets(finalWallets);
         setLedgers(finalLedgers);
         setCategories(finalCategories);
@@ -249,7 +280,7 @@ export function useExpenseManager() {
           );
         }
 
-        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(cleanMerged.transactions));
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(repairedTransactions));
         localStorage.setItem(STORAGE_KEYS.WALLETS, JSON.stringify(finalWallets));
         localStorage.setItem(STORAGE_KEYS.LEDGERS, JSON.stringify(finalLedgers));
         localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(finalCategories));
@@ -300,8 +331,11 @@ export function useExpenseManager() {
                 (w) => !deletedWalletIdsRef.current.has(w.id)
               );
               if (filtered.length > 0) {
-                filtered.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-                setWallets(sanitizeData(filtered));
+                setWallets((prev) => {
+                  const merged = mergeEntitiesById(prev, filtered);
+                  merged.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+                  return sanitizeData(merged);
+                });
               }
             }
           },
@@ -313,8 +347,11 @@ export function useExpenseManager() {
                 (l) => !deletedLedgerIdsRef.current.has(l.id)
               );
               if (filtered.length > 0) {
-                filtered.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-                setLedgers(sanitizeData(filtered));
+                setLedgers((prev) => {
+                  const merged = mergeEntitiesById(prev, filtered);
+                  merged.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+                  return sanitizeData(merged);
+                });
               }
             }
           },
@@ -325,7 +362,10 @@ export function useExpenseManager() {
                 (c) => !deletedCategoryIdsRef.current.has(c.id)
               );
               if (filtered.length > 0) {
-                setCategories(sanitizeData(filtered));
+                setCategories((prev) => {
+                  const merged = mergeEntitiesById(prev, filtered);
+                  return sanitizeData(merged);
+                });
               }
             }
           },
@@ -343,6 +383,11 @@ export function useExpenseManager() {
 
         // Xóa trắng hoàn toàn Giao dịch (0 giao dịch), Ví (0 ví) và Sổ (0 sổ) khi đã đăng xuất
         if (localStorage.getItem('user_is_logged_out') === 'true') {
+          // Xóa ngay cờ sau khi hoàn tất reset để nếu người dùng tiếp tục dùng ở chế độ ngoại tuyến thì dữ liệu không bị xóa nhầm
+          try {
+            localStorage.removeItem('user_is_logged_out');
+          } catch (_) {}
+
           setTransactions([]);
           setWallets([]);
           setLedgers([]);
@@ -509,6 +554,9 @@ export function useExpenseManager() {
 
   // 6. Action Handlers
   const addTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
+    try {
+      localStorage.removeItem('user_is_logged_out');
+    } catch (_) {}
     const now = new Date().toISOString();
     const newTx: Transaction = sanitizeData({
       ...data,
@@ -525,6 +573,9 @@ export function useExpenseManager() {
   };
 
   const addBatchTransactions = (items: Array<Omit<Transaction, 'id' | 'createdAt'>>) => {
+    try {
+      localStorage.removeItem('user_is_logged_out');
+    } catch (_) {}
     const now = new Date().toISOString();
     const newTxs: Transaction[] = sanitizeData(
       items.map((data, idx) => ({
@@ -579,6 +630,9 @@ export function useExpenseManager() {
   };
 
   const addLedger = (data: Omit<Ledger, 'id' | 'createdAt'>) => {
+    try {
+      localStorage.removeItem('user_is_logged_out');
+    } catch (_) {}
     const now = new Date().toISOString();
     const shouldBeDefault = Boolean(data.isDefault) || ledgers.length === 0;
     const newLedger: Ledger = sanitizeData({
@@ -709,6 +763,9 @@ export function useExpenseManager() {
   };
 
   const addWallet = (data: Omit<Wallet, 'id' | 'createdAt'>) => {
+    try {
+      localStorage.removeItem('user_is_logged_out');
+    } catch (_) {}
     const now = new Date().toISOString();
     const shouldBeDefault = Boolean(data.isDefault) || wallets.length === 0;
     const newWallet: Wallet = sanitizeData({

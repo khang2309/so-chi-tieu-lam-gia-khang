@@ -1,10 +1,10 @@
 {
-  "version": "2.1.51",
+  "version": "2.1.52",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Thêm nút 'Tạo nhanh 1 chạm' Sổ & Ví khi quét hóa đơn\n- Đồng bộ giao diện chọn và tạo mới Sổ & Ví chuyên nghiệp giống trang tạo giao dịch",
+  "releaseNotes": "- Khắc phục triệt để vấn đề mất dữ liệu khi đăng nhập hoặc tạo tài khoản\n- Tự động bảo toàn và đồng bộ 100% Sổ, Ví và Giao dịch đã lưu khi chưa đăng nhập lên Cloud\n- Khắc phục giao dịch mồ côi sổ hoặc ví, tự động gán vào sổ/ví mặc định",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T09:26:47.069Z"
+  "updatedAt": "2026-10-16T10:08:43.362Z"
 }

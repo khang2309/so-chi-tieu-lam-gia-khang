@@ -290,8 +290,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const continueOffline = () => {
     setIsOfflineMode(true);
-    localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
-    localStorage.setItem('hasSeenLoginPopup', 'true');
+    try {
+      localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem(STORAGE_OFFLINE_KEY, 'true');
+      localStorage.setItem('hasSeenLoginPopup', 'true');
+    } catch (_) {}
     setIsAuthModalOpen(false);
   };
 

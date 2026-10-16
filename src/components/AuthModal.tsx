@@ -60,7 +60,10 @@ export const AuthModal: React.FC = () => {
   };
 
   const handleSkip = () => {
-    localStorage.setItem('hasSeenLoginPopup', 'true');
+    try {
+      localStorage.removeItem('user_is_logged_out');
+      localStorage.setItem('hasSeenLoginPopup', 'true');
+    } catch (_) {}
     continueOffline();
     showToast('Bạn có thể đăng nhập sau tại mục Cài đặt ⚙️');
   };

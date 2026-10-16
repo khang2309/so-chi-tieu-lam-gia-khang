@@ -109,15 +109,13 @@ export interface TwoWaySyncResult {
 export async function performTwoWaySync(
   uid: string,
   localData: TwoWaySyncPayload,
-  options?: { preferCloudLists?: boolean }
+  _options?: { preferCloudLists?: boolean }
 ): Promise<TwoWaySyncResult> {
   if (!db || !uid) {
     const err = 'Chưa đăng nhập tài khoản hoặc chưa kết nối Firebase.';
     alert('Lỗi Firebase: ' + err);
     return { success: false, message: err };
   }
-
-  const preferCloudLists = options?.preferCloudLists ?? false;
 
   try {
     // Sạch hóa dữ liệu đầu vào triệt để
@@ -155,29 +153,24 @@ export async function performTwoWaySync(
     mergedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     // Đối với Ví, Sổ, Danh mục:
-    // - Khi vừa đăng nhập hoặc mở app (preferCloudLists = true): Nếu Cloud đã có dữ liệu (> 0), ưu tiên danh sách trên Cloud.
-    // - Khi người dùng bấm Đồng bộ thủ công (preferCloudLists = false): Lấy danh sách hiện tại trên máy làm chuẩn.
-    // Tuyệt đối không fallback về DEFAULT_WALLETS hay DEFAULT_LEDGERS để không tự ý hồi sinh dữ liệu mẫu khi người dùng đã Đặt lại / Xóa hết.
-    const mergedWallets = [
-      ...(preferCloudLists && cloudWallets.length > 0
-        ? cloudWallets
-        : cleanLocalData.wallets),
-    ];
+    // Luôn gộp an toàn 2 chiều giữa dữ liệu Local (tạo khi chưa đăng nhập/offline) và Cloud
+    // Đảm bảo tuyệt đối không làm mất dữ liệu người dùng đã lưu khi đăng nhập hoặc tạo tài khoản
+    const mergedWallets = mergeEntitiesById(cleanLocalData.wallets, cloudWallets);
     mergedWallets.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    if (mergedWallets.length > 0 && !mergedWallets.some((w) => w.isDefault)) {
+      mergedWallets[0].isDefault = true;
+    }
 
-    const mergedLedgers =
-      preferCloudLists && cloudLedgers.length > 0
-        ? cloudLedgers
-        : cleanLocalData.ledgers;
+    const mergedLedgers = mergeEntitiesById(cleanLocalData.ledgers, cloudLedgers);
+    mergedLedgers.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+    if (mergedLedgers.length > 0 && !mergedLedgers.some((l) => l.isDefault)) {
+      mergedLedgers[0].isDefault = true;
+    }
 
-    const mergedCategories =
-      preferCloudLists && cloudCategories.length > 0
-        ? cloudCategories
-        : cleanLocalData.categories.length > 0
-        ? cleanLocalData.categories
-        : cloudCategories.length > 0
-        ? cloudCategories
-        : DEFAULT_CATEGORIES;
+    const mergedCategories = mergeEntitiesById(
+      cleanLocalData.categories.length > 0 ? cleanLocalData.categories : DEFAULT_CATEGORIES,
+      cloudCategories
+    );
 
     const mergedData: TwoWaySyncPayload = {
       transactions: mergedTransactions,
