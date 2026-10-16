@@ -132,25 +132,34 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
+        <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="w-7 h-7 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center shrink-0">
               <Copy className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#3e332a]">
+              <h3 className="text-base font-bold text-[#3e332a] leading-tight">
                 Nhân Bản Giao Dịch
               </h3>
-              <p className="text-xs text-[#7a6a58]">
-                Tạo giao dịch mới dựa trên dữ liệu giao dịch cũ
+              <p className="text-[11px] text-[#7a6a58] leading-tight">
+                Tạo giao dịch mới từ dữ liệu cũ
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition"
+            type="button"
+            onClick={handleSubmit}
+            className="px-4 py-1.5 rounded-xl bg-[#2e7d32] text-white text-xs font-bold hover:bg-[#256629] active:scale-95 transition shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
           >
-            <X className="w-5 h-5" />
+            <Check className="w-4 h-4" />
+            <span>Nhân bản</span>
           </button>
         </div>
 

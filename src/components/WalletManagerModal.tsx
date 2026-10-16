@@ -218,19 +218,29 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
               <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90vh] my-auto animate-in zoom-in-95 duration-150">
                 {/* Header cố định */}
-                <div className="shrink-0 px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#3e332a]">
-                    {editingWallet ? `Chỉnh sửa ví: ${editingWallet.name}` : 'Thêm Ví / Nguồn tiền mới'}
-                  </span>
+                <div className="shrink-0 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAdding(false);
+                        setEditingWallet(null);
+                      }}
+                      className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    <span className="text-sm font-bold text-[#3e332a]">
+                      {editingWallet ? `Chỉnh sửa ví: ${editingWallet.name}` : 'Thêm Ví / Nguồn tiền mới'}
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsAdding(false);
-                      setEditingWallet(null);
-                    }}
-                    className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                    onClick={handleSave}
+                    className="px-4 py-1.5 rounded-xl bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] active:scale-95 transition shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
                   >
-                    <X className="w-4 h-4" />
+                    <Check className="w-4 h-4" />
+                    <span>{editingWallet ? 'Lưu' : 'Thêm'}</span>
                   </button>
                 </div>
 

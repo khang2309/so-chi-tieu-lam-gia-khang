@@ -6,7 +6,7 @@ import {
   formatExpressionWithDots,
 } from '../utils/mathExpression';
 import { formatCurrency } from '../utils/formatters';
-import { Calculator, X } from 'lucide-react';
+import { Calculator, X, Check } from 'lucide-react';
 import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
 
 interface SmartAmountInputProps {
@@ -230,14 +230,25 @@ export const SmartAmountInput: React.FC<SmartAmountInputProps> = ({
                     {internalValue || '0'}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleKeypadDone}
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 active:scale-95 transition shrink-0"
-                  title="Đóng bàn phím"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleKeypadDone}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 active:scale-95 transition flex items-center gap-1 shadow-xs cursor-pointer"
+                    title="Xong / Đóng bàn phím"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Xong</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleKeypadDone}
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 active:scale-95 transition cursor-pointer"
+                    title="Đóng bàn phím"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Custom Calculator Keypad */}
