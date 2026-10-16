@@ -233,12 +233,12 @@ export function evaluateMathExpression(input: string): number | null {
  * returning a fallback number (default 0) if neither is valid.
  */
 export function parseAmountOrExpression(input: string, fallback = 0): number {
-  if (!input || !input.trim()) return fallback;
+  if (!input || !input.trim()) return Math.round(fallback);
   const evalResult = evaluateMathExpression(input);
   if (evalResult !== null && !isNaN(evalResult) && isFinite(evalResult)) {
-    return evalResult;
+    return Math.round(evalResult);
   }
   const cleanStr = input.replace(/\./g, '').replace(/[^0-9-]/g, '');
   const parsed = parseFloat(cleanStr);
-  return !isNaN(parsed) && isFinite(parsed) ? parsed : fallback;
+  return !isNaN(parsed) && isFinite(parsed) ? Math.round(parsed) : Math.round(fallback);
 }

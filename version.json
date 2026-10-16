@@ -1,10 +1,10 @@
 {
-  "version": "2.1.40",
+  "version": "2.1.41",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Khac phuc loi hien thi so tien/phep tinh dai bi dau ba cham (...) che mat; tu dong co gian font chu va cuon ngang muot ma\n- Tich hop ban phim may tinh chuyen dung cho tinh nang Nhan Ban Giao Dich",
+  "releaseNotes": "- Khac phuc triet de loi sai so so thuc khi chinh sua vi tien khien so du hien thi thanh hang nghin ty; lam tron chuan so nguyen VND toan bo he thong",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T05:46:13.460Z"
+  "updatedAt": "2026-10-16T05:58:11.997Z"
 }

@@ -376,26 +376,32 @@ export function useExpenseManager() {
     const balanceMap: Record<string, number> = {};
 
     wallets.forEach((wallet) => {
-      balanceMap[wallet.id] = wallet.initialBalance;
+      balanceMap[wallet.id] = Math.round(Number(wallet.initialBalance) || 0);
     });
 
     transactions.filter((tx) => !tx.isDeleted).forEach((tx) => {
+      const amount = Math.round(Number(tx.amount) || 0);
       if (tx.type === 'expense') {
         if (balanceMap[tx.walletId] !== undefined) {
-          balanceMap[tx.walletId] -= tx.amount;
+          balanceMap[tx.walletId] -= amount;
         }
       } else if (tx.type === 'income') {
         if (balanceMap[tx.walletId] !== undefined) {
-          balanceMap[tx.walletId] += tx.amount;
+          balanceMap[tx.walletId] += amount;
         }
       } else if (tx.type === 'transfer') {
         if (balanceMap[tx.walletId] !== undefined) {
-          balanceMap[tx.walletId] -= tx.amount;
+          balanceMap[tx.walletId] -= amount;
         }
         if (tx.toWalletId && balanceMap[tx.toWalletId] !== undefined) {
-          balanceMap[tx.toWalletId] += tx.amount;
+          balanceMap[tx.toWalletId] += amount;
         }
       }
+    });
+
+    // Clean all balances to rounded integer VND
+    Object.keys(balanceMap).forEach((k) => {
+      balanceMap[k] = Math.round(balanceMap[k]);
     });
 
     return balanceMap;

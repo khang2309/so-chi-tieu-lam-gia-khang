@@ -81,7 +81,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     setName(w.name);
     // Hiển thị số dư hiện tại thực tế để người dùng dễ dàng điều chỉnh khớp với tài khoản
     const currentBal = walletBalances[w.id] !== undefined ? walletBalances[w.id] : w.initialBalance;
-    setInitialBalance(currentBal.toString());
+    const roundedBal = Math.round(Number(currentBal) || 0);
+    setInitialBalance(roundedBal.toString());
     setAccountNumber(w.accountNumber || '');
     setIcon(w.icon);
     setColor(w.color);
@@ -94,18 +95,20 @@ export const WalletTab: React.FC<WalletTabProps> = ({
       alert('Vui lòng nhập tên ví / ngân hàng!');
       return;
     }
-    const numBalance = parseAmountOrExpression(initialBalance, 0);
+    const numBalance = Math.round(parseAmountOrExpression(initialBalance, 0));
 
     if (editingWallet) {
       // Số dư hiện tại = Số dư ban đầu + Tổng biến động từ giao dịch
       // => Tổng biến động = Số dư hiện tại cũ - Số dư ban đầu cũ
       // Khi người dùng nhập Số dư hiện tại mới (numBalance):
       // Số dư ban đầu mới = Số dư hiện tại mới - Tổng biến động
-      const currentOldBalance =
+      const currentOldBalance = Math.round(
         walletBalances[editingWallet.id] !== undefined
           ? walletBalances[editingWallet.id]
-          : editingWallet.initialBalance;
-      const netTransactions = currentOldBalance - editingWallet.initialBalance;
+          : editingWallet.initialBalance
+      );
+      const oldInitial = Math.round(Number(editingWallet.initialBalance) || 0);
+      const netTransactions = currentOldBalance - oldInitial;
       const newInitialBalance = Math.round(numBalance - netTransactions);
 
       onUpdateWallet(editingWallet.id, {
