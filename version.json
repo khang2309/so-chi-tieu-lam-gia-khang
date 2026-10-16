@@ -1,10 +1,10 @@
 {
-  "version": "2.1.50",
+  "version": "2.1.51",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Nhận diện thông minh vận đơn & phiếu giao hàng TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki, GHN, GHTK)\n- Tự động bóc tách đầy đủ các món hàng trong kiện kể cả đơn hàng đã trả trước ghi 0 đ hoặc không in giá\n- Hỗ trợ nhập và chỉnh sửa nhanh giá tiền với nhãn cảnh báo trực quan cho đơn trả trước\n- Nâng cấp bộ model Gemini 3.5 & tối ưu độ nét ảnh gửi AI",
+  "releaseNotes": "- Thêm nút 'Tạo nhanh 1 chạm' Sổ & Ví khi quét hóa đơn\n- Đồng bộ giao diện chọn và tạo mới Sổ & Ví chuyên nghiệp giống trang tạo giao dịch",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T09:05:24.595Z"
+  "updatedAt": "2026-10-16T09:26:47.069Z"
 }
