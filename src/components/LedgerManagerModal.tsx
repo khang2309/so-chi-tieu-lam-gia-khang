@@ -130,10 +130,10 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col animate-in slide-in-from-bottom-2 sm:zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
+        <div className="shrink-0 px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#a25832]/10 text-[#a25832] flex items-center justify-center">
               <BookMarked className="w-4 h-4" />
@@ -175,8 +175,8 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
 
           {/* Add / Edit Form Modal (Chuẩn hóa đồng bộ giao diện như TransactionModal) */}
           {(isAdding || editingLedger) && (
-            <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150">
+            <div className="fixed inset-0 z-60 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="relative w-full max-w-md h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-2 sm:zoom-in-95 duration-150">
                 {/* Header cố định */}
                 <div className="shrink-0 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -206,11 +206,11 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
 
                 <form
                   onSubmit={handleSave}
-                  className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain"
+                  className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 overscroll-contain"
                 >
                   <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
-                      Tên sổ chi tiêu:
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
+                      Tên sổ chi tiêu
                     </label>
                     <input
                       type="text"
@@ -219,20 +219,20 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                       placeholder="VD: Quỹ du lịch, Đám cưới..."
                       required
                       autoFocus
-                      className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-sm font-medium text-[#3e332a] focus:outline-none focus:ring-1 focus:ring-[#a25832]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
-                      Mô tả mục đích:
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
+                      Mô tả mục đích
                     </label>
                     <input
                       type="text"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="VD: Ghi chép chi tiêu riêng biệt"
-                      className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-sm text-[#3e332a] focus:outline-none focus:ring-1 focus:ring-[#a25832]"
                     />
                   </div>
 

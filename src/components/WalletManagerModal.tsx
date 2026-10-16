@@ -71,7 +71,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
   const [icon, setIcon] = useState<string>('Landmark');
   const [color, setColor] = useState<string>('#1565c0');
   const [isDefault, setIsDefault] = useState<boolean>(false);
-  const [showKeypad, setShowKeypad] = useState<boolean>(false);
+  const [showKeypad, setShowKeypad] = useState<boolean>(true);
   const amountScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,10 +85,10 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
 
   const getAmountFontSize = (val: string) => {
     const len = (val || '').length;
-    if (len <= 8) return 'text-2xl sm:text-3xl';
-    if (len <= 13) return 'text-xl sm:text-2xl';
-    if (len <= 18) return 'text-lg sm:text-xl';
-    return 'text-base sm:text-lg';
+    if (len <= 8) return 'text-3xl sm:text-4xl';
+    if (len <= 13) return 'text-2xl sm:text-3xl';
+    if (len <= 18) return 'text-xl sm:text-2xl';
+    return 'text-lg sm:text-xl';
   };
 
   if (!isOpen) return null;
@@ -101,7 +101,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
     setIcon('Landmark');
     setColor('#1565c0');
     setIsDefault(wallets.length === 0);
-    setShowKeypad(false);
+    setShowKeypad(true);
     setIsAdding(true);
   };
 
@@ -117,7 +117,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
     setIcon(w.icon);
     setColor(w.color);
     setIsDefault(Boolean(w.isDefault));
-    setShowKeypad(false);
+    setShowKeypad(true);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -185,8 +185,8 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb]">
           <div className="flex items-center gap-2">
@@ -242,8 +242,8 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
 
           {/* Add / Edit Form Modal (Chuẩn hóa đồng bộ giao diện như TransactionModal) */}
           {(isAdding || editingWallet) && (
-            <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
+            <div className="fixed inset-0 z-60 flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col">
                 {/* Header cố định */}
                 <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
                   <div className="flex items-center gap-2">
@@ -277,22 +277,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                   onSubmit={handleSave}
                   className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1"
                 >
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
-                      Tên ví / Ngân hàng <span className="text-[#b94a3b]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onFocus={() => setShowKeypad(false)}
-                      placeholder="VD: Techcombank, VNPAY, Tiền mặt..."
-                      required
-                      className="w-full mt-1.5 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Amount Input (Money Lover Style) */}
+                  {/* 1. Amount Input (Money Lover Style) - Đặt lên đầu giống TransactionModal */}
                   <div className="pt-1 pb-1">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] flex items-center gap-1.5">
@@ -358,6 +343,23 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                     )}
                   </div>
 
+                  {/* 2. Tên ví */}
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
+                      Tên ví / Ngân hàng <span className="text-[#b94a3b]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onFocus={() => setShowKeypad(false)}
+                      placeholder="VD: Techcombank, VNPAY, Tiền mặt..."
+                      required
+                      className="w-full mt-1.5 px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-xs font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
+                    />
+                  </div>
+
+                  {/* 3. Số tài khoản */}
                   <div>
                     <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
                       Số tài khoản / Ghi chú số thẻ
@@ -437,6 +439,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
                     <CustomCalculatorKeyboard
                       value={initialBalance}
                       onChange={setInitialBalance}
+                      quickAmounts={[50000, 100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000]}
                       onDone={() => {
                         const ev = evaluateMathExpression(initialBalance);
                         if (ev !== null && isMathExpression(initialBalance)) {

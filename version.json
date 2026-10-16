@@ -1,10 +1,10 @@
 {
-  "version": "2.1.44",
+  "version": "2.1.45",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Dong bo giao dien toan bo app theo chuan TransactionModal, bo nut xac nhan du thua, ban phim so docked khong che khuat",
+  "releaseNotes": "Dong bo toan dien giao dien nhan ban, vi tien va tao so theo chuan chinh sua giao dich",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T06:49:00.025Z"
+  "updatedAt": "2026-10-16T07:06:18.051Z"
 }
