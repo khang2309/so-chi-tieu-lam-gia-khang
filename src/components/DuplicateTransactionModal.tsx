@@ -392,24 +392,6 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
               </div>
             )}
           </div>
-
-          {/* Footer Actions */}
-          <div className="pt-3 border-t border-[#f0e4d5] flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-[#ebdcc9] text-xs font-medium text-[#7a6a58] hover:bg-[#ebdcc9] transition"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-[#a25832] text-white text-xs font-bold hover:bg-[#8c4623] active:scale-95 transition shadow-xs flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4" />
-              <span>Xác nhận nhân bản</span>
-            </button>
-          </div>
         </form>
 
         {/* Custom Calculator Keypad Docked at Bottom */}

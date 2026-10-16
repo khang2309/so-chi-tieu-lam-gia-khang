@@ -1,10 +1,10 @@
 {
-  "version": "2.1.43",
+  "version": "2.1.44",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Dong bo vi tri nut Luu len thanh Header tren cung cho Nhan Ban Giao Dich va Chinh Sua Vi giong het Tao Giao Dich Moi; khong bao gio bi ban phim che khuat; them nut Xong dong ban phim",
+  "releaseNotes": "Dong bo giao dien toan bo app theo chuan TransactionModal, bo nut xac nhan du thua, ban phim so docked khong che khuat",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T06:25:31.167Z"
+  "updatedAt": "2026-10-16T06:49:00.025Z"
 }

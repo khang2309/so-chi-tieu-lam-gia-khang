@@ -173,35 +173,43 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
             )}
           </div>
 
-          {/* Add / Edit Form Modal (Hiển thị dạng Popup trực tiếp, không bắt cuộn lên đầu trang) */}
+          {/* Add / Edit Form Modal (Chuẩn hóa đồng bộ giao diện như TransactionModal) */}
           {(isAdding || editingLedger) && (
-            <div className="fixed inset-0 z-60 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150">
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150">
                 {/* Header cố định */}
-                <div className="shrink-0 px-5 py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#3e332a]">
-                    {editingLedger ? `Chỉnh sửa sổ: ${editingLedger.name}` : 'Thêm Sổ Chi Tiêu mới'}
-                  </span>
+                <div className="shrink-0 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAdding(false);
+                        setEditingLedger(null);
+                      }}
+                      className="p-1 -ml-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    <span className="text-sm font-bold text-[#3e332a]">
+                      {editingLedger ? `Chỉnh sửa sổ: ${editingLedger.name}` : 'Thêm Sổ Chi Tiêu mới'}
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsAdding(false);
-                      setEditingLedger(null);
-                    }}
-                    className="p-1 rounded-lg text-[#7a6a58] hover:text-[#3e332a] hover:bg-[#ebdcc9] transition cursor-pointer"
+                    onClick={handleSave}
+                    className="px-4 py-1.5 rounded-xl bg-[#2e7d32] text-white text-xs font-bold hover:bg-[#256629] active:scale-95 transition shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
                   >
-                    <X className="w-4 h-4" />
+                    <Check className="w-4 h-4" />
+                    <span>{editingLedger ? 'Lưu' : 'Tạo'}</span>
                   </button>
                 </div>
 
                 <form
                   onSubmit={handleSave}
-                  className="flex flex-col flex-1 min-h-0 overflow-hidden"
+                  className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain"
                 >
-                  {/* Thân form cuộn mượt mà */}
-                  <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain">
                   <div>
-                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
                       Tên sổ chi tiêu:
                     </label>
                     <input
@@ -211,12 +219,12 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                       placeholder="VD: Quỹ du lịch, Đám cưới..."
                       required
                       autoFocus
-                      className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
+                      className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-[#7a6a58]">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58]">
                       Mô tả mục đích:
                     </label>
                     <input
@@ -224,14 +232,14 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="VD: Ghi chép chi tiêu riêng biệt"
-                      className="w-full mt-0.5 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
+                      className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs text-[#3e332a]"
                     />
                   </div>
 
                   {/* Icon & Color selector */}
                   <div className="space-y-2.5 pt-1">
                     <div>
-                      <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
                         Biểu tượng sổ:
                       </label>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -254,7 +262,7 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-semibold text-[#7a6a58] block mb-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-[#7a6a58] block mb-1">
                         Màu bìa sổ:
                       </label>
                       <div className="flex items-center gap-2.5 flex-wrap">
@@ -285,32 +293,10 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                       <span>Đặt làm sổ mặc định khi mở ứng dụng</span>
                     </span>
                   </label>
-                </div>
-
-                {/* Footer cố định: Luôn nhìn thấy trên bàn phím */}
-                <div className="shrink-0 px-4 py-3 bg-[#fbf5eb] border-t border-[#f0e4d5] flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdding(false);
-                      setEditingLedger(null);
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg border border-[#ebdcc9] text-xs font-semibold text-[#7a6a58] hover:bg-[#f5ebe0] transition cursor-pointer"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-[#a25832] text-white text-xs font-semibold hover:bg-[#8c4623] transition flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>{editingLedger ? 'Lưu thay đổi' : 'Tạo sổ'}</span>
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
           {/* Ledgers List */}
           {ledgers.length === 0 ? (
