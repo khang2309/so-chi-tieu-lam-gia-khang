@@ -160,6 +160,7 @@ export function useExpenseManager() {
   const deletedLedgerIdsRef = useRef<Set<string>>(new Set());
   const deletedCategoryIdsRef = useRef<Set<string>>(new Set());
   const resetPromiseRef = useRef<Promise<void> | null>(null);
+  const isResettingRef = useRef<boolean>(false);
   const isReorderingWalletsRef = useRef<boolean>(false);
   const isReorderingLedgersRef = useRef<boolean>(false);
 
@@ -173,12 +174,14 @@ export function useExpenseManager() {
   // Hàm tự động đồng bộ 2 chiều (Auto-Sync) ngầm khi đăng nhập (Delta Diff Sync Siêu Tốc)
   const runAutoSync = async (uid: string) => {
     if (autoSyncRunningRef.current) return;
+    if (isResettingRef.current) return;
     if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
     if (resetPromiseRef.current) {
       try {
         await resetPromiseRef.current;
       } catch (_) {}
     }
+    if (isResettingRef.current) return;
     if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
     autoSyncRunningRef.current = true;
     setIsAutoSyncing(true);
@@ -314,9 +317,11 @@ export function useExpenseManager() {
         // 1. Gắn bộ lắng nghe thay đổi thời gian thực ngay lập tức
         unsubDataRef.current = subscribeToUserFirestoreData(uid, {
           onTransactions: (fireTxs, isEmpty) => {
+            if (isResettingRef.current) return;
             if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (!isEmpty) {
               setTransactions((prev) => {
+                if (isResettingRef.current) return [];
                 const merged = mergeEntitiesById(prev, fireTxs);
                 merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 return sanitizeData(merged);
@@ -324,6 +329,7 @@ export function useExpenseManager() {
             }
           },
           onWallets: (fireWallets, isEmpty) => {
+            if (isResettingRef.current) return;
             if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (isReorderingWalletsRef.current) return;
             if (!isEmpty) {
@@ -332,6 +338,7 @@ export function useExpenseManager() {
               );
               if (filtered.length > 0) {
                 setWallets((prev) => {
+                  if (isResettingRef.current) return [];
                   const merged = mergeEntitiesById(prev, filtered);
                   merged.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                   return sanitizeData(merged);
@@ -340,6 +347,7 @@ export function useExpenseManager() {
             }
           },
           onLedgers: (fireLedgers, isEmpty) => {
+            if (isResettingRef.current) return;
             if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (isReorderingLedgersRef.current) return;
             if (!isEmpty) {
@@ -348,6 +356,7 @@ export function useExpenseManager() {
               );
               if (filtered.length > 0) {
                 setLedgers((prev) => {
+                  if (isResettingRef.current) return [];
                   const merged = mergeEntitiesById(prev, filtered);
                   merged.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
                   return sanitizeData(merged);
@@ -356,6 +365,7 @@ export function useExpenseManager() {
             }
           },
           onCategories: (fireCategories, isEmpty) => {
+            if (isResettingRef.current) return;
             if (activeUidRef.current !== uid || auth?.currentUser?.uid !== uid) return;
             if (!isEmpty) {
               const filtered = fireCategories.filter(
@@ -363,6 +373,7 @@ export function useExpenseManager() {
               );
               if (filtered.length > 0) {
                 setCategories((prev) => {
+                  if (isResettingRef.current) return DEFAULT_CATEGORIES;
                   const merged = mergeEntitiesById(prev, filtered);
                   return sanitizeData(merged);
                 });
@@ -966,6 +977,7 @@ export function useExpenseManager() {
         'Bạn có chắc chắn muốn ĐẶT LẠI TẤT CẢ? Toàn bộ giao dịch, ví tiền và sổ chi tiêu sẽ bị xóa sạch hoàn toàn (không còn ví hay sổ nào).'
       )
     ) {
+      isResettingRef.current = true;
       deletedWalletIdsRef.current.clear();
       deletedLedgerIdsRef.current.clear();
       deletedCategoryIdsRef.current.clear();
@@ -995,12 +1007,12 @@ export function useExpenseManager() {
         })
       );
 
-      // Xóa đồng thời trên Firestore Cloud ở chế độ chạy ngầm (không làm đơ/chậm giao diện)
-      const uid = auth.currentUser?.uid;
+      // Xóa đồng thời trên Firestore Cloud và đợi hoàn tất để tránh snapshot kéo lại dữ liệu
+      const uid = auth?.currentUser?.uid;
       if (uid) {
         const wipePromise = clearAllUserFirestoreData(uid)
           .catch((err) => {
-            console.warn('Lỗi khi xóa dữ liệu ngầm trên Firestore:', err);
+            console.warn('Lỗi khi xóa dữ liệu trên Firestore:', err);
           })
           .finally(() => {
             if (resetPromiseRef.current === wipePromise) {
@@ -1008,7 +1020,28 @@ export function useExpenseManager() {
             }
           });
         resetPromiseRef.current = wipePromise;
+        try {
+          await wipePromise;
+        } catch (_) {}
       }
+
+      // Đảm bảo dữ liệu trong state và storage luôn là rỗng sau khi Cloud xóa xong
+      setTransactions([]);
+      setWallets([]);
+      setLedgers([]);
+      try {
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, '[]');
+        localStorage.setItem(STORAGE_KEYS.WALLETS, '[]');
+        localStorage.setItem(STORAGE_KEYS.LEDGERS, '[]');
+      } catch (_) {}
+
+      // Giữ cờ isResettingRef thêm 1.5 giây để loại bỏ mọi snapshot event dư âm từ Firestore
+      setTimeout(() => {
+        isResettingRef.current = false;
+        setTransactions([]);
+        setWallets([]);
+        setLedgers([]);
+      }, 1500);
     }
   };
 

@@ -1,10 +1,10 @@
 {
-  "version": "2.1.52",
+  "version": "2.1.53",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Khắc phục triệt để vấn đề mất dữ liệu khi đăng nhập hoặc tạo tài khoản\n- Tự động bảo toàn và đồng bộ 100% Sổ, Ví và Giao dịch đã lưu khi chưa đăng nhập lên Cloud\n- Khắc phục giao dịch mồ côi sổ hoặc ví, tự động gán vào sổ/ví mặc định",
+  "releaseNotes": "- Khắc phục triệt để lỗi phải bấm Đặt lại 2 lần: chặn xung đột Firestore Snapshot hồi sinh dữ liệu khi đang xóa\n- Đảm bảo 1 chạm Đặt lại duy nhất xóa sạch 100% Giao dịch, Ví tiền, Sổ chi tiêu cả ở máy lẫn trên Cloud",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T10:08:43.362Z"
+  "updatedAt": "2026-10-16T10:21:09.474Z"
 }
