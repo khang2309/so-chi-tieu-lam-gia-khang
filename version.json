@@ -1,10 +1,10 @@
 {
-  "version": "2.1.48",
+  "version": "2.1.49",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Fix transaction modal sticky header and quick create layout",
+  "releaseNotes": "Fix mobile modal height and keyboard overlap with 100dvh",
   "allowSkip": true,
-  "updatedAt": "2026-10-16T08:16:17.199Z"
+  "updatedAt": "2026-10-16T08:21:21.873Z"
 }

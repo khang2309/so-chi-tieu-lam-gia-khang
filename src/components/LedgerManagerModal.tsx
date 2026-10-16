@@ -134,8 +134,8 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg h-auto max-h-[90vh] rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-lg h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
         {isAdding || editingLedger ? (
           <>
             {/* Header Form Thêm / Sửa Sổ */}
@@ -171,7 +171,7 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
             {/* Form Thêm / Sửa Sổ */}
             <form
               onSubmit={handleSave}
-              className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain"
+              className="p-4 sm:p-5 pb-28 sm:pb-6 space-y-3.5 overflow-y-auto flex-1 overscroll-contain"
             >
               {/* Mô phỏng bìa sổ tay thực tế (Live Notebook Cover Preview) */}
               <div
@@ -210,7 +210,6 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
                   onChange={(e) => setName(e.target.value)}
                   placeholder="VD: Quỹ du lịch, Đám cưới..."
                   required
-                  autoFocus
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-sm font-medium text-[#3e332a] focus:bg-[#fffdfa] focus:outline-none focus:ring-1 focus:ring-[#a25832]"
                 />
               </div>
@@ -313,7 +312,7 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
             </div>
 
             {/* Content Body - Danh sách sổ */}
-            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+            <div className="p-4 sm:p-5 pb-24 sm:pb-5 overflow-y-auto space-y-4 flex-1">
               {/* Action Toolbar */}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-[#7a6a58]">

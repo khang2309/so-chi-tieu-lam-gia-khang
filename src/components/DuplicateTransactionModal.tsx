@@ -196,7 +196,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-lg h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-[#f0e4d5] flex items-center justify-between bg-[#fbf5eb] shrink-0">
           <div className="flex items-center gap-2">
@@ -323,7 +323,7 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
         </div>
 
         {/* Form Body (Scrollable) */}
-        <form ref={formRef} onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+        <form ref={formRef} onSubmit={handleSubmit} className="p-4 sm:p-5 pb-28 sm:pb-5 overflow-y-auto space-y-4 flex-1">
 
           {/* 3. Ghi chú chi tiết */}
           <div className="space-y-1">

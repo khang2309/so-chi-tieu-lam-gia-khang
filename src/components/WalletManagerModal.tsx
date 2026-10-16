@@ -186,7 +186,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg h-full sm:h-auto sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-lg h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-paper-lg overflow-hidden flex flex-col">
         {isAdding || editingWallet ? (
           <>
             {/* Header cho Form Thêm/Sửa Ví */}
@@ -220,7 +220,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
             {/* Form Body (Scrollable) */}
             <form
               onSubmit={handleSave}
-              className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 overscroll-contain"
+              className="p-4 sm:p-5 pb-28 sm:pb-6 overflow-y-auto space-y-4 flex-1 overscroll-contain"
             >
               {/* 1. Amount Input (Money Lover Style) */}
               <div className="pt-1 pb-1">
@@ -422,7 +422,7 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
             </div>
 
             {/* Content Body */}
-            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+            <div className="p-4 sm:p-5 pb-24 sm:pb-5 overflow-y-auto space-y-4 flex-1">
               {/* Action Toolbar */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-[#7a6a58]">

@@ -156,8 +156,8 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
 
           {/* Add / Edit Form Modal (Chuẩn hóa đồng bộ giao diện như TransactionModal) */}
           {(isAdding || editingCategory) && (
-            <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="relative w-full max-w-md rounded-2xl bg-[#fffdfa] border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150">
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="relative w-full max-w-md h-full sm:h-auto max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-2xl bg-[#fffdfa] border-0 sm:border border-[#d8c8b4] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
                 {/* Header cố định */}
                 <div className="shrink-0 px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#f0e4d5] bg-[#fbf5eb] flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
 
                 <form
                   onSubmit={handleSave}
-                  className="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain"
+                  className="p-4 sm:p-5 pb-28 sm:pb-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
@@ -200,7 +200,6 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
                         onChange={(e) => setName(e.target.value)}
                         placeholder="VD: Du lịch, Xem phim..."
                         required
-                        autoFocus
                         className="w-full mt-1 px-3 py-1.5 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] text-xs font-medium text-[#3e332a]"
                       />
                     </div>
