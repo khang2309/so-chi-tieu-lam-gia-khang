@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   ArrowRightLeft,
@@ -44,6 +44,14 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [showKeypad, setShowKeypad] = useState<boolean>(true);
+
+  const amountScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (amountScrollRef.current) {
+      amountScrollRef.current.scrollLeft = amountScrollRef.current.scrollWidth;
+    }
+  }, [amount]);
 
   // Tự động khởi tạo 2 ví khác nhau và xóa trắng form mỗi khi mở modal
   useEffect(() => {
@@ -262,24 +270,27 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
                 </span>
               )}
             </div>
-            <div className="mt-1.5 flex items-center justify-between px-3 py-2 rounded-lg bg-[#fffdfa] border border-[#ebdcc9]">
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <div className="mt-1.5 flex items-center justify-between px-3 py-2 rounded-lg bg-[#fffdfa] border border-[#ebdcc9] gap-2">
+              <div
+                ref={amountScrollRef}
+                className="flex items-center gap-1.5 min-w-0 flex-1 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth"
+              >
                 <span
-                  className={`text-base font-bold font-mono tracking-tight truncate ${
+                  className={`text-base sm:text-lg font-bold font-mono tracking-tight shrink-0 ${
                     amount ? 'text-[#3e332a]' : 'text-[#a89886]'
                   }`}
                 >
                   {amount || '0'}
                 </span>
-                <span className="text-xs font-semibold text-[#7a6a58]">₫</span>
-                {isMathExpression(amount) && (
-                  <span className="text-xs font-bold text-emerald-600 shrink-0 ml-1">
-                    = {formatCurrency(numAmount)}
-                  </span>
-                )}
+                <span className="text-xs font-semibold text-[#7a6a58] shrink-0">₫</span>
               </div>
+              {isMathExpression(amount) && (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
+                  = {formatCurrency(numAmount)}
+                </span>
+              )}
               {showKeypad && (
-                <span className="w-1.5 h-4 bg-[#3b6e8c] rounded-full animate-pulse shrink-0 ml-1" />
+                <span className="w-1.5 h-4 bg-[#3b6e8c] rounded-full animate-pulse shrink-0" />
               )}
             </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Check, Calculator, Plus, Sparkles, Zap } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category, TransactionType } from '../types';
 import { DynamicIcon } from './DynamicIcon';
@@ -52,6 +52,22 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [note, setNote] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [showKeypad, setShowKeypad] = useState<boolean>(true);
+
+  const amountScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (amountScrollRef.current) {
+      amountScrollRef.current.scrollLeft = amountScrollRef.current.scrollWidth;
+    }
+  }, [amount]);
+
+  const getAmountFontSize = (val: string) => {
+    const len = (val || '').length;
+    if (len <= 8) return 'text-3xl sm:text-4xl';
+    if (len <= 13) return 'text-2xl sm:text-3xl';
+    if (len <= 18) return 'text-xl sm:text-2xl';
+    return 'text-lg sm:text-xl';
+  };
 
   // Quick inline creation state for Ledgers & Wallets
   const [showQuickCreateLedger, setShowQuickCreateLedger] = useState<boolean>(false);
@@ -392,21 +408,26 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {/* Money Lover Amount Bar with clean green underline */}
             <div
               onClick={() => setShowKeypad(true)}
-              className="mt-1.5 flex items-center gap-3 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
+              className="mt-1.5 flex items-center justify-between gap-2.5 pb-2 border-b-2 border-emerald-500 cursor-pointer select-none"
             >
-              <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
-                VND
-              </span>
-              <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-extrabold text-[#16a34a] tracking-tight truncate">
-                  {amount || '0'}
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <span className="px-2.5 py-1 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
+                  VND
                 </span>
-                {hasExpression && evaluatedAmount !== null && (
-                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded shrink-0">
-                    = {formatCurrency(Math.round(evaluatedAmount))}
+                <div
+                  ref={amountScrollRef}
+                  className="flex-1 min-w-0 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth flex items-center"
+                >
+                  <span className={`${getAmountFontSize(amount)} font-extrabold text-[#16a34a] tracking-tight inline-block`}>
+                    {amount || '0'}
                   </span>
-                )}
+                </div>
               </div>
+              {hasExpression && evaluatedAmount !== null && (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg shrink-0 shadow-2xs whitespace-nowrap">
+                  = {formatCurrency(Math.round(evaluatedAmount))}
+                </span>
+              )}
             </div>
           </div>
 

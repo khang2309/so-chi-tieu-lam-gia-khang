@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Copy,
@@ -10,10 +10,18 @@ import {
   FileText,
   DollarSign,
   ArrowRightLeft,
+  Calculator,
 } from 'lucide-react';
 import { Transaction, Ledger, Wallet, Category } from '../types';
 import { formatCurrency, toLocalDateTimeInput } from '../utils/formatters';
 import { sanitizeData } from '../utils/firestoreSync';
+import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
+import {
+  formatExpressionWithDots,
+  evaluateMathExpression,
+  isMathExpression,
+  parseAmountOrExpression,
+} from '../utils/mathExpression';
 
 interface DuplicateTransactionModalProps {
   isOpen: boolean;
@@ -34,7 +42,8 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   categories,
   onConfirm,
 }) => {
-  const [amount, setAmount] = useState<number | ''>('');
+  const [amount, setAmount] = useState<string>('');
+  const [showKeypad, setShowKeypad] = useState<boolean>(false);
   const [date, setDate] = useState<string>(() => toLocalDateTimeInput(new Date()));
   const [note, setNote] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
@@ -43,9 +52,17 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   const [toWalletId, setToWalletId] = useState<string>('');
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
 
+  const amountScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (amountScrollRef.current) {
+      amountScrollRef.current.scrollLeft = amountScrollRef.current.scrollWidth;
+    }
+  }, [amount]);
+
   useEffect(() => {
     if (isOpen && sourceTransaction) {
-      setAmount(sourceTransaction.amount);
+      setAmount(formatExpressionWithDots(sourceTransaction.amount.toString()));
       setDate(toLocalDateTimeInput(new Date())); // Mặc định lấy đúng ngày & giờ hiện tại
       setNote(sourceTransaction.note || '');
       setCategoryId(sourceTransaction.categoryId);
@@ -53,14 +70,30 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
       setWalletId(sourceTransaction.walletId);
       setToWalletId(sourceTransaction.toWalletId || '');
       setType(sourceTransaction.type);
+      setShowKeypad(false);
     }
   }, [isOpen, sourceTransaction]);
+
+  const evaluatedAmount = evaluateMathExpression(amount);
+  const hasExpression = isMathExpression(amount);
+
+  const getAmountFontSize = (val: string) => {
+    const len = (val || '').length;
+    if (len <= 8) return 'text-2xl sm:text-3xl';
+    if (len <= 14) return 'text-xl sm:text-2xl';
+    if (len <= 20) return 'text-lg sm:text-xl';
+    return 'text-base sm:text-lg';
+  };
 
   if (!isOpen || !sourceTransaction) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalAmount = Number(amount) || 0;
+    let evaluatedVal = evaluateMathExpression(amount);
+    if (evaluatedVal === null || isNaN(evaluatedVal)) {
+      evaluatedVal = parseAmountOrExpression(amount);
+    }
+    const finalAmount = Math.round(evaluatedVal || 0);
     if (finalAmount <= 0) {
       alert('Vui lòng nhập số tiền hợp lệ lớn hơn 0!');
       return;
@@ -140,30 +173,71 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
             />
           </div>
 
-          {/* Số tiền */}
+          {/* Số tiền với bàn phím máy tính & không bị che bởi ... */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#7a6a58] flex items-center gap-1">
-              <DollarSign className="w-3.5 h-3.5 text-[#a25832]" />
-              <span>Số tiền:</span>
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="0"
-                className="w-full px-3 py-2 rounded-xl bg-[#fbf5eb] border border-[#ebdcc9] text-base font-bold text-[#b94a3b] focus:bg-[#fffdfa] focus:border-[#a25832] focus:outline-none"
-                required
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#7a6a58]">
-                đ
-              </span>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[#7a6a58] flex items-center gap-1">
+                <DollarSign className="w-3.5 h-3.5 text-[#a25832]" />
+                <span>Số tiền:</span>
+              </label>
+              {showKeypad ? (
+                <button
+                  type="button"
+                  onClick={() => setShowKeypad(false)}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-[#7a6a58] hover:text-[#3e332a] bg-[#ebdcc9]/50 px-2.5 py-0.5 rounded-full transition cursor-pointer"
+                >
+                  <span>Thu gọn bàn phím</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowKeypad(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-[#a25832] hover:text-[#8c4623] bg-[#fbf5eb] border border-[#ebdcc9] px-2.5 py-0.5 rounded-full transition cursor-pointer"
+                >
+                  <Calculator className="w-3.5 h-3.5 text-[#a25832]" />
+                  <span>Mở bàn phím số</span>
+                </button>
+              )}
             </div>
-            {Number(amount) > 0 && (
-              <p className="text-[11px] text-[#7a6a58] font-medium pl-1">
-                {formatCurrency(Number(amount))}
-              </p>
-            )}
+
+            {/* Money Lover Style Amount Bar */}
+            <div
+              onClick={() => setShowKeypad(true)}
+              className={`mt-1 flex items-center justify-between gap-2.5 pb-2 border-b-2 cursor-pointer select-none transition ${
+                type === 'expense'
+                  ? 'border-[#b94a3b]'
+                  : type === 'income'
+                  ? 'border-[#2e7d32]'
+                  : 'border-[#3b6e8c]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <span className="px-2 py-0.5 rounded bg-[#e5e7eb] text-gray-700 text-xs font-bold uppercase tracking-wider shrink-0">
+                  VND
+                </span>
+                <div
+                  ref={amountScrollRef}
+                  className="flex-1 min-w-0 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth flex items-center"
+                >
+                  <span
+                    className={`${getAmountFontSize(amount)} font-extrabold tracking-tight inline-block ${
+                      type === 'expense'
+                        ? 'text-[#b94a3b]'
+                        : type === 'income'
+                        ? 'text-[#2e7d32]'
+                        : 'text-[#3b6e8c]'
+                    }`}
+                  >
+                    {amount || '0'}
+                  </span>
+                </div>
+              </div>
+              {hasExpression && evaluatedAmount !== null && (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg shrink-0 shadow-2xs whitespace-nowrap">
+                  = {formatCurrency(Math.round(evaluatedAmount))}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Ghi chú */}
@@ -319,6 +393,23 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
             </button>
           </div>
         </form>
+
+        {/* Custom Calculator Keypad Docked at Bottom */}
+        {showKeypad && (
+          <div className="shrink-0 border-t border-[#e5e7eb] bg-[#f9fafb] animate-in slide-in-from-bottom-2 duration-150">
+            <CustomCalculatorKeyboard
+              value={amount}
+              onChange={setAmount}
+              onDone={() => {
+                const ev = evaluateMathExpression(amount);
+                if (ev !== null && isMathExpression(amount)) {
+                  setAmount(formatExpressionWithDots(Math.round(ev).toString()));
+                }
+                setShowKeypad(false);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

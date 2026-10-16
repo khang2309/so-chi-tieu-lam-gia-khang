@@ -1,10 +1,10 @@
 {
-  "version": "2.1.39",
+  "version": "2.1.40",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Hỗ trợ đăng nhập Google mượt mà trên Web và Android\\n- Tự động liên kết tài khoản Google và Email/Mật khẩu song song giống ChatGPT\\n- Thêm nút kích hoạt mật khẩu 1-chạm và chức năng Quên mật khẩu\\n- Bảo toàn mật khẩu khi đăng xuất",
+  "releaseNotes": "- Khac phuc loi hien thi so tien/phep tinh dai bi dau ba cham (...) che mat; tu dong co gian font chu va cuon ngang muot ma\n- Tich hop ban phim may tinh chuyen dung cho tinh nang Nhan Ban Giao Dich",
   "allowSkip": true,
-  "updatedAt": "2026-10-15T16:10:46.241Z"
+  "updatedAt": "2026-10-16T05:46:13.460Z"
 }
