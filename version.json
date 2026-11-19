@@ -1,10 +1,10 @@
 {
-  "version": "4.0.1",
+  "version": "4.0.2",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "- Thêm tính năng chọn và đổi ví mặc định khi ghi chép giao dịch\n- Tự động ưu tiên ví mặc định khi thêm giao dịch, quét hóa đơn và nhập giọng nói\n- Tối ưu thuật toán nhận diện biến động số dư MoMo Túi Thần Tài & Timo\n- Khay chờ duyệt biến động số dư thông minh trên trang chủ",
+  "releaseNotes": "Nang cap toan dien AI nhan dien thong minh moi loai hoa don: sieu thi, nha hang, don ship, TMDT, nha thuoc, dien nuoc; xu ly da gia va ngay tu dong",
   "allowSkip": true,
-  "updatedAt": "2026-11-19T08:12:26.748Z"
+  "updatedAt": "2026-11-19T08:13:57.141Z"
 }
