@@ -25,6 +25,7 @@ import {
   isMathExpression,
   parseAmountOrExpression,
 } from '../utils/mathExpression';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface DuplicateTransactionModalProps {
   isOpen: boolean;
@@ -68,6 +69,36 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
   const [isCreatingWalletInPicker, setIsCreatingWalletInPicker] = useState<boolean>(false);
   const [newWalletName, setNewWalletName] = useState<string>('');
   const [newWalletBalance, setNewWalletBalance] = useState<string>('');
+
+  useBackHandler(
+    'DuplicateTransactionModal',
+    () => {
+      if (isCreatingLedgerInPicker) {
+        setIsCreatingLedgerInPicker(false);
+        return true;
+      }
+      if (isCreatingWalletInPicker) {
+        setIsCreatingWalletInPicker(false);
+        return true;
+      }
+      if (showLedgerPicker) {
+        setShowLedgerPicker(false);
+        return true;
+      }
+      if (showWalletPicker) {
+        setShowWalletPicker(false);
+        return true;
+      }
+      if (showToWalletPicker) {
+        setShowToWalletPicker(false);
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   const amountScrollRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);

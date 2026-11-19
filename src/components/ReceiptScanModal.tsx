@@ -28,6 +28,7 @@ import {
   getSavedVisionConfig,
   VisionConfig,
 } from '../utils/cloudVisionService';
+import { useBackHandler } from '../utils/backButtonHandler';
 import { compressImageForOcr } from '../utils/imagePreprocessor';
 import { Ledger, Wallet, Category, Transaction } from '../types';
 import { formatCurrency, toLocalDateKey } from '../utils/formatters';
@@ -116,6 +117,36 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
   const [invoiceType, setInvoiceType] = useState<InvoiceType>('TYPE_A_TABLE');
   const [invoiceTypeName, setInvoiceTypeName] = useState<string>('');
   const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
+
+  useBackHandler(
+    'ReceiptScanModal',
+    () => {
+      if (isCreatingLedgerInPicker) {
+        setIsCreatingLedgerInPicker(false);
+        return true;
+      }
+      if (isCreatingWalletInPicker) {
+        setIsCreatingWalletInPicker(false);
+        return true;
+      }
+      if (showLedgerPicker) {
+        setShowLedgerPicker(false);
+        return true;
+      }
+      if (showWalletPicker) {
+        setShowWalletPicker(false);
+        return true;
+      }
+      if (step === 'verify') {
+        setStep('scan');
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   useEffect(() => {
     const cfg = getSavedVisionConfig();

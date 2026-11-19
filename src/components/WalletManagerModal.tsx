@@ -23,6 +23,7 @@ import {
   isMathExpression,
   parseAmountOrExpression,
 } from '../utils/mathExpression';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface WalletManagerModalProps {
   isOpen: boolean;
@@ -90,6 +91,24 @@ export const WalletManagerModal: React.FC<WalletManagerModalProps> = ({
     if (len <= 18) return 'text-xl sm:text-2xl';
     return 'text-lg sm:text-xl';
   };
+
+  useBackHandler(
+    'WalletManagerModal',
+    () => {
+      if (isAdding) {
+        setIsAdding(false);
+        return true;
+      }
+      if (editingWallet) {
+        setEditingWallet(null);
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   if (!isOpen) return null;
 

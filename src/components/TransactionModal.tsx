@@ -10,6 +10,7 @@ import {
   parseAmountOrExpression,
 } from '../utils/mathExpression';
 import { CustomCalculatorKeyboard } from './CustomCalculatorKeyboard';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -137,6 +138,36 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
     setShowSuggestions(false);
   };
+
+  useBackHandler(
+    'TransactionModal',
+    () => {
+      if (isCreatingLedgerInPicker) {
+        setIsCreatingLedgerInPicker(false);
+        return true;
+      }
+      if (isCreatingWalletInPicker) {
+        setIsCreatingWalletInPicker(false);
+        return true;
+      }
+      if (showLedgerPicker) {
+        setShowLedgerPicker(false);
+        return true;
+      }
+      if (showWalletPicker) {
+        setShowWalletPicker(false);
+        return true;
+      }
+      if (showSuggestions) {
+        setShowSuggestions(false);
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   useEffect(() => {
     if (isOpen) {

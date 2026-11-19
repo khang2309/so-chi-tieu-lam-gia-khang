@@ -11,10 +11,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 export const AuthModal: React.FC = () => {
   const {
     isAuthModalOpen,
+    setIsAuthModalOpen,
     loginWithEmail,
     registerWithEmail,
     loginWithGoogleNative,
@@ -31,6 +33,16 @@ export const AuthModal: React.FC = () => {
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [suggestGoogleAutoLink, setSuggestGoogleAutoLink] = useState(false);
+
+  useBackHandler(
+    'AuthModal',
+    () => {
+      setIsAuthModalOpen(false);
+      return true;
+    },
+    55,
+    isAuthModalOpen
+  );
 
   if (!isAuthModalOpen) return null;
 

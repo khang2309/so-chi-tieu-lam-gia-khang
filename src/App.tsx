@@ -31,6 +31,7 @@ import { exportTransactionsToExcel } from './utils/excelExporter';
 import { Transaction } from './types';
 import { ParsedVoiceResult } from './utils/voiceParser';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useBackHandler, initBackButtonService } from './utils/backButtonHandler';
 import {
   Plus,
   Camera,
@@ -74,6 +75,61 @@ export function App() {
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    initBackButtonService();
+  }, []);
+
+  // Xử lý các thành phần giao diện cấp cao bằng phím / cử chỉ quay lại (Android back gesture)
+  useBackHandler(
+    'SpeedDial',
+    () => {
+      setIsSpeedDialOpen(false);
+      return true;
+    },
+    40,
+    isSpeedDialOpen
+  );
+
+  useBackHandler(
+    'FilterSheet',
+    () => {
+      setIsFilterSheetOpen(false);
+      return true;
+    },
+    30,
+    isFilterSheetOpen
+  );
+
+  useBackHandler(
+    'CategoryFilterSheet',
+    () => {
+      setIsCategoryFilterSheetOpen(false);
+      return true;
+    },
+    30,
+    isCategoryFilterSheetOpen
+  );
+
+  useBackHandler(
+    'SearchQuery',
+    () => {
+      manager.setSearchQuery('');
+      return true;
+    },
+    20,
+    Boolean(manager.searchQuery)
+  );
+
+  useBackHandler(
+    'ActiveTab',
+    () => {
+      setActiveTab('dashboard');
+      return true;
+    },
+    10,
+    activeTab !== 'dashboard'
+  );
 
   useEffect(() => {
     const handleToast = (e: any) => {

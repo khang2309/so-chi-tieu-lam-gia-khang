@@ -39,6 +39,8 @@ declare global {
       ) => void;
       isListenerConnected?: () => boolean;
       getRawNotificationLog?: () => string;
+      minimizeApp?: () => void;
+      exitApp?: () => void;
     };
   }
 }

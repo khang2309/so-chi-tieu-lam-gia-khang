@@ -27,6 +27,7 @@ import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
 import { getSavedVisionConfig, saveVisionConfig } from '../utils/cloudVisionService';
 import { getCurrentRunningVersion, inspectNativeCapabilities } from '../utils/appUpdater';
+import { useBackHandler } from '../utils/backButtonHandler';
 import {
   getBankNotifConfig,
   saveBankNotifConfig,
@@ -147,6 +148,24 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     setGeminiSaved(true);
     setTimeout(() => setGeminiSaved(false), 3000);
   };
+
+  useBackHandler(
+    'DataBackupModal',
+    () => {
+      if (showLogoutConfirm) {
+        setShowLogoutConfirm(false);
+        return true;
+      }
+      if (showPasswordSection) {
+        setShowPasswordSection(false);
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   if (!isOpen) return null;
 

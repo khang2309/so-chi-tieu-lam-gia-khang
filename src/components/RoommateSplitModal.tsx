@@ -22,6 +22,7 @@ import {
   isMathExpression,
   formatExpressionWithDots,
 } from '../utils/mathExpression';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface RoommateSplitModalProps {
   isOpen: boolean;
@@ -94,6 +95,8 @@ export const RoommateSplitModal: React.FC<RoommateSplitModalProps> = ({
 
   const [copied, setCopied] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+
+  useBackHandler('RoommateSplitModal', () => { onClose(); return true; }, 50, isOpen);
 
   // Cập nhật Sổ & Ví khi mở modal (Tự động chọn đúng ví mặc định)
   useEffect(() => {

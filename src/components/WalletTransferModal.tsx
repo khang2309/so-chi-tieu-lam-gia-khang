@@ -16,6 +16,7 @@ import {
   isMathExpression,
   formatExpressionWithDots,
 } from '../utils/mathExpression';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface WalletTransferModalProps {
   isOpen: boolean;
@@ -82,6 +83,8 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
       setToWalletId(defaultTo?.id || '');
     }
   }, [isOpen, wallets]);
+
+  useBackHandler('WalletTransferModal', () => { onClose(); return true; }, 50, isOpen);
 
   if (!isOpen) return null;
 

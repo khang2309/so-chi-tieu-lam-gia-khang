@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Category } from '../types';
 import { DynamicIcon } from './DynamicIcon';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface CategoryManagerModalProps {
   isOpen: boolean;
@@ -35,6 +36,24 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
   const [type, setType] = useState<'expense' | 'income' | 'both'>('expense');
   const [icon, setIcon] = useState<string>('Tag');
   const [color, setColor] = useState<string>('#d97706');
+
+  useBackHandler(
+    'CategoryManagerModal',
+    () => {
+      if (isAdding) {
+        setIsAdding(false);
+        return true;
+      }
+      if (editingCategory) {
+        setEditingCategory(null);
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   if (!isOpen) return null;
 

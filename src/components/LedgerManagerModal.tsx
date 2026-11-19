@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Ledger } from '../types';
 import { DynamicIcon } from './DynamicIcon';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface LedgerManagerModalProps {
   isOpen: boolean;
@@ -50,6 +51,24 @@ export const LedgerManagerModal: React.FC<LedgerManagerModalProps> = ({
   const [icon, setIcon] = useState<string>('BookOpen');
   const [color, setColor] = useState<string>('#a25832');
   const [isDefault, setIsDefault] = useState<boolean>(false);
+
+  useBackHandler(
+    'LedgerManagerModal',
+    () => {
+      if (isAdding) {
+        setIsAdding(false);
+        return true;
+      }
+      if (editingLedger) {
+        setEditingLedger(null);
+        return true;
+      }
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   if (!isOpen) return null;
 

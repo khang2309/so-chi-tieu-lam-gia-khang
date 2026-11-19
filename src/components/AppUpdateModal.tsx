@@ -15,6 +15,7 @@ import {
   inspectNativeCapabilities,
   normalizeDownloadUrl,
 } from '../utils/appUpdater';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface AppUpdateModalProps {
   isOpen: boolean;
@@ -73,10 +74,24 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({
 
   const caps = useMemo(() => inspectNativeCapabilities(), [isOpen]);
 
+  const canSkip = release?.allowSkip !== false;
+
+  useBackHandler(
+    'AppUpdateModal',
+    () => {
+      if (canSkip && !isUpdating) {
+        onClose();
+        return true;
+      }
+      return true; // Chặn thoát app khi đang tải cập nhật hoặc cập nhật bắt buộc
+    },
+    60,
+    isOpen
+  );
+
   if (!isOpen) return null;
 
   const currentVersion = getCurrentRunningVersion();
-  const canSkip = release?.allowSkip !== false;
 
   const handleStartUpdate = () => {
     if (!release || !release.downloadUrl) return;

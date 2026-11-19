@@ -210,6 +210,20 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void minimizeApp() {
+            runOnUiThread(() -> {
+                MainActivity.this.moveTaskToBack(true);
+            });
+        }
+
+        @JavascriptInterface
+        public void exitApp() {
+            runOnUiThread(() -> {
+                MainActivity.this.finish();
+            });
+        }
+
+        @JavascriptInterface
         public String getRawNotificationLog() {
             SharedPreferences prefs = getSharedPreferences(
                     BankNotificationListenerService.PREFS_NAME,

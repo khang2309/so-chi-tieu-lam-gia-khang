@@ -20,6 +20,7 @@ import {
 } from '../utils/voiceParser';
 import { getSavedVisionConfig, DEFAULT_GEMINI_API_KEY } from '../utils/cloudVisionService';
 import { formatCurrency } from '../utils/formatters';
+import { useBackHandler } from '../utils/backButtonHandler';
 
 interface VoiceInputModalProps {
   isOpen: boolean;
@@ -43,6 +44,17 @@ export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewResult, setPreviewResult] = useState<ParsedVoiceResult | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('Chạm vào Micro để bắt đầu nói');
+
+  useBackHandler(
+    'VoiceInputModal',
+    () => {
+      audioRecorder.cancelRecording();
+      onClose();
+      return true;
+    },
+    50,
+    isOpen
+  );
 
   // Reset state mỗi khi mở/đóng modal
   useEffect(() => {
