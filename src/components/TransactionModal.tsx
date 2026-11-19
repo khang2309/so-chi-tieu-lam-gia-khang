@@ -193,7 +193,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       // Defaults for new transaction (hỗ trợ điền từ giọng nói hoặc mẫu)
       const defaultType = initialValues?.type || 'expense';
       setType(defaultType);
-      setAmount(initialValues?.amount ? formatExpressionWithDots(initialValues.amount.toString()) : '');
+      setAmount(initialValues?.amount !== undefined ? formatExpressionWithDots(initialValues.amount.toString()) : '');
       setDate(toLocalDateTimeInput(new Date()));
 
       const fallbackDefaultLedger = ledgers.find((l) => l.isDefault) || ledgers[0];

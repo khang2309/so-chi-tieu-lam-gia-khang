@@ -1,10 +1,10 @@
 {
-  "version": "4.0",
+  "version": "4.0.1",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Tối ưu AI phân biệt giá gốc gạch ngang và giá thành tiền thực trả (Shopee/TMĐT), tự động đặt ngày hôm nay nếu ảnh thiếu ngày mua, cho phép lưu và nhân bản đơn 0đ",
+  "releaseNotes": "- Thêm tính năng chọn và đổi ví mặc định khi ghi chép giao dịch\n- Tự động ưu tiên ví mặc định khi thêm giao dịch, quét hóa đơn và nhập giọng nói\n- Tối ưu thuật toán nhận diện biến động số dư MoMo Túi Thần Tài & Timo\n- Khay chờ duyệt biến động số dư thông minh trên trang chủ",
   "allowSkip": true,
-  "updatedAt": "2026-11-19T07:58:50.135Z"
+  "updatedAt": "2026-11-19T08:12:26.748Z"
 }

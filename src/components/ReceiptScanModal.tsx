@@ -411,7 +411,7 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     const zeroItems = batchItems.filter((it) => (Number(it.amount) || 0) === 0);
     if (zeroItems.length > 0) {
       const confirmSave = window.confirm(
-        `Phát hiện ${zeroItems.length} món hàng đang có số tiền là 0 đ (do phiếu giao hàng không in sẵn giá tiền).\n\nBạn có muốn tiếp tục lưu các khoản này với số tiền 0 đ không? (Nhấn Hủy nếu bạn muốn chạm vào để nhập giá tiền thực tế)`
+        `Phát hiện ${zeroItems.length} món hàng đang có số tiền là 0 đ (quà tặng kèm, áp voucher 100% hoặc đã trả trước).\n\nBạn có muốn tiếp tục lưu các khoản này với số tiền 0 đ không? (Nhấn Hủy nếu bạn muốn chạm vào để nhập giá tiền khác)`
       );
       if (!confirmSave) return;
     }
@@ -691,14 +691,14 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
               </div>
             </div>
 
-            {/* Cảnh báo nhắc nhở nếu có món hàng 0 đ (Đơn Shopee trả trước) */}
+            {/* Cảnh báo nhắc nhở nếu có món hàng 0 đ (Voucher 100%, quà tặng hoặc trả trước) */}
             {batchItems.some((it) => (Number(it.amount) || 0) === 0) && (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
                 <span className="text-base shrink-0">💡</span>
                 <div className="flex-1">
-                  <strong className="font-bold text-amber-950">Đơn hàng Shopee/TMĐT trả trước (0 đ):</strong>
+                  <strong className="font-bold text-amber-950">Món hàng / Đơn hàng 0 đ:</strong>
                   <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                    Phiếu giao hàng không in sẵn giá tiền từng món. Vui lòng bấm vào ô số tiền màu vàng bên dưới để nhập giá thực tế bạn đã thanh toán trước khi lưu.
+                    Hóa đơn/phiếu có sản phẩm 0 đ (quà tặng kèm, áp voucher 100% hoặc đã trả trước). Bạn có thể bấm vào ô số tiền màu vàng bên dưới để nhập giá tiền khác nếu muốn trước khi lưu.
                   </p>
                 </div>
               </div>

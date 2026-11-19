@@ -17,50 +17,75 @@ export interface BatchParsedResult {
   totalAmount: number;
 }
 
-// Bộ từ điển phân loại chi tiêu tự động (Keyword Mapping)
+// Bộ từ điển phân loại chi tiêu tự động toàn diện (Keyword Mapping)
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'cat-eat': [
     'cơm', 'phở', 'bún', 'ăn', 'thịt', 'rau', 'bánh', 'trưa', 'sáng',
     'tối', 'mì', 'cháo', 'lẩu', 'hủ tiếu', 'cơm tấm', 'bánh mì', 'trứng',
     'hải sản', 'gà', 'vịt', 'bò', 'canh', 'quán ăn', 'nhà hàng', 'thực phẩm',
-    'cá', 'tôm', 'mực', 'thức ăn', 'chả'
+    'cá', 'tôm', 'mực', 'thức ăn', 'chả', 'siêu thị', 'coopmart', 'winmart',
+    'bachhoaxanh', 'bách hóa xanh', 'lotte', 'big c', 'go!', 'circle k',
+    'family mart', '7-eleven', 'ministop', 'gs25', 'gia vị', 'nước mắm',
+    'dầu ăn', 'đường', 'muối', 'hạt nêm', 'xúc xích', 'snack', 'bim bim',
+    'trái cây', 'hoa quả', 'pizza', 'kfc', 'lotteria', 'jollibee', 'đồ ăn'
   ],
   'cat-drink': [
     'nước', 'cafe', 'cà phê', 'trà sữa', 'bia', 'sinh tố', 'sting',
     'nước ngọt', 'matcha', 'highlands', 'phúc long', 'coca', 'pepsi',
-    'trà', 'nước suối', 'lavie', 'aquafina', 'sữa tươi', 'uống', 'sữa'
+    'trà', 'nước suối', 'lavie', 'aquafina', 'sữa tươi', 'uống', 'sữa',
+    'the coffee house', 'katinat', 'koi thé', 'tocotoco', 'mixue', 'starbucks',
+    'rượu', 'cocktail', 'nước khoáng', 'nước ép', 'bò húc', 'red bull', 'nước ép'
   ],
   'cat-gas': [
-    'xăng', 'nhớt', 'xe', 'vá', 'janus', 'yamaha', 'rửa xe', 'petrolimex',
-    'thay nhớt', 'ruột xe', 'bơm xe', 'gửi xe', 'bảo dưỡng', 'xăng xe', 'sửa xe',
-    'ron 95', 'ron 92', 'e5'
+    'xăng', 'nhớt', 'xe', 'vá', 'janus', 'yamaha', 'honda', 'rửa xe',
+    'petrolimex', 'thay nhớt', 'ruột xe', 'bơm xe', 'gửi xe', 'bảo dưỡng',
+    'xăng xe', 'sửa xe', 'ron 95', 'ron 92', 'e5', 'grab', 'be', 'be bike',
+    'be car', 'xanh sm', 'taxi', 'mai linh', 'vina sun', 'xe buýt', 'bus',
+    'vé xe', 'vé tàu', 'vé máy bay', 'phí gửi xe', 'bến xe', 'cầu đường', 'bot'
   ],
   'cat-bills': [
-    'điện', 'nước', 'wifi', 'mạng', 'trọ', 'phòng', 'rác', 'vệ sinh',
+    'điện', 'nước sinh hoạt', 'wifi', 'mạng', 'trọ', 'phòng', 'rác', 'vệ sinh',
     'tiền nhà', 'hóa đơn', 'internet', 'truyền hình', 'phí quản lý',
-    'tiền trọ', 'phòng trọ', 'kwh', 'khối nước'
+    'tiền trọ', 'phòng trọ', 'kwh', 'khối nước', 'evn', 'fpt', 'vnpt',
+    'viettel telecom', 'chung cư', 'bảo hiểm', 'phí dịch vụ'
   ],
   'cat-shopping': [
-    'áo', 'quần', 'shopee', 'lazada', 'tiki', 'mua', 'giày', 'dép',
-    'váy', 'túi', 'sắm', 'siêu thị', 'quần áo', 'mỹ phẩm', 'đầm', 'nón',
-    'balo', 'thời trang', 'tất', 'vớ', 'jean', 'bootcut', 'quà tặng', 'cotton'
+    'áo', 'quần', 'shopee', 'lazada', 'tiki', 'tiktok', 'tiktok shop', 'mua',
+    'giày', 'dép', 'váy', 'túi', 'sắm', 'quần áo', 'mỹ phẩm', 'đầm', 'nón',
+    'mũ', 'balo', 'thời trang', 'tất', 'vớ', 'jean', 'bootcut', 'quà tặng',
+    'cotton', 'son môi', 'kem chống nắng', 'nước hoa', 'dưỡng da', 'serum',
+    'skincare', 'đồng hồ', 'mắt kính', 'thắt lưng'
   ],
   'cat-haircut': [
-    'cắt tóc', 'gội đầu', 'barber', '30shine', 'cắt', 'uốn tóc', 'nhuộm', 'tóc'
+    'cắt tóc', 'gội đầu', 'barber', '30shine', 'cắt', 'uốn tóc', 'nhuộm',
+    'tóc', 'dầu gội', 'dầu xả', 'kem ủ', 'gội', 'oliu', 'sáp vuốt',
+    'gel vuốt tóc', 'làm móng', 'nail', 'spa', 'mỹ phẩm tóc'
   ],
   'cat-electronics': [
     'điện thoại', 'laptop', 'tai nghe', 'sạc', 'chuột', 'bàn phím',
-    'cáp', 'điện tử', 'pin', 'máy tính', 'cục sạc', 'ốp lưng', 'màn hình',
-    'type-c', 'usb', 'phụ kiện'
+    'cáp', 'điện tử', 'pin', 'máy tính', 'cục sạc', 'củ sạc', 'dây sạc',
+    'ốp lưng', 'màn hình', 'type-c', 'usb', 'phụ kiện', 'iphone', 'samsung',
+    'xiaomi', 'ipad', 'airpods', 'loa', 'bluetooth', 'ổ cứng', 'ssd'
   ],
   'cat-furniture': [
-    'gia dụng', 'chảo', 'nồi', 'quạt', 'bếp', 'khăn', 'xô', 'chổi',
-    'móc áo', 'ly', 'chén', 'đũa', 'nệm', 'gối', 'màn', 'chiếu'
+    'gia dụng', 'chảo', 'nồi', 'quạt', 'bếp', 'khăn', 'xô', 'chậu',
+    'chổi', 'móc áo', 'ly', 'chén', 'đũa', 'nệm', 'gối', 'màn', 'chiếu',
+    'chà sàn', 'lau sàn', 'lau nhà', 'cây lau', 'cọ sàn', 'cọ rửa',
+    'nước rửa chén', 'nước giặt', 'bột giặt', 'nước xả', 'xả vải',
+    'túi rác', 'thùng rác', 'giấy vệ sinh', 'bàn', 'ghế', 'tủ', 'kệ',
+    'kệ gỗ', 'kệ sách', 'rèm', 'thớt', 'dao', 'bóng đèn'
   ],
   'cat-salary': [
-    'lương', 'thưởng', 'thu nhập', 'lương tháng', 'hoa hồng', 'tiền lương',
-    'nhận lương', 'phụ cấp'
+    'lương', 'thu nhập', 'lương tháng', 'tiền lương', 'nhận lương'
   ],
+  'cat-bonus': [
+    'thưởng', 'hoa hồng', 'phụ cấp', 'tiền thưởng'
+  ],
+  'cat-other-expense': [
+    'thuốc', 'khám bệnh', 'bác sĩ', 'y tế', 'viện phí', 'bệnh viện',
+    'phòng khám', 'paracetamol', 'panadol', 'vitamin', 'khẩu trang',
+    'bông băng', 'gạc', 'cồn y tế', 'pharmacity', 'long châu', 'an khang', 'nha khoa'
+  ]
 };
 
 /**

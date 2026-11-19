@@ -98,39 +98,249 @@ function cleanBase64(dataUrl: string): { base64Data: string; mimeType: string } 
 }
 
 /**
- * Map tên danh mục tiếng Việt từ LLM sang Category ID của ứng dụng
+ * Map tên danh mục tiếng Việt từ LLM / tên món hàng sang Category ID của ứng dụng
  */
-function mapCategoryNameToId(name: string): string {
-  const normalized = (name || '').toLowerCase();
-  if (normalized.includes('ăn') || normalized.includes('cơm') || normalized.includes('phở') || normalized.includes('thực phẩm')) return 'cat-eat';
-  if (normalized.includes('uống') || normalized.includes('cafe') || normalized.includes('trà') || normalized.includes('nước')) return 'cat-drink';
-  if (normalized.includes('xăng') || normalized.includes('xe') || normalized.includes('janus')) return 'cat-gas';
-  if (normalized.includes('hóa đơn') || normalized.includes('điện') || normalized.includes('nước') || normalized.includes('trọ') || normalized.includes('mạng')) return 'cat-bills';
+function mapCategoryNameToId(suggestion: string, noteText: string = ''): string {
+  const combined = `${suggestion} ${noteText}`.toLowerCase();
+
+  // 1. Gia dụng / Nhà cửa (ưu tiên các từ ngữ đồ dùng lau chùi, vệ sinh nhà cửa trước)
   if (
-    normalized.includes('mua sắm') ||
-    normalized.includes('quần áo') ||
-    normalized.includes('quần') ||
-    normalized.includes('áo') ||
-    normalized.includes('tất') ||
-    normalized.includes('vớ') ||
-    normalized.includes('váy') ||
-    normalized.includes('đầm') ||
-    normalized.includes('giày') ||
-    normalized.includes('dép') ||
-    normalized.includes('shopee') ||
-    normalized.includes('lazada') ||
-    normalized.includes('tiktok') ||
-    normalized.includes('tiki') ||
-    normalized.includes('thời trang') ||
-    normalized.includes('jean') ||
-    normalized.includes('bootcut') ||
-    normalized.includes('quà tặng')
-  ) return 'cat-shopping';
-  if (normalized.includes('cắt tóc') || normalized.includes('gội đầu') || normalized.includes('tóc')) return 'cat-haircut';
-  if (normalized.includes('điện tử') || normalized.includes('điện thoại') || normalized.includes('laptop') || normalized.includes('tai nghe') || normalized.includes('sạc')) return 'cat-electronics';
-  if (normalized.includes('gia dụng') || normalized.includes('nồi') || normalized.includes('chảo')) return 'cat-furniture';
-  if (normalized.includes('lương') || normalized.includes('thưởng') || normalized.includes('thu nhập')) return 'cat-salary';
-  return predictCategory(name);
+    combined.includes('gia dụng') ||
+    combined.includes('chổi') ||
+    combined.includes('chà sàn') ||
+    combined.includes('lau sàn') ||
+    combined.includes('lau nhà') ||
+    combined.includes('cọ sàn') ||
+    combined.includes('cọ rửa') ||
+    combined.includes('nước lau') ||
+    combined.includes('nước rửa chén') ||
+    combined.includes('nước giặt') ||
+    combined.includes('bột giặt') ||
+    combined.includes('nước xả') ||
+    combined.includes('xả vải') ||
+    combined.includes('túi rác') ||
+    combined.includes('thùng rác') ||
+    combined.includes('giấy vệ sinh') ||
+    combined.includes('nồi') ||
+    combined.includes('chảo') ||
+    combined.includes('bếp') ||
+    combined.includes('quạt') ||
+    combined.includes('khăn') ||
+    combined.includes('xô') ||
+    combined.includes('chậu') ||
+    combined.includes('móc áo') ||
+    combined.includes('ly') ||
+    combined.includes('chén') ||
+    combined.includes('đũa') ||
+    combined.includes('nệm') ||
+    combined.includes('gối') ||
+    combined.includes('màn') ||
+    combined.includes('chiếu') ||
+    combined.includes('kệ') ||
+    combined.includes('tủ') ||
+    combined.includes('bàn') ||
+    combined.includes('ghế') ||
+    combined.includes('rèm') ||
+    combined.includes('bóng đèn')
+  ) {
+    return 'cat-furniture';
+  }
+
+  // 2. Cắt tóc & Chăm sóc tóc, làm đẹp
+  if (
+    combined.includes('cắt tóc') ||
+    combined.includes('gội đầu') ||
+    combined.includes('gội') ||
+    combined.includes('dầu gội') ||
+    combined.includes('dầu xả') ||
+    combined.includes('kem ủ') ||
+    combined.includes('oliu') ||
+    combined.includes('nhuộm tóc') ||
+    combined.includes('uốn tóc') ||
+    combined.includes('barber') ||
+    combined.includes('tóc') ||
+    combined.includes('làm móng') ||
+    combined.includes('nail') ||
+    combined.includes('spa')
+  ) {
+    return 'cat-haircut';
+  }
+
+  // 3. Đồ ăn, thực phẩm, siêu thị ăn uống
+  if (
+    combined.includes('ăn') ||
+    combined.includes('cơm') ||
+    combined.includes('phở') ||
+    combined.includes('bún') ||
+    combined.includes('bánh mì') ||
+    combined.includes('mì') ||
+    combined.includes('thịt') ||
+    combined.includes('cá') ||
+    combined.includes('tôm') ||
+    combined.includes('rau') ||
+    combined.includes('thực phẩm') ||
+    combined.includes('hải sản') ||
+    combined.includes('lẩu') ||
+    combined.includes('chả') ||
+    combined.includes('trứng') ||
+    combined.includes('gia vị') ||
+    combined.includes('nước mắm') ||
+    combined.includes('dầu ăn') ||
+    combined.includes('xúc xích') ||
+    combined.includes('snack') ||
+    combined.includes('bim bim') ||
+    combined.includes('trái cây') ||
+    combined.includes('hoa quả') ||
+    combined.includes('pizza') ||
+    combined.includes('kfc') ||
+    combined.includes('lotteria') ||
+    combined.includes('jollibee')
+  ) {
+    return 'cat-eat';
+  }
+
+  // 4. Đồ uống, cafe, trà sữa
+  if (
+    combined.includes('uống') ||
+    combined.includes('cafe') ||
+    combined.includes('cà phê') ||
+    combined.includes('trà') ||
+    combined.includes('trà sữa') ||
+    combined.includes('sinh tố') ||
+    combined.includes('nước ngọt') ||
+    combined.includes('bia') ||
+    combined.includes('sting') ||
+    combined.includes('highlands') ||
+    combined.includes('phúc long') ||
+    combined.includes('the coffee house') ||
+    combined.includes('katinat') ||
+    combined.includes('sữa tươi') ||
+    combined.includes('sữa') ||
+    combined.includes('rượu') ||
+    combined.includes('nước ép')
+  ) {
+    return 'cat-drink';
+  }
+
+  // 5. Xăng xe, đi lại, cuốc xe
+  if (
+    combined.includes('xăng') ||
+    combined.includes('xe') ||
+    combined.includes('nhớt') ||
+    combined.includes('rửa xe') ||
+    combined.includes('sửa xe') ||
+    combined.includes('vá xe') ||
+    combined.includes('petrolimex') ||
+    combined.includes('grab') ||
+    combined.includes('be ') ||
+    combined.includes('xanh sm') ||
+    combined.includes('taxi') ||
+    combined.includes('gửi xe') ||
+    combined.includes('vé xe') ||
+    combined.includes('vé tàu') ||
+    combined.includes('vé máy bay') ||
+    combined.includes('bot') ||
+    combined.includes('cầu đường')
+  ) {
+    return 'cat-gas';
+  }
+
+  // 6. Hóa đơn, tiện ích sinh hoạt
+  if (
+    combined.includes('hóa đơn') ||
+    combined.includes('điện') ||
+    combined.includes('tiền nước') ||
+    combined.includes('nước sinh hoạt') ||
+    combined.includes('tiền trọ') ||
+    combined.includes('tiền phòng') ||
+    combined.includes('tiền nhà') ||
+    combined.includes('internet') ||
+    combined.includes('wifi') ||
+    combined.includes('mạng') ||
+    combined.includes('chung cư') ||
+    combined.includes('bảo hiểm') ||
+    combined.includes('tiền rác')
+  ) {
+    return 'cat-bills';
+  }
+
+  // 7. Đồ điện tử, công nghệ
+  if (
+    combined.includes('điện tử') ||
+    combined.includes('điện thoại') ||
+    combined.includes('laptop') ||
+    combined.includes('tai nghe') ||
+    combined.includes('sạc') ||
+    combined.includes('chuột') ||
+    combined.includes('bàn phím') ||
+    combined.includes('cáp') ||
+    combined.includes('pin') ||
+    combined.includes('máy tính') ||
+    combined.includes('iphone') ||
+    combined.includes('samsung') ||
+    combined.includes('loa') ||
+    combined.includes('bluetooth') ||
+    combined.includes('ổ cứng') ||
+    combined.includes('ssd') ||
+    combined.includes('màn hình')
+  ) {
+    return 'cat-electronics';
+  }
+
+  // 8. Mua sắm thời trang & phụ kiện
+  if (
+    combined.includes('mua sắm') ||
+    combined.includes('quần áo') ||
+    combined.includes('quần') ||
+    combined.includes('áo') ||
+    combined.includes('tất') ||
+    combined.includes('vớ') ||
+    combined.includes('váy') ||
+    combined.includes('đầm') ||
+    combined.includes('giày') ||
+    combined.includes('dép') ||
+    combined.includes('túi') ||
+    combined.includes('balo') ||
+    combined.includes('nón') ||
+    combined.includes('mũ') ||
+    combined.includes('mỹ phẩm') ||
+    combined.includes('son') ||
+    combined.includes('kem chống nắng') ||
+    combined.includes('skincare') ||
+    combined.includes('shopee') ||
+    combined.includes('lazada') ||
+    combined.includes('tiktok') ||
+    combined.includes('tiki') ||
+    combined.includes('thời trang') ||
+    combined.includes('jean') ||
+    combined.includes('quà tặng') ||
+    combined.includes('đồng hồ') ||
+    combined.includes('mắt kính')
+  ) {
+    return 'cat-shopping';
+  }
+
+  // 9. Tiền lương & Thưởng
+  if (combined.includes('lương') || combined.includes('thu nhập')) return 'cat-salary';
+  if (combined.includes('thưởng') || combined.includes('phụ cấp') || combined.includes('hoa hồng')) return 'cat-bonus';
+
+  // 10. Y tế & Chi tiêu khác
+  if (
+    combined.includes('thuốc') ||
+    combined.includes('khám') ||
+    combined.includes('bệnh') ||
+    combined.includes('y tế') ||
+    combined.includes('viện phí') ||
+    combined.includes('pharmacity') ||
+    combined.includes('long châu') ||
+    combined.includes('panadol') ||
+    combined.includes('paracetamol') ||
+    combined.includes('khác')
+  ) {
+    return 'cat-other-expense';
+  }
+
+  return predictCategory(combined);
 }
 
 /**
@@ -139,37 +349,82 @@ function mapCategoryNameToId(name: string): string {
 export function getVisionInvoicePromptSplit(
   todayStr: string = new Date().toISOString().slice(0, 10)
 ): string {
-  return `Đọc và phân tích hóa đơn / biên lai / phiếu giao hàng / ảnh chụp màn hình ứng dụng mua sắm (Shopee, Lazada, TikTok Shop, Tiki, siêu thị, nhà hàng...) và trích xuất các khoản chi tiêu từng món.
+  return `Bạn là một chuyên gia kế toán tài chính AI thông minh. Nhiệm vụ của bạn là phân tích và bóc tách dữ liệu từ BẤT KỲ loại hóa đơn, biên lai, phiếu giao hàng, bảng kê chi tiết hoặc ảnh chụp màn hình thanh toán nào.
 Hôm nay là ngày: ${todayStr}.
-Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ: [ { "name": "Món 1", "amount": 80000, "categorySuggestion": "Đồ gia dụng", "date": "${todayStr}" } ]. Không trả về các object rời rạc.
 
-Mỗi phần tử gồm:
-- "name": tên món, sản phẩm hoặc người nhận chuyển khoản.
-  + Nếu là đơn hàng sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki...): BẮT BUỘC gắn kèm tên Shop và số lượng. Ví dụ: "[Shopee - TopGia HCM Store] Cây chà sàn TopGia cao cấp 3in1 (SL: 1)".
-  + Nếu ảnh chụp là danh sách nhiều đơn hàng (như màn hình "Đơn đã mua" Shopee có 2-3 khối đơn hàng khác nhau): Bóc tách TỪNG ĐƠN HÀNG thành một phần tử riêng trong mảng JSON!
-- "amount": số tiền thực tế người dùng phải trả (số nguyên >= 0).
-  *** QUY TẮC BẮT BUỘC ĐỂ PHÂN BIỆT NHIỀU MỨC GIÁ (GIÁ GỐC, GIÁ BÁN, GIÁ THÀNH TIỀN) ***:
-  1. TUYỆT ĐỐI BỎ QUA GIÁ GỐC GẠCH NGANG (strikethrough / crossed-out price, ví dụ chữ số bị gạch ngang 169.000đ). Đó KHÔNG PHẢI là số tiền người mua chi trả!
-  2. TUYỆT ĐỐI BỎ QUA giá niêm yết của shop khi đơn hàng có dòng "Tổng số tiền", "Thành tiền", "Tổng thanh toán".
-  3. BẮT BUỘC ƯU TIÊN LẤY SỐ TIỀN THỰC TRẢ CUỐI CÙNG:
-     - Trên màn hình Shopee / TMĐT: BẮT BUỘC lấy giá trị tại dòng "Tổng số tiền (...):" hoặc "Thành tiền:" hoặc "Tổng thanh toán:" (ví dụ: trên ảnh có '169.000đ' gạch ngang, '100.000đ', và 'Tổng số tiền (1 sản phẩm): 80.000đ' -> BẮT BUỘC lấy amount = 80000).
-     - Với hóa đơn siêu thị / cửa hàng có cột "Đơn giá", "Giảm giá / Chiết khấu", "Thành tiền": BẮT BUỘC lấy cột "Thành tiền" (sau khi đã trừ giảm giá của món đó).
-     - Nếu đơn hàng thanh toán 0đ (do áp voucher 100% hoặc quà tặng 0đ): BẮT BUỘC để amount = 0, TUYỆT ĐỐI KHÔNG BỎ QUA sản phẩm!
-     - Nếu là phiếu giao hàng có tiền COD thu người nhận > 0: gán số tiền COD (nếu có quà tặng 0đ kèm theo, gán COD cho món chính).
-- "date": YYYY-MM-DD.
-  *** QUY TẮC BẮT BUỘC VỀ NGÀY THÁNG ***:
-  + CHỈ lấy ngày khi có ngày đặt hàng, ngày mua hoặc ngày in hóa đơn cụ thể trong quá khứ hoặc hôm nay.
-  + TUYỆT ĐỐI KHÔNG lấy các hạn chót trong tương lai như "Đánh giá sản phẩm trước 18 Thg 12", "Hạn đổi trả trước...", "Giao dự kiến...". Đó là hạn chót, không phải ngày mua!
-  + Nếu trên hóa đơn / ảnh chụp KHÔNG CÓ ngày mua hàng cụ thể (hoặc ảnh màn hình Đơn đã mua của Shopee không in ngày mua): BẮT BUỘC để ngày là ngày hôm nay: "${todayStr}"!
-- "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác".
+PHẠM VI HÓA ĐƠN ĐA DẠNG TRONG THỰC TẾ:
+1. Siêu thị & Cửa hàng tiện lợi: WinMart, Co.opmart, Bách Hóa Xanh, Big C, GO!, Lotte Mart, Aeon Mall, Circle K, 7-Eleven, FamilyMart, GS25...
+2. Nhà hàng, Ăn uống & Cà phê: Highlands Coffee, Phúc Long, The Coffee House, quán ăn, trà sữa, gà rán, buffet, quán nhậu...
+3. Ứng dụng giao đồ ăn & Đặt xe: Grab, GrabFood, ShopeeFood, Be, Gojek, Xanh SM...
+4. Ứng dụng Thương mại điện tử: Shopee, Lazada, TikTok Shop, Tiki, Taobao, Temu, Sendo... (cả màn hình chi tiết 1 đơn lẫn màn hình danh sách nhiều đơn hàng "Đơn đã mua").
+5. Phiếu giao hàng / Vận đơn bưu tá: SPX Express, GHTK, GHN, Viettel Post, J&T Express, VNPost, Best Express...
+6. Hóa đơn tiện ích & sinh hoạt: Điện lực EVN, nước sinh hoạt, Internet FPT/VNPT/Viettel, tiền thuê phòng trọ, phí chung cư.
+7. Nhà thuốc & Y tế: Pharmacity, Long Châu, An Khang, viện phí, xét nghiệm, đơn thuốc.
+8. Biên lai ngân hàng & Ví điện tử: Chuyển khoản Vietcombank, Techcombank, MB Bank, MoMo, ZaloPay, VNPay...
+9. Hóa đơn viết tay, tiệm tạp hóa, tiệm sửa xe.
 
-Quy tắc bổ sung:
-1. Với phiếu giao hàng / vận đơn sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki, GHN, GHTK, Viettel Post, J&T...):
-   - Trích xuất TOÀN BỘ từng sản phẩm trong phần "Nội dung hàng" hoặc "Chi tiết hàng hóa" (kể cả quà tặng kèm, sản phẩm 0đ).
-   - Tên món cần ngắn gọn, rõ ràng, giữ lại phân loại size/màu và số lượng (bỏ bớt các mã SKU rườm rà).
-2. Không lấy các dòng phụ như tiền thối / tiền thừa.
-3. Biên lai ngân hàng: xuất 1 phần tử gồm nội dung/người nhận và số tiền.
-4. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc ký tự khác bên ngoài.`;
+BẮT BUỘC TRẢ VỀ:
+Một MẢNG JSON hợp lệ duy nhất (JSON Array of objects). Ví dụ:
+[
+  {
+    "name": "[Shopee - TopGia HCM Store] Cây chà sàn TopGia cao cấp 3in1 (SL: 1)",
+    "amount": 80000,
+    "categorySuggestion": "Đồ gia dụng",
+    "date": "${todayStr}"
+  }
+]
+TUYỆT ĐỐI không trả về văn bản giải thích ngoài JSON, không bọc markdown \`\`\`json.
+
+QUY TẮC BÓC TÁCH TÀI CHÍNH CỐT LÕI (BẮT BUỘC TUÂN THỦ):
+
+1. SỐ TIỀN THỰC TẾ NGƯỜI DÙNG PHẢI TRẢ (NET OUT-OF-POCKET EXPENSE) - XỬ LÝ ĐA MỨC GIÁ:
+- "amount": Số nguyên >= 0 là số tiền thực tế người dùng phải trả cho món/đơn hàng đó.
+- TUYỆT ĐỐI BỎ QUA GIÁ GỐC GẠCH NGANG (strikethrough / crossed-out price, ví dụ chữ số bị gạch ngang 169.000đ). Đó là giá ảo/giá trước giảm, KHÔNG PHẢI số tiền người mua chi trả!
+- TUYỆT ĐỐI BỎ QUA giá niêm yết của shop khi đơn hàng có dòng thành tiền sau chiết khấu/voucher.
+  + Ví dụ đơn Shopee/TMĐT: giá niêm yết 100.000đ, nhưng dòng "Tổng số tiền (1 sản phẩm): 80.000đ" -> BẮT BUỘC lấy amount = 80000.
+- Với hóa đơn siêu thị / bán lẻ có các cột [Đơn giá], [Số lượng], [Khuyến mãi/Chiết khấu], [Thành tiền]:
+  + BẮT BUỘC lấy giá trị tại cột [Thành tiền] của từng dòng (sau khi đã trừ khuyến mãi của sản phẩm đó).
+- Với hóa đơn tổng hợp có các dòng cuối: [Cộng tiền hàng], [Chiết khấu hóa đơn], [Thuế VAT], [Tổng thanh toán / Khách phải trả], [Tiền khách đưa], [Tiền thừa]:
+  + TUYỆT ĐỐI KHÔNG lấy [Tiền khách đưa] (ví dụ: hóa đơn 180.000đ, khách đưa 500.000đ -> Không được lấy 500.000đ!).
+  + TUYỆT ĐỐI KHÔNG lấy [Tiền thừa / Tiền thối] (ví dụ 320.000đ).
+- Đơn hàng hoặc sản phẩm 0đ (do áp voucher giảm 100%, hàng tặng kèm 0đ, hoặc phiếu giao hàng đã trả trước ghi COD: 0đ):
+  + BẮT BUỘC giữ lại sản phẩm và gán amount = 0. TUYỆT ĐỐI KHÔNG ĐƯỢC BỎ QUA sản phẩm 0đ!
+- Phiếu giao hàng có tiền COD > 0: gán số tiền COD cho món hàng chính.
+
+2. XỬ LÝ ẢNH CHỤP DANH SÁCH NHIỀU ĐƠN HÀNG (MULTI-ORDER LIST):
+- Nếu ảnh là màn hình danh sách nhiều đơn hàng riêng biệt (ví dụ màn hình "Đơn đã mua" Shopee có 2-3 khối đơn hàng từ các Shop khác nhau, hoặc lịch sử nhiều chuyến xe Grab/Be):
+  + BẮT BUỘC bóc tách TỪNG KHỐI ĐƠN HÀNG thành một phần tử riêng biệt trong mảng JSON!
+  + Không được gom chung hoặc bỏ sót bất kỳ khối đơn hàng nào có trong ảnh.
+
+3. TÊN MÓN VÀ CỬA HÀNG ("name"):
+- BẮT BUỘC gắn kèm tên thương hiệu / Shop / Đơn vị cung cấp ở đầu trong ngoặc vuông [ ] nếu có.
+  + Ví dụ TMĐT: "[Shopee - TopGia HCM Store] Cây chà sàn TopGia cao cấp 3in1 (SL: 1)"
+  + Ví dụ siêu thị: "[WinMart] Sữa tươi tiệt trùng TH True Milk 1L (SL: 2)"
+  + Ví dụ ăn uống: "[Highlands Coffee] Trà sen vàng size L (SL: 1)"
+  + Ví dụ đặt xe/đồ ăn: "[GrabFood - Cơm Tấm Ba Ghiền] Cơm sườn bì chả"
+  + Ví dụ tiện ích: "[EVN] Tiền điện kỳ 11/2026"
+  + Ví dụ chuyển khoản: "[Vietcombank] Chuyển tiền cho NGUYEN VAN A"
+- Bỏ bớt mã SKU rườm rà, giữ lại phân loại size/màu và số lượng (SL) để tên gọn gàng và rõ nghĩa.
+
+4. THÔNG MINH VỀ NGÀY THÁNG ("date"):
+- Định dạng YYYY-MM-DD.
+- CHỈ lấy ngày khi có ngày giao dịch, ngày mua, hoặc ngày in hóa đơn cụ thể trong quá khứ hoặc hôm nay.
+- TUYỆT ĐỐI KHÔNG NHẦM VỚI THỜI HẠN TƯƠNG LAI (Deadlines):
+  + Bỏ qua các hạn chót trong tương lai như: "Đánh giá sản phẩm trước 18 Thg 12", "Hạn đổi trả hàng trước...", "Giao dự kiến...", "Hạn thanh toán...".
+- NẾU ẢNH KHÔNG CÓ NGÀY MUA CỤ THỂ (hoặc chỉ có hạn đánh giá tương lai): BẮT BUỘC ĐỂ NGÀY LÀ HÔM NAY: "${todayStr}"!
+
+5. PHÂN LOẠI DANH MỤC THÔNG MINH ("categorySuggestion"):
+Tự động phán đoán chính xác và chọn DUY NHẤT 1 trong các nhóm sau:
+- "Ăn": Cơm, phở, bún, bánh mì, thịt, cá, rau củ, đồ ăn tươi sống, gia vị, siêu thị đồ ăn...
+- "Uống": Cà phê, trà sữa, trà, sinh tố, nước ngọt, bia, Highlands, Phúc Long, Katinat...
+- "Mua sắm": Quần áo, giày dép, váy đầm, túi xách, mỹ phẩm, skincare, son phấn, thời trang...
+- "Cắt tóc": Cắt tóc, gội đầu, uốn nhuộm, barber, dầu gội, dầu xả, kem ủ tóc, làm móng...
+- "Đồ điện tử": Điện thoại, laptop, tai nghe, sạc cáp, pin dự phòng, chuột, bàn phím, công nghệ...
+- "Đồ gia dụng": Cây chà sàn, chổi quét nhà, nước lau sàn, nước giặt, xả vải, nước rửa chén, xoong chảo, đồ bếp, kệ gỗ, bàn ghế, ga gối...
+- "Xăng xe": Đổ xăng, sửa xe, rửa xe, vá lốp, gửi xe, cước taxi, Grab, Be, vé tàu, vé xe, vé máy bay...
+- "Hóa đơn": Tiền điện EVN, tiền nước sinh hoạt, cước Internet/Wifi, tiền thuê phòng trọ, phí chung cư...
+- "Tiền lương" / "Tiền thưởng": Nhận lương, thưởng, hoa hồng...
+- "Chi tiêu khác": Thuốc tây, khám chữa bệnh, y tế, viện phí, từ thiện và các chi phí khác.`;
 }
 
 /**
@@ -178,22 +433,26 @@ Quy tắc bổ sung:
 export function getVisionInvoicePromptMerge(
   todayStr: string = new Date().toISOString().slice(0, 10)
 ): string {
-  return `Phân tích hóa đơn hoặc ảnh chụp màn hình mua sắm/phiếu giao hàng này và trả về 1 giao dịch duy nhất.
+  return `Bạn là một chuyên gia kế toán tài chính AI thông minh. Nhiệm vụ của bạn là phân tích BẤT KỲ loại hóa đơn, biên lai, phiếu giao hàng hoặc ảnh chụp màn hình thanh toán nào (siêu thị, nhà hàng, quán cafe, Grab, Shopee, bưu tá giao hàng, điện nước, chuyển khoản ngân hàng...) và tổng hợp thành DUY NHẤT 1 giao dịch trọn gói.
 Hôm nay là ngày: ${todayStr}.
-BẮT BUỘC: Trả về DUY NHẤT một chuỗi JSON hợp lệ. Ví dụ:
+
+BẮT BUỘC TRẢ VỀ:
+DUY NHẤT một chuỗi JSON hợp lệ. Ví dụ:
 {"totalAmount": 80000, "note": "[Shopee - TopGia HCM Store]\\n- Cây chà sàn TopGia cao cấp 3in1 (SL: 1)", "categorySuggestion": "Đồ gia dụng", "date": "${todayStr}"}
 
-ĐẶC BIỆT LƯU Ý: Phải dùng ký tự escape \\n để xuống dòng bên trong giá trị string của note, tuyệt đối không dùng dấu xuống dòng thực tế (literal unescaped newline) gây lỗi JSON.
+ĐẶC BIỆT LƯU Ý KỸ THUẬT:
+Bắt buộc dùng ký tự escape \\n để xuống dòng bên trong giá trị chuỗi của "note", tuyệt đối không dùng dấu xuống dòng thực tế gây lỗi cú pháp JSON.
 
-Quy tắc bắt buộc:
+QUY TẮC BẮT BUỘC:
 1. "totalAmount": Số nguyên tổng tiền thực tế người dùng phải trả (số nguyên >= 0).
-   - TUYỆT ĐỐI BỎ QUA giá gốc gạch ngang (strikethrough price).
-   - BẮT BUỘC lấy giá thành tiền thực trả sau khi trừ toàn bộ voucher / giảm giá / Shopee Xu (ví dụ dòng 'Tổng số tiền: 80.000đ' -> lấy 80000).
-   - Nếu đơn hàng trả trước ghi 0 VND hoặc quà tặng thì để 0, không được bỏ qua.
-2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng / Shop / Đơn vị giao hàng], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và số lượng.
-3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
-4. "date": YYYY-MM-DD. Nếu không có ngày mua cụ thể trên ảnh (hoặc chỉ có hạn đánh giá trong tương lai như 'Đánh giá trước 18 Thg 12'): BẮT BUỘC để ngày hôm nay: "${todayStr}".
-5. Chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không bọc markdown (\`\`\`json) hay văn bản giải thích nào khác.`;
+   - TUYỆT ĐỐI BỎ QUA GIÁ GỐC GẠCH NGANG (strikethrough price).
+   - BẮT BUỘC lấy giá thành tiền thực trả sau khi đã trừ toàn bộ khuyến mãi, voucher, chiết khấu, điểm thưởng (ví dụ: dòng 'Tổng số tiền: 80.000đ' -> lấy 80000).
+   - Với hóa đơn siêu thị/nhà hàng: Lấy dòng "Tổng thanh toán / Khách phải trả", TUYỆT ĐỐI KHÔNG lấy "Tiền khách đưa" hay "Tiền thừa".
+   - Nếu đơn hàng thanh toán 0đ hoặc quà tặng 0đ hoặc COD = 0đ: để 0, không được bỏ qua.
+2. "note": Bắt đầu bằng [Tên Đơn vị / Cửa hàng / Shop], sau đó dùng ký tự \\n để xuống dòng liệt kê từng sản phẩm kèm số lượng.
+3. "categorySuggestion": Tự động chọn 1 nhóm phù hợp nhất ("Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
+4. "date": YYYY-MM-DD. Lấy ngày mua/giao dịch thực tế. TUYỆT ĐỐI KHÔNG lấy hạn chót trong tương lai (như 'Đánh giá trước 18 Thg 12'). Nếu không có ngày cụ thể, mặc định lấy hôm nay: "${todayStr}".
+5. Chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không có markdown hay văn bản nào khác.`;
 }
 
 export const VISION_INVOICE_PROMPT_SPLIT = getVisionInvoicePromptSplit();
@@ -222,11 +481,11 @@ export const GEMINI_MERGE_SCHEMA = {
   properties: {
     totalAmount: {
       type: 'INTEGER',
-      description: 'Tổng số tiền thanh toán thực tế của đơn hàng/hóa đơn (số nguyên >= 0). Lấy giá thành tiền thực trả sau khi trừ voucher giảm giá, bỏ qua giá gốc gạch ngang.',
+      description: 'Tổng số tiền thanh toán thực tế của đơn hàng/hóa đơn (số nguyên >= 0). Lấy giá thành tiền thực trả sau khi trừ voucher giảm giá, bỏ qua giá gốc gạch ngang và tiền khách đưa/tiền thừa. Đơn 0đ để 0.',
     },
     note: {
       type: 'STRING',
-      description: 'Ghi chú bắt đầu bằng [Tên Cửa Hàng / Shop], sau đó liệt kê từng món kèm số lượng ngăn cách bằng \\n',
+      description: 'Ghi chú bắt đầu bằng [Tên Cửa Hàng / Đơn vị], sau đó liệt kê từng món kèm số lượng ngăn cách bằng \\n',
     },
     categorySuggestion: {
       type: 'STRING',
@@ -245,21 +504,21 @@ export const GEMINI_MERGE_SCHEMA = {
  */
 export const GEMINI_SPLIT_SCHEMA = {
   type: 'ARRAY',
-  description: 'Danh sách các món hàng/dịch vụ/sản phẩm trong hóa đơn hoặc phiếu giao hàng',
+  description: 'Danh sách các món hàng/dịch vụ/khoản chi trong hóa đơn, biên lai hoặc ảnh chụp màn hình đơn hàng',
   items: {
     type: 'OBJECT',
     properties: {
       name: {
         type: 'STRING',
-        description: 'Tên món hàng, dịch vụ hoặc sản phẩm trên phiếu giao hàng',
+        description: 'Tên món hàng, dịch vụ hoặc khoản chi (gắn kèm tên cửa hàng/shop nếu có, ví dụ [Shopee - TopGia HCM Store] Cây chà sàn)',
       },
       amount: {
         type: 'INTEGER',
-        description: 'Số tiền thực tế của món hàng/sản phẩm (số nguyên >= 0). BẮT BUỘC lấy giá thành tiền / thực trả sau giảm giá hoặc dòng "Tổng số tiền", TUYỆT ĐỐI BỎ QUA giá gốc gạch ngang. Nếu là đơn 0đ hoặc quà tặng thì để 0.',
+        description: 'Số tiền thực tế của món hàng/sản phẩm (số nguyên >= 0). BẮT BUỘC lấy giá thành tiền / thực trả sau giảm giá hoặc dòng "Tổng số tiền", TUYỆT ĐỐI BỎ QUA giá gốc gạch ngang và tiền khách đưa/tiền thừa. Đơn 0đ để 0.',
       },
       categorySuggestion: {
         type: 'STRING',
-        description: 'Gợi ý danh mục phù hợp cho món này',
+        description: 'Gợi ý danh mục phù hợp cho món này (Ăn, Uống, Xăng xe, Hóa đơn, Mua sắm, Cắt tóc, Đồ điện tử, Đồ gia dụng, Chi tiêu khác)',
       },
       date: {
         type: 'STRING',
@@ -969,7 +1228,7 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
         .trim()
         .replace(/\\n/g, '\n');
       const itemDate = isValidPastOrPresentDate(item.date) ? item.date : defaultDate;
-      const categoryId = item.categoryId || mapCategoryNameToId(item.categorySuggestion || item.category || noteText);
+      const categoryId = item.categoryId || mapCategoryNameToId(item.categorySuggestion || item.category || '', noteText);
 
       return {
         id: `vision-item-${Date.now()}-${idx}`,
