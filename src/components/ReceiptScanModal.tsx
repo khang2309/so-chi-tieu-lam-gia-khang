@@ -454,15 +454,24 @@ export const ReceiptScanModal: React.FC<ReceiptScanModalProps> = ({
     }
 
     // Chuyển đổi thành Transaction array
-    const transactionsToSave = batchItems.map((item) => ({
-      amount: Number(item.amount) || 0,
-      type: 'expense' as const,
-      date: new Date(`${item.date}T${hh}:${mm}:${ss}`).toISOString(),
-      categoryId: item.categoryId,
-      ledgerId: finalLedgerId,
-      walletId: finalWalletId,
-      note: item.note.trim() || 'Khoản chi tiêu quét hóa đơn',
-    }));
+    const transactionsToSave = batchItems.map((item) => {
+      let safeDateStr = (item.date || '').trim();
+      if (!safeDateStr || isNaN(new Date(safeDateStr).getTime())) {
+        safeDateStr = toLocalDateKey(now);
+      }
+      const combinedDate = new Date(`${safeDateStr}T${hh}:${mm}:${ss}`);
+      const finalIsoDate = isNaN(combinedDate.getTime()) ? now.toISOString() : combinedDate.toISOString();
+
+      return {
+        amount: Number(item.amount) || 0,
+        type: 'expense' as const,
+        date: finalIsoDate,
+        categoryId: item.categoryId,
+        ledgerId: finalLedgerId,
+        walletId: finalWalletId,
+        note: item.note.trim() || 'Khoản chi tiêu quét hóa đơn',
+      };
+    });
 
     onSaveBatchTransactions(transactionsToSave);
     onClose();

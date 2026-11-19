@@ -189,13 +189,18 @@ export const DuplicateTransactionModal: React.FC<DuplicateTransactionModalProps>
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    let evaluatedVal = evaluateMathExpression(amount);
-    if (evaluatedVal === null || isNaN(evaluatedVal)) {
-      evaluatedVal = parseAmountOrExpression(amount);
+    const effectiveAmountStr = (amount || '').trim();
+    if (effectiveAmountStr === '') {
+      alert('Vui lòng nhập số tiền (hoặc bấm số 0 nếu là đơn 0đ)!');
+      return;
     }
-    const finalAmount = Math.round(evaluatedVal || 0);
-    if (finalAmount <= 0) {
-      alert('Vui lòng nhập số tiền hợp lệ lớn hơn 0!');
+    let evaluatedVal = evaluateMathExpression(effectiveAmountStr);
+    if (evaluatedVal === null || isNaN(evaluatedVal)) {
+      evaluatedVal = parseAmountOrExpression(effectiveAmountStr, NaN);
+    }
+    const finalAmount = Math.round(evaluatedVal);
+    if (isNaN(finalAmount) || finalAmount < 0) {
+      alert('Vui lòng nhập số tiền hợp lệ (từ 0đ trở lên)!');
       return;
     }
 

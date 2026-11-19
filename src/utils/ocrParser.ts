@@ -753,9 +753,24 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
           ? 'Biên lai Chuyển khoản Ngân hàng'
           : 'Giấy ghi chép tự do');
 
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const isValidPastOrPresentDate = (d: any): boolean => {
+        if (!d || typeof d !== 'string') return false;
+        const match = d.match(/^\d{4}-\d{2}-\d{2}$/);
+        if (!match) return false;
+        const time = new Date(d).getTime();
+        if (isNaN(time)) return false;
+        const maxFutureTime = Date.now() + 86400000;
+        if (time < new Date('2000-01-01').getTime() || time > maxFutureTime) {
+          return false;
+        }
+        return true;
+      };
+
       const defaultDate =
-        (typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.date : null) ||
-        new Date().toISOString().slice(0, 10);
+        typeof parsed === 'object' && !Array.isArray(parsed) && isValidPastOrPresentDate(parsed.date)
+          ? parsed.date
+          : todayStr;
 
       const rawItems = Array.isArray(parsed)
         ? parsed
@@ -773,7 +788,7 @@ export function extractInvoiceData(rawText: string): BatchParsedResult {
         .map((item: any, idx: number) => {
           const amt = Math.max(0, Number(item.amount ?? item.price ?? 0));
           const name = String(item.name || item.title || item.note || `Món hàng ${idx + 1}`).trim();
-          const itemDate = item.date || defaultDate;
+          const itemDate = isValidPastOrPresentDate(item.date) ? item.date : defaultDate;
           const categoryId = item.categoryId || predictCategory(item.categorySuggestion || item.category || name);
 
           return {

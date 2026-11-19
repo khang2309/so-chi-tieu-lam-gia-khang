@@ -136,48 +136,68 @@ function mapCategoryNameToId(name: string): string {
 /**
  * Prompt 1: Tách từng món (Mặc định)
  */
-export const VISION_INVOICE_PROMPT_SPLIT = `Đọc hóa đơn/biên lai/phiếu giao hàng/vận đơn TMĐT và trích xuất các khoản chi tiêu từng món.
-Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ: [ { "name": "Món 1", "amount": 100 }, { "name": "Món 2", "amount": 200 } ]. Không trả về các object rời rạc.
+export function getVisionInvoicePromptSplit(
+  todayStr: string = new Date().toISOString().slice(0, 10)
+): string {
+  return `Đọc và phân tích hóa đơn / biên lai / phiếu giao hàng / ảnh chụp màn hình ứng dụng mua sắm (Shopee, Lazada, TikTok Shop, Tiki, siêu thị, nhà hàng...) và trích xuất các khoản chi tiêu từng món.
+Hôm nay là ngày: ${todayStr}.
+Bạn phải trả về một MẢNG JSON (JSON Array) chứa các đối tượng. Ví dụ: [ { "name": "Món 1", "amount": 80000, "categorySuggestion": "Đồ gia dụng", "date": "${todayStr}" } ]. Không trả về các object rời rạc.
 
 Mỗi phần tử gồm:
-- "name": tên món, sản phẩm hoặc người nhận chuyển khoản. Nếu là đơn hàng sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki...), hãy gắn kèm tên Shop (VD: "[Shopee - HAVENSA] Quần jean form bootcut Haven's").
-- "amount": số tiền (số nguyên >= 0).
-  + Nếu có giá in trên từng món: lấy đúng giá.
-  + Nếu là phiếu giao hàng có tiền COD thu người nhận > 0: gán số tiền COD (nếu có quà tặng 0đ kèm theo, gán COD cho món chính).
-  + Nếu là phiếu giao hàng Shopee/Lazada trả trước ghi "Tiền thu Người nhận: 0 VND" hoặc không in giá tiền từng món: BẮT BUỘC để amount = 0, TUYỆT ĐỐI KHÔNG BỎ QUA sản phẩm!
-- "date": YYYY-MM-DD (ngày hóa đơn hoặc ngày đặt hàng, mặc định 2026 nếu thiếu năm).
+- "name": tên món, sản phẩm hoặc người nhận chuyển khoản.
+  + Nếu là đơn hàng sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki...): BẮT BUỘC gắn kèm tên Shop và số lượng. Ví dụ: "[Shopee - TopGia HCM Store] Cây chà sàn TopGia cao cấp 3in1 (SL: 1)".
+  + Nếu ảnh chụp là danh sách nhiều đơn hàng (như màn hình "Đơn đã mua" Shopee có 2-3 khối đơn hàng khác nhau): Bóc tách TỪNG ĐƠN HÀNG thành một phần tử riêng trong mảng JSON!
+- "amount": số tiền thực tế người dùng phải trả (số nguyên >= 0).
+  *** QUY TẮC BẮT BUỘC ĐỂ PHÂN BIỆT NHIỀU MỨC GIÁ (GIÁ GỐC, GIÁ BÁN, GIÁ THÀNH TIỀN) ***:
+  1. TUYỆT ĐỐI BỎ QUA GIÁ GỐC GẠCH NGANG (strikethrough / crossed-out price, ví dụ chữ số bị gạch ngang 169.000đ). Đó KHÔNG PHẢI là số tiền người mua chi trả!
+  2. TUYỆT ĐỐI BỎ QUA giá niêm yết của shop khi đơn hàng có dòng "Tổng số tiền", "Thành tiền", "Tổng thanh toán".
+  3. BẮT BUỘC ƯU TIÊN LẤY SỐ TIỀN THỰC TRẢ CUỐI CÙNG:
+     - Trên màn hình Shopee / TMĐT: BẮT BUỘC lấy giá trị tại dòng "Tổng số tiền (...):" hoặc "Thành tiền:" hoặc "Tổng thanh toán:" (ví dụ: trên ảnh có '169.000đ' gạch ngang, '100.000đ', và 'Tổng số tiền (1 sản phẩm): 80.000đ' -> BẮT BUỘC lấy amount = 80000).
+     - Với hóa đơn siêu thị / cửa hàng có cột "Đơn giá", "Giảm giá / Chiết khấu", "Thành tiền": BẮT BUỘC lấy cột "Thành tiền" (sau khi đã trừ giảm giá của món đó).
+     - Nếu đơn hàng thanh toán 0đ (do áp voucher 100% hoặc quà tặng 0đ): BẮT BUỘC để amount = 0, TUYỆT ĐỐI KHÔNG BỎ QUA sản phẩm!
+     - Nếu là phiếu giao hàng có tiền COD thu người nhận > 0: gán số tiền COD (nếu có quà tặng 0đ kèm theo, gán COD cho món chính).
+- "date": YYYY-MM-DD.
+  *** QUY TẮC BẮT BUỘC VỀ NGÀY THÁNG ***:
+  + CHỈ lấy ngày khi có ngày đặt hàng, ngày mua hoặc ngày in hóa đơn cụ thể trong quá khứ hoặc hôm nay.
+  + TUYỆT ĐỐI KHÔNG lấy các hạn chót trong tương lai như "Đánh giá sản phẩm trước 18 Thg 12", "Hạn đổi trả trước...", "Giao dự kiến...". Đó là hạn chót, không phải ngày mua!
+  + Nếu trên hóa đơn / ảnh chụp KHÔNG CÓ ngày mua hàng cụ thể (hoặc ảnh màn hình Đơn đã mua của Shopee không in ngày mua): BẮT BUỘC để ngày là ngày hôm nay: "${todayStr}"!
 - "categorySuggestion": một trong các nhóm: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Tiền lương", "Chi tiêu khác".
 
-Quy tắc bắt buộc:
+Quy tắc bổ sung:
 1. Với phiếu giao hàng / vận đơn sàn TMĐT (Shopee, SPX Express, TikTok Shop, Lazada, Tiki, GHN, GHTK, Viettel Post, J&T...):
    - Trích xuất TOÀN BỘ từng sản phẩm trong phần "Nội dung hàng" hoặc "Chi tiết hàng hóa" (kể cả quà tặng kèm, sản phẩm 0đ).
    - Tên món cần ngắn gọn, rõ ràng, giữ lại phân loại size/màu và số lượng (bỏ bớt các mã SKU rườm rà).
-2. Không lấy dòng VAT, Tổng cộng, Tiền thối.
+2. Không lấy các dòng phụ như tiền thối / tiền thừa.
 3. Biên lai ngân hàng: xuất 1 phần tử gồm nội dung/người nhận và số tiền.
 4. Chỉ trả về chuỗi JSON thuần túy, không có markdown hoặc ký tự khác bên ngoài.`;
+}
 
 /**
  * Prompt 2: Gộp thành 1 giao dịch duy nhất
  */
-export const VISION_INVOICE_PROMPT_MERGE = `Phân tích hóa đơn hoặc phiếu giao hàng này và trả về 1 giao dịch duy nhất.
-Khóa totalAmount là tổng tiền hóa đơn hoặc số tiền thu COD (nếu đơn trả trước ghi 0 VND hoặc không có giá thì để 0).
-Khóa note (Ghi chú) bắt buộc phải bắt đầu bằng [Tên Cửa Hàng / Tên Shop / Đơn vị giao hàng], sau đó liệt kê chi tiết từng món hàng kèm số lượng theo định dạng:
-[Tên Cửa Hàng / Shop]
-- Món A (SL: 1)
-- Món B (SL: 1)
-
+export function getVisionInvoicePromptMerge(
+  todayStr: string = new Date().toISOString().slice(0, 10)
+): string {
+  return `Phân tích hóa đơn hoặc ảnh chụp màn hình mua sắm/phiếu giao hàng này và trả về 1 giao dịch duy nhất.
+Hôm nay là ngày: ${todayStr}.
 BẮT BUỘC: Trả về DUY NHẤT một chuỗi JSON hợp lệ. Ví dụ:
-{"totalAmount": 100000, "note": "[Shopee - HAVENSA]\\n- Quần jean form bootcut (SL: 1)\\n- Tất thể thao (SL: 1)", "categorySuggestion": "Mua sắm", "date": "2026-10-10"}
+{"totalAmount": 80000, "note": "[Shopee - TopGia HCM Store]\\n- Cây chà sàn TopGia cao cấp 3in1 (SL: 1)", "categorySuggestion": "Đồ gia dụng", "date": "${todayStr}"}
 
 ĐẶC BIỆT LƯU Ý: Phải dùng ký tự escape \\n để xuống dòng bên trong giá trị string của note, tuyệt đối không dùng dấu xuống dòng thực tế (literal unescaped newline) gây lỗi JSON.
 
 Quy tắc bắt buộc:
-1. "totalAmount": Số nguyên tổng tiền cả hóa đơn hoặc tiền thu COD (nếu đơn Shopee/Lazada trả trước ghi 0 VND thì để 0, không được bỏ qua).
-2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng / Shop], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và số lượng.
+1. "totalAmount": Số nguyên tổng tiền thực tế người dùng phải trả (số nguyên >= 0).
+   - TUYỆT ĐỐI BỎ QUA giá gốc gạch ngang (strikethrough price).
+   - BẮT BUỘC lấy giá thành tiền thực trả sau khi trừ toàn bộ voucher / giảm giá / Shopee Xu (ví dụ dòng 'Tổng số tiền: 80.000đ' -> lấy 80000).
+   - Nếu đơn hàng trả trước ghi 0 VND hoặc quà tặng thì để 0, không được bỏ qua.
+2. "note": BẮT BUỘC bắt đầu bằng [Tên Cửa Hàng / Shop / Đơn vị giao hàng], sau đó dùng ký tự \\n để xuống dòng liệt kê từng món và số lượng.
 3. "categorySuggestion": Tự động phán đoán danh mục phù hợp nhất cho cả hóa đơn (chọn 1 trong: "Ăn", "Uống", "Xăng xe", "Hóa đơn", "Mua sắm", "Cắt tóc", "Đồ điện tử", "Đồ gia dụng", "Chi tiêu khác").
-4. "date": YYYY-MM-DD từ hóa đơn hoặc ngày đặt hàng (mặc định 2026 nếu thiếu).
+4. "date": YYYY-MM-DD. Nếu không có ngày mua cụ thể trên ảnh (hoặc chỉ có hạn đánh giá trong tương lai như 'Đánh giá trước 18 Thg 12'): BẮT BUỘC để ngày hôm nay: "${todayStr}".
 5. Chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không bọc markdown (\`\`\`json) hay văn bản giải thích nào khác.`;
+}
 
+export const VISION_INVOICE_PROMPT_SPLIT = getVisionInvoicePromptSplit();
+export const VISION_INVOICE_PROMPT_MERGE = getVisionInvoicePromptMerge();
 
 /**
  * Kiểm tra xem lỗi trả về từ Google Gemini API có phải do cạn kiệt Quota / Rate Limit (HTTP 429 / 503 / RESOURCE_EXHAUSTED) hay không
@@ -202,7 +222,7 @@ export const GEMINI_MERGE_SCHEMA = {
   properties: {
     totalAmount: {
       type: 'INTEGER',
-      description: 'Tổng số tiền thanh toán cả hóa đơn hoặc tiền COD thu hộ (số nguyên >= 0, để 0 nếu đơn trả trước 0 VND)',
+      description: 'Tổng số tiền thanh toán thực tế của đơn hàng/hóa đơn (số nguyên >= 0). Lấy giá thành tiền thực trả sau khi trừ voucher giảm giá, bỏ qua giá gốc gạch ngang.',
     },
     note: {
       type: 'STRING',
@@ -214,7 +234,7 @@ export const GEMINI_MERGE_SCHEMA = {
     },
     date: {
       type: 'STRING',
-      description: 'Ngày lập hóa đơn hoặc ngày đặt hàng theo định dạng YYYY-MM-DD',
+      description: 'Ngày lập hóa đơn hoặc ngày đặt hàng theo định dạng YYYY-MM-DD. Nếu thiếu hoặc chỉ có hạn đánh giá tương lai, lấy ngày hôm nay.',
     },
   },
   required: ['totalAmount', 'note', 'categorySuggestion', 'date'],
@@ -235,7 +255,7 @@ export const GEMINI_SPLIT_SCHEMA = {
       },
       amount: {
         type: 'INTEGER',
-        description: 'Số tiền của món hàng/sản phẩm (số nguyên >= 0, nếu là phiếu giao hàng Shopee/Lazada đã trả trước hoặc không ghi giá thì để 0)',
+        description: 'Số tiền thực tế của món hàng/sản phẩm (số nguyên >= 0). BẮT BUỘC lấy giá thành tiền / thực trả sau giảm giá hoặc dòng "Tổng số tiền", TUYỆT ĐỐI BỎ QUA giá gốc gạch ngang. Nếu là đơn 0đ hoặc quà tặng thì để 0.',
       },
       categorySuggestion: {
         type: 'STRING',
@@ -243,7 +263,7 @@ export const GEMINI_SPLIT_SCHEMA = {
       },
       date: {
         type: 'STRING',
-        description: 'Ngày lập hóa đơn hoặc ngày đặt hàng định dạng YYYY-MM-DD',
+        description: 'Ngày lập hóa đơn hoặc ngày đặt hàng định dạng YYYY-MM-DD. Nếu thiếu hoặc chỉ có hạn đánh giá tương lai, lấy ngày hôm nay.',
       },
     },
     required: ['name', 'amount', 'categorySuggestion', 'date'],
@@ -887,9 +907,26 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
       ? 'Hóa đơn in / Bảng (Siêu thị)'
       : 'Giấy ghi chép tự do');
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const isValidPastOrPresentDate = (d: any): boolean => {
+    if (!d || typeof d !== 'string') return false;
+    const match = d.match(/^\d{4}-\d{2}-\d{2}$/);
+    if (!match) return false;
+    const time = new Date(d).getTime();
+    if (isNaN(time)) return false;
+    // Chặn ngày tương lai (cho phép tối đa 1 ngày so với hôm nay do chênh lệch múi giờ)
+    const maxFutureTime = Date.now() + 86400000;
+    if (time < new Date('2000-01-01').getTime() || time > maxFutureTime) {
+      return false;
+    }
+    return true;
+  };
+
   const defaultDate =
-    (typeof parsed === 'object' && !Array.isArray(parsed) ? parsed.date : null) ||
-    new Date().toISOString().slice(0, 10);
+    typeof parsed === 'object' && !Array.isArray(parsed) && isValidPastOrPresentDate(parsed.date)
+      ? parsed.date
+      : todayStr;
 
   let rawItems: any[] = [];
   if (Array.isArray(parsed)) {
@@ -911,7 +948,7 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
           name: singleNote,
           amount: singleAmt,
           totalAmount: singleAmt,
-          date: parsed.date || defaultDate,
+          date: isValidPastOrPresentDate(parsed.date) ? parsed.date : defaultDate,
           categorySuggestion: parsed.categorySuggestion || parsed.category || singleNote,
         },
       ];
@@ -931,7 +968,7 @@ export function parseVisionJsonResponse(responseText: string): BatchParsedResult
       const noteText = String(item.note || item.name || item.title || `Món hàng ${idx + 1}`)
         .trim()
         .replace(/\\n/g, '\n');
-      const itemDate = item.date || defaultDate;
+      const itemDate = isValidPastOrPresentDate(item.date) ? item.date : defaultDate;
       const categoryId = item.categoryId || mapCategoryNameToId(item.categorySuggestion || item.category || noteText);
 
       return {
@@ -973,8 +1010,9 @@ export async function extractInvoiceDataWithCloudVision(
   const currentConfig = { ...getSavedVisionConfig(), ...configOverride };
   const effectiveKey = currentConfig.apiKey?.trim() || DEFAULT_GEMINI_API_KEY;
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   const promptText =
-    scanMode === 'merge' ? VISION_INVOICE_PROMPT_MERGE : VISION_INVOICE_PROMPT_SPLIT;
+    scanMode === 'merge' ? getVisionInvoicePromptMerge(todayStr) : getVisionInvoicePromptSplit(todayStr);
   const schemaToUse =
     scanMode === 'merge' ? GEMINI_MERGE_SCHEMA : GEMINI_SPLIT_SCHEMA;
 

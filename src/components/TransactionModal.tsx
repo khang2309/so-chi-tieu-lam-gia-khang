@@ -306,9 +306,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseAmountOrExpression(amount, 0);
-    if (!numAmount || numAmount <= 0) {
-      alert('Vui lòng nhập số tiền hợp lệ lớn hơn 0!');
+    const effectiveAmountStr = (amount || '').trim();
+    if (effectiveAmountStr === '') {
+      alert('Vui lòng nhập số tiền (hoặc bấm số 0 nếu là đơn 0đ)!');
+      return;
+    }
+    const numAmount = parseAmountOrExpression(effectiveAmountStr, NaN);
+    if (isNaN(numAmount) || numAmount < 0) {
+      alert('Vui lòng nhập số tiền hợp lệ (từ 0đ trở lên)!');
       return;
     }
     if (!categoryId) {
