@@ -1,10 +1,10 @@
 {
-  "version": "4.0.2",
+  "version": "4.0.3",
   "updateType": "ota",
   "downloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/ota-bundle.zip",
   "minApkVersion": "2.1.26",
   "apkDownloadUrl": "https://raw.githubusercontent.com/khang2309/so-chi-tieu-lam-gia-khang/main/app-debug.apk",
-  "releaseNotes": "Nang cap toan dien AI nhan dien thong minh moi loai hoa don: sieu thi, nha hang, don ship, TMDT, nha thuoc, dien nuoc; xu ly da gia va ngay tu dong",
+  "releaseNotes": "Toi uu hoa toan dien: Code-splitting giam 90% bundle ban dau, loai bo 300ms click delay mobile, don sach code thua",
   "allowSkip": true,
-  "updatedAt": "2026-11-19T08:13:57.141Z"
+  "updatedAt": "2026-11-20T05:42:28.110Z"
 }

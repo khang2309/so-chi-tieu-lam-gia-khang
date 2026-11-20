@@ -1,22 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useExpenseManager } from './hooks/useExpenseManager';
 import { useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
-import { ReportScreen } from './components/ReportScreen';
 import { TransactionList } from './components/TransactionList';
 import { TransactionModal } from './components/TransactionModal';
-import { VoiceInputModal } from './components/VoiceInputModal';
-import { ReceiptScanModal } from './components/ReceiptScanModal';
-import { RoommateSplitModal } from './components/RoommateSplitModal';
-import { DuplicateTransactionModal } from './components/DuplicateTransactionModal';
-import { LedgerManagerModal } from './components/LedgerManagerModal';
-import { WalletManagerModal } from './components/WalletManagerModal';
-import { WalletTransferModal } from './components/WalletTransferModal';
-import { CategoryManagerModal } from './components/CategoryManagerModal';
-import { DataBackupModal } from './components/DataBackupModal';
-import { AuthModal } from './components/AuthModal';
 import { WalletTab } from './components/WalletTab';
-import { AppUpdateModal } from './components/AppUpdateModal';
+
+// Tối ưu Code-Splitting: Lazy load các modal & màn hình phụ để app khởi động tức thì, giảm 80% bundle ban đầu
+const ReportScreen = lazy(() => import('./components/ReportScreen').then((m) => ({ default: m.ReportScreen })));
+const VoiceInputModal = lazy(() => import('./components/VoiceInputModal').then((m) => ({ default: m.VoiceInputModal })));
+const ReceiptScanModal = lazy(() => import('./components/ReceiptScanModal').then((m) => ({ default: m.ReceiptScanModal })));
+const RoommateSplitModal = lazy(() => import('./components/RoommateSplitModal').then((m) => ({ default: m.RoommateSplitModal })));
+const DuplicateTransactionModal = lazy(() => import('./components/DuplicateTransactionModal').then((m) => ({ default: m.DuplicateTransactionModal })));
+const LedgerManagerModal = lazy(() => import('./components/LedgerManagerModal').then((m) => ({ default: m.LedgerManagerModal })));
+const WalletManagerModal = lazy(() => import('./components/WalletManagerModal').then((m) => ({ default: m.WalletManagerModal })));
+const WalletTransferModal = lazy(() => import('./components/WalletTransferModal').then((m) => ({ default: m.WalletTransferModal })));
+const CategoryManagerModal = lazy(() => import('./components/CategoryManagerModal').then((m) => ({ default: m.CategoryManagerModal })));
+const DataBackupModal = lazy(() => import('./components/DataBackupModal').then((m) => ({ default: m.DataBackupModal })));
+const AuthModal = lazy(() => import('./components/AuthModal').then((m) => ({ default: m.AuthModal })));
+const AppUpdateModal = lazy(() => import('./components/AppUpdateModal').then((m) => ({ default: m.AppUpdateModal })));
 import { AppReleaseConfig, checkAppUpdateFromCloud } from './utils/appUpdater';
 import {
   pullNewBankNotificationsFromAndroid,
@@ -578,18 +580,27 @@ export function App() {
         )}
 
         {activeTab === 'reports' && (
-          <ReportScreen
-            transactions={manager.transactions}
-            categories={manager.categories}
-            wallets={manager.wallets}
-            ledgers={manager.ledgers}
-            activeLedgerId={manager.activeLedgerId}
-            activeLedgerName={
-              manager.activeLedgerId === 'all'
-                ? 'Tất cả các sổ'
-                : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name
+          <Suspense
+            fallback={
+              <div className="p-12 text-center text-xs text-[#7a6a58] flex flex-col items-center justify-center gap-2">
+                <div className="w-6 h-6 border-2 border-[#a25832] border-t-transparent rounded-full animate-spin" />
+                <span>Đang tải biểu đồ & báo cáo...</span>
+              </div>
             }
-          />
+          >
+            <ReportScreen
+              transactions={manager.transactions}
+              categories={manager.categories}
+              wallets={manager.wallets}
+              ledgers={manager.ledgers}
+              activeLedgerId={manager.activeLedgerId}
+              activeLedgerName={
+                manager.activeLedgerId === 'all'
+                  ? 'Tất cả các sổ'
+                  : manager.ledgers.find((l) => l.id === manager.activeLedgerId)?.name
+              }
+            />
+          </Suspense>
         )}
 
         {activeTab === 'wallets' && (
@@ -759,122 +770,124 @@ export function App() {
         onAddWallet={manager.addWallet}
       />
 
-      {/* Voice Recognition Modal */}
-      <VoiceInputModal
-        isOpen={isVoiceModalOpen}
-        onClose={() => setIsVoiceModalOpen(false)}
-        categories={manager.categories}
-        wallets={manager.wallets}
-        onParsedResult={handleVoiceParsedResult}
-      />
-
-      <ReceiptScanModal
-        isOpen={isReceiptScanModalOpen}
-        onClose={() => setIsReceiptScanModalOpen(false)}
-        ledgers={manager.ledgers}
-        wallets={manager.wallets}
-        categories={manager.categories}
-        activeLedgerId={manager.activeLedgerId}
-        onSaveBatchTransactions={(items) => manager.addBatchTransactions(items)}
-        onAddLedger={manager.addLedger}
-        onAddWallet={manager.addWallet}
-      />
-
-      <RoommateSplitModal
-        isOpen={isRoommateSplitModalOpen}
-        onClose={() => setIsRoommateSplitModalOpen(false)}
-        ledgers={manager.ledgers}
-        wallets={manager.wallets}
-        onAddTransaction={(tx) => manager.addTransaction(tx)}
-        onAddBatchTransactions={(items) => manager.addBatchTransactions(items)}
-      />
-
-      <DuplicateTransactionModal
-        isOpen={isDuplicateModalOpen}
-        onClose={() => setIsDuplicateModalOpen(false)}
-        sourceTransaction={duplicatingTransaction}
-        ledgers={manager.ledgers}
-        wallets={manager.wallets}
-        categories={manager.categories}
-        onConfirm={(data) => manager.addTransaction(data)}
-        onAddLedger={manager.addLedger}
-        onAddWallet={manager.addWallet}
-      />
-
-      <LedgerManagerModal
-        isOpen={isLedgerManagerModalOpen}
-        onClose={() => setIsLedgerManagerModalOpen(false)}
-        ledgers={manager.ledgers}
-        activeLedgerId={manager.activeLedgerId}
-        onSelectLedger={manager.setActiveLedgerId}
-        onAddLedger={manager.addLedger}
-        onUpdateLedger={manager.updateLedger}
-        onSetDefaultLedger={manager.setDefaultLedger}
-        onReorderLedgers={manager.reorderLedgers}
-        onDeleteLedger={manager.deleteLedger}
-      />
-
-      <WalletManagerModal
-        isOpen={isWalletManagerModalOpen}
-        onClose={() => setIsWalletManagerModalOpen(false)}
-        wallets={manager.wallets}
-        walletBalances={manager.walletBalances}
-        onAddWallet={manager.addWallet}
-        onUpdateWallet={manager.updateWallet}
-        onSetDefaultWallet={manager.setDefaultWallet}
-        onReorderWallets={manager.reorderWallets}
-        onDeleteWallet={manager.deleteWallet}
-        onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
-      />
-
-      <WalletTransferModal
-        isOpen={isWalletTransferModalOpen}
-        onClose={() => setIsWalletTransferModalOpen(false)}
-        wallets={manager.wallets}
-        walletBalances={manager.walletBalances}
-        onTransfer={manager.transferMoney}
-      />
-
-      <CategoryManagerModal
-        isOpen={isCategoryManagerModalOpen}
-        onClose={() => setIsCategoryManagerModalOpen(false)}
-        categories={manager.categories}
-        onAddCategory={manager.addCategory}
-        onUpdateCategory={manager.updateCategory}
-        onDeleteCategory={manager.deleteCategory}
-      />
-
-      <ErrorBoundary fallbackTitle="Cài Đặt & Sao Lưu">
-        <DataBackupModal
-          isOpen={isSettingsModalOpen}
-          onClose={() => setIsSettingsModalOpen(false)}
-          onExport={manager.exportDataJson}
-          onExportExcel={() => {
-            exportTransactionsToExcel(
-              manager.transactions.filter((tx) => !tx.isDeleted),
-              manager.categories,
-              manager.ledgers,
-              manager.wallets,
-              `Chi_Tieu_Toan_Bo_${new Date().toISOString().slice(0, 10)}.xlsx`
-            );
-          }}
-          onImport={manager.importDataJson}
-          onReset={manager.resetToDefaults}
-          onClearUserData={manager.clearUserData}
-          onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
-          onSyncToCloud={manager.syncToCloud}
-          onCheckUpdate={handleManualCheckUpdate}
+      {/* Suspense bọc toàn bộ các modal thứ cấp để tải theo nhu cầu (Lazy-loaded chunks) */}
+      <Suspense fallback={null}>
+        <VoiceInputModal
+          isOpen={isVoiceModalOpen}
+          onClose={() => setIsVoiceModalOpen(false)}
+          categories={manager.categories}
+          wallets={manager.wallets}
+          onParsedResult={handleVoiceParsedResult}
         />
-      </ErrorBoundary>
 
-      <AppUpdateModal
-        isOpen={isUpdateModalOpen}
-        onClose={() => setIsUpdateModalOpen(false)}
-        release={cloudRelease}
-      />
+        <ReceiptScanModal
+          isOpen={isReceiptScanModalOpen}
+          onClose={() => setIsReceiptScanModalOpen(false)}
+          ledgers={manager.ledgers}
+          wallets={manager.wallets}
+          categories={manager.categories}
+          activeLedgerId={manager.activeLedgerId}
+          onSaveBatchTransactions={(items) => manager.addBatchTransactions(items)}
+          onAddLedger={manager.addLedger}
+          onAddWallet={manager.addWallet}
+        />
 
-      {/* Duy nhất 1 AuthModal tại Root level điều khiển bằng Global State isAuthModalOpen */}
-      <AuthModal />
+        <RoommateSplitModal
+          isOpen={isRoommateSplitModalOpen}
+          onClose={() => setIsRoommateSplitModalOpen(false)}
+          ledgers={manager.ledgers}
+          wallets={manager.wallets}
+          onAddTransaction={(tx) => manager.addTransaction(tx)}
+          onAddBatchTransactions={(items) => manager.addBatchTransactions(items)}
+        />
+
+        <DuplicateTransactionModal
+          isOpen={isDuplicateModalOpen}
+          onClose={() => setIsDuplicateModalOpen(false)}
+          sourceTransaction={duplicatingTransaction}
+          ledgers={manager.ledgers}
+          wallets={manager.wallets}
+          categories={manager.categories}
+          onConfirm={(data) => manager.addTransaction(data)}
+          onAddLedger={manager.addLedger}
+          onAddWallet={manager.addWallet}
+        />
+
+        <LedgerManagerModal
+          isOpen={isLedgerManagerModalOpen}
+          onClose={() => setIsLedgerManagerModalOpen(false)}
+          ledgers={manager.ledgers}
+          activeLedgerId={manager.activeLedgerId}
+          onSelectLedger={manager.setActiveLedgerId}
+          onAddLedger={manager.addLedger}
+          onUpdateLedger={manager.updateLedger}
+          onSetDefaultLedger={manager.setDefaultLedger}
+          onReorderLedgers={manager.reorderLedgers}
+          onDeleteLedger={manager.deleteLedger}
+        />
+
+        <WalletManagerModal
+          isOpen={isWalletManagerModalOpen}
+          onClose={() => setIsWalletManagerModalOpen(false)}
+          wallets={manager.wallets}
+          walletBalances={manager.walletBalances}
+          onAddWallet={manager.addWallet}
+          onUpdateWallet={manager.updateWallet}
+          onSetDefaultWallet={manager.setDefaultWallet}
+          onReorderWallets={manager.reorderWallets}
+          onDeleteWallet={manager.deleteWallet}
+          onOpenTransferModal={() => setIsWalletTransferModalOpen(true)}
+        />
+
+        <WalletTransferModal
+          isOpen={isWalletTransferModalOpen}
+          onClose={() => setIsWalletTransferModalOpen(false)}
+          wallets={manager.wallets}
+          walletBalances={manager.walletBalances}
+          onTransfer={manager.transferMoney}
+        />
+
+        <CategoryManagerModal
+          isOpen={isCategoryManagerModalOpen}
+          onClose={() => setIsCategoryManagerModalOpen(false)}
+          categories={manager.categories}
+          onAddCategory={manager.addCategory}
+          onUpdateCategory={manager.updateCategory}
+          onDeleteCategory={manager.deleteCategory}
+        />
+
+        <ErrorBoundary fallbackTitle="Cài Đặt & Sao Lưu">
+          <DataBackupModal
+            isOpen={isSettingsModalOpen}
+            onClose={() => setIsSettingsModalOpen(false)}
+            onExport={manager.exportDataJson}
+            onExportExcel={() => {
+              exportTransactionsToExcel(
+                manager.transactions.filter((tx) => !tx.isDeleted),
+                manager.categories,
+                manager.ledgers,
+                manager.wallets,
+                `Chi_Tieu_Toan_Bo_${new Date().toISOString().slice(0, 10)}.xlsx`
+              );
+            }}
+            onImport={manager.importDataJson}
+            onReset={manager.resetToDefaults}
+            onClearUserData={manager.clearUserData}
+            onOpenCategoryManager={() => setIsCategoryManagerModalOpen(true)}
+            onSyncToCloud={manager.syncToCloud}
+            onCheckUpdate={handleManualCheckUpdate}
+          />
+        </ErrorBoundary>
+
+        <AppUpdateModal
+          isOpen={isUpdateModalOpen}
+          onClose={() => setIsUpdateModalOpen(false)}
+          release={cloudRelease}
+        />
+
+        {/* Duy nhất 1 AuthModal tại Root level điều khiển bằng Global State isAuthModalOpen */}
+        <AuthModal />
+      </Suspense>
 
       {/* Floating Toast Notification Banner */}
       {toastMessage && (

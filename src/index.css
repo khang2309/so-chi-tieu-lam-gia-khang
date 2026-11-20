@@ -8,6 +8,24 @@
     color: #3e332a;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Tối ưu Modern Web: Loại bỏ 300ms click delay trên điện thoại, ngăn chặn double-tap zoom ngoài ý muốn */
+  html, body, button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+}
+
+/* Tối ưu hiệu năng cuộn danh sách lớn (Content-Visibility) */
+.virtual-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 72px;
+}
+
+/* Tăng tốc phần cứng GPU cho animation trên mobile */
+.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
 /* Notebook paper lined pattern for balance card & notes */

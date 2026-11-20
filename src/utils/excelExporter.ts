@@ -1,9 +1,9 @@
-import * as XLSX from 'xlsx';
 import { Transaction, Category, Ledger, Wallet } from '../types';
 import { saveAndShareFile } from './fileExporter';
 
 /**
  * Xuất danh sách giao dịch ra file Excel (.xlsx)
+ * Sử dụng Dynamic Import để không làm nặng bundle khởi động của app
  * Bao gồm các cột chuẩn: STT, Ngày, Tên giao dịch, Loại, Danh mục, Số tiền, Ghi chú, Sổ, Ví
  */
 export async function exportTransactionsToExcel(
@@ -13,6 +13,8 @@ export async function exportTransactionsToExcel(
   wallets: Wallet[],
   filename = 'Danh_Sach_Chi_Tieu.xlsx'
 ): Promise<void> {
+  // Chỉ nạp thư viện XLSX khi người dùng bấm nút Xuất Excel
+  const XLSX = await import('xlsx');
   const getCatName = (id: string) => categories.find((c) => c.id === id)?.name || 'Khác';
   const getLedgerName = (id: string) => ledgers.find((l) => l.id === id)?.name || 'Mặc định';
   const getWalletName = (id: string) => wallets.find((w) => w.id === id)?.name || 'Tiền mặt';
